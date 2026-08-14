@@ -1,0 +1,119 @@
+Package: SpaMTP
+Type: Package
+Title: Spatial Metabolomics and Multi-Omics Analysis
+Version: 0.99.0
+Authors@R: c(
+    person("Andrew", "Causer",
+            email = "a.causer@uq.edu.au", 
+            role = c("aut"),
+            comment = c(ORCID = "0009-0001-7341-8366")),
+    person("Tianyao", "Lu",
+            email = "lu.t@wehi.edu.au", 
+            role = c("aut", "cre")),
+    person("Christopher C.J.", "Fitzgerald",
+            email = "cfitzgerald@marum.de",
+            role = c("aut"),
+            comment = c(ORCID = "0000-0003-3935-4300")),
+    person("GML", "Lab",
+            role = c("lbr")),
+    person("Brain Cancer Research", "Lab",
+            role = c("lbr")),
+    person("UQ", "Institute",
+            role = c("fnd")),
+    person("QIMR", "Institute",
+            role = c("fnd")),
+    person("WEHI", "Institute",
+            role = c("fnd"))
+            )
+Description: Provides analysis, annotation, visualisation, and multi-omic
+    integration methods for spatial metabolomics data. SpaMTP interoperates
+    with Cardinal, Seurat, and Bioconductor data structures; supports indexed
+    accurate-mass annotation using versioned RaMP resources; and implements
+    spatial feature analysis, pathway enrichment, pathway-network
+    visualisation, and alignment with spatial transcriptomics data.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Suggests: 
+    ape,
+    BiocStyle,
+    EnhancedVolcano,
+    htmlTable,
+    htmltools,
+    kableExtra,
+    knitr,
+    mclust,
+    patchwork,
+    reticulate,
+    rmarkdown,
+    SpaMTPData,
+    testthat (>= 3.0.0),
+    viridis,
+    yaml
+Config/testthat/edition: 3
+biocViews: MassSpectrometry, ImagingMassSpectrometry, Metabolomics, Spatial
+Imports: 
+    Cardinal,
+    cowplot,
+    data.table,
+    dplyr,
+    DropletUtils,
+    EBImage,
+    edgeR,
+    fgsea,
+    FNN,
+    future,
+    future.apply,
+    ggdendro,
+    ggnewscale,
+    ggplot2,
+    ggridges,
+    grDevices,
+    graphics,
+    grid,
+    httr,
+    igraph,
+    jsonlite,
+    limma,
+    magick,
+    magrittr,
+    Matrix,
+    matter,
+    methods,
+    naturalsort,
+    parallel,
+    pbapply,
+    pheatmap,
+    plotly,
+    png,
+    purrr,
+    RColorBrewer,
+    rgoslin,
+    rlang,
+    RSpectra,
+    scales,
+    scater,
+    Seurat,
+    SeuratObject,
+    sf,
+    shiny,
+    shinyjs,
+    SingleCellExperiment,
+    SpaMTPdb,
+    sp,
+    stats,
+    stringr,
+    tibble,
+    tidyr,
+    utils,
+    withr,
+    zeallot
+URL: https://github.com/SpaMTP-project/SpaMTP,
+    https://github.com/GenomicsMachineLearning/SpaMTP,
+    https://genomicsmachinelearning.github.io/SpaMTP/,
+    https://doi.org/10.1038/s41592-026-03140-8
+BugReports: https://github.com/SpaMTP-project/SpaMTP/issues
+Depends: 
+    R (>= 4.6.0)
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.1.0

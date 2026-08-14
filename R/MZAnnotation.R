@@ -1,0 +1,1542 @@
+#### SpaMTP m/z Annotation Functions #####################################################################################################################################################################################
+
+#' Subset a SpaMTP Seurat Spatial Metabolomic object by a list of m/z's
+#'
+#' @param data A Seurat Spatial Metabolomic Object for subsetting.
+#' @param features A list of character strings defining the features/mz values to subset against.
+#' @param assay A character string identifying the Seurat assay which contains the count data being subset.
+#'
+#' @returns A subset Seurat object containing only m/z values that were specified
+#' @export
+#'
+#' @examples
+#' utils::str(formals(SubsetMZFeatures))
+#' # SubsetMZFeatures(SeuratObj, c("mz-160","mz-170","mz-180"))
+SubsetMZFeatures <- function(data, features, assay = "Spatial"){
+  feature.metadata <- data[[assay]]@meta.data
+  sub.data <- subset(data, features = features)
+
+  sub.data[[assay]]@meta.data <- feature.metadata[feature.metadata[["mz_names"]] %in% features,]
+  return(sub.data)
+}
+
+
+
+#' Filters the annotation list to only include the first n number of annotations per m/z
+#'
+#' @param annotation_column Vector of the meta.data column containing the m/z annotations.
+#' @param n Numeric value defining the number of annotations to keep (default = 3).
+#'
+#' @return Vector containing the first n number of annotations
+#'
+#' @examples
+#' # labels_to_show(`SeuratObject[["Spatial"]]@meta.data$annotations`, n = 3)
+labels_to_show <- function(annotation_column, n = 3) {
+  new_column <- sapply(strsplit(annotation_column, "; "), function(x) {
+    # Filter out NA values and select the first three entries
+    non_na_values <- x[!is.na(x)]
+    paste(non_na_values[1:min(n, length(non_na_values))], collapse = "; ")
+  })
+  return(new_column)
+}
+
+
+
+
+#' Annotates m/z values stored in a SpaMTP Object
+#'
+#' This function assigns each valid m/z peak with one/multiple metabolite names based on the mass difference between the observed value and the theoretical value documented in the reference database.
+#' Versioned RaMP, HMDB, LIPID MAPS, ChEBI, and GNPS resources are provided by
+#' SpaMTPdb and can be combined with user-supplied reference tables.
+#'
+#' @param data Seurat Spatial Metabolomic Object containing m/z values for annotation.
+#' @param db Reference metabolite dataset in the form of a data.frame. When
+#'   `NULL`, the versioned SpaMTPdb `chem_props` table is used, unless a
+#'   pre-built `index` is supplied through `...`. Versioned resources are loaded
+#'   from SpaMTPdb and may be staged locally for offline use.
+#' @param assay Character string defining the Seurat assay which contains the mz counts being annotated (default = "Spatial").
+#' @param raw.mz.column Character string defining the Seurat assay slot which contains the raw mz values, this is without the 'mz-' and are a vector of integers. This is setup by default when running the cardinal_to_seurat() function (default = "raw_mz").
+#' @param ppm_error Mass tolerance in ppm. If `NULL`, a strict 5 ppm maximum
+#'   is used (or a smaller value inferred from `tof_resolution`). Set to zero
+#'   for exact numerical matches.
+#' @param adducts Optional adduct names/notations; see `AdductRules()`. If
+#'   `NULL`, use the complete rule space selected from `maldi_matrix`, or all
+#'   validated general rules for the selected polarity when no matrix is given.
+#' @param polarity Character string defining the ion mode. When `NULL`, use the
+#'   MALDI matrix profile default, a supplied index's mode, or positive mode
+#'   when neither is available.
+#' @param tof_resolution Instrument resolving power retained for compatibility;
+#'   it can only tighten, not widen, the default 5 ppm mass-accuracy threshold.
+#' @param filepath Character string of the directory to store the _annotated_mz_peaks.csv. If set to NULL no dataframe will be saved (default = NULL).
+#' @param return.only.annotated Boolean value indicating if the annotated Seurat Object should only include m/z values that were successfully annotated (default = TRUE).
+#' @param save.intermediate Boolean indicating whether to store the scored
+#'   annotation result and its pipeline/RaMP provenance in
+#'   `@tools$mz_annotation`. A compatibility copy is retained in
+#'   `@tools$db_3` (default = TRUE).
+#' @param min_score Minimum annotation score retained in the stored candidate
+#'   table. The default `0` keeps all ppm-valid candidates so downstream
+#'   pathway functions can apply a user-defined threshold without re-running
+#'   annotation.
+#' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#' @param maldi_matrix Optional MALDI matrix or derivatization reagent name.
+#'   When supplied, SpaMTP selects validated matrix-specific rules
+#'   automatically. `adducts` is optional and only restricts that automatic
+#'   search space when explicitly supplied.
+#' @param database_version SpaMTPdb/RaMP version used when `db = NULL`.
+#' @param database_source Database source used when `db = NULL`; see
+#'   [LoadSpaMTPDatabase()].
+#' @param database_local_dir Optional staged SpaMTPdb resource directory.
+#' @param ... Additional indexed annotation/scoring arguments passed to
+#'   `annotateTable()`, such as `index`, `rules`, `ms1_spectrum`,
+#'   `infer_structure`, `structure_backend`, `structure_workers`, or
+#'   `min_structure_score`.
+#'
+#' @returns A Seurat Object with m/z values annotated. These annotations are stored in the relative assay's meta.data (e.g. SeuratObj`[["Spatial"]][[]]`)
+#' @export
+#'
+#' @examples
+#' utils::str(formals(AnnotateSM))
+#' # HMDB_db <- load("data/HMDB_1_names.rds")
+#' # Annotated_SeuratObj <- AnnotateSM(SeuratObj, HMDB_db)
+AnnotateSM <- function(data, db = NULL, assay = "Spatial", raw.mz.column = "raw_mz", ppm_error = NULL, adducts = NULL, polarity = NULL, tof_resolution = 30000, filepath = NULL, return.only.annotated = TRUE, save.intermediate = TRUE, min_score = 0, verbose = TRUE, maldi_matrix = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL, ...){
+
+  if (is.null(data@assays[[assay]])) {
+    stop(paste0("No assay '",assay,"'exists in SpaMTP object! Please check assay name input ..."))
+  }
+
+  annotation_args <- list(...)
+  supplied_index <- annotation_args$index
+  polarity <- if (is.null(polarity) &&
+                  inherits(supplied_index, "spamtp_mz_index")) {
+    supplied_index$polarity
+  } else {
+    .resolve_maldi_polarity(polarity, maldi_matrix)
+  }
+  resolved_matrix <- if (!is.null(maldi_matrix)) {
+    .normalise_maldi_matrix(maldi_matrix)
+  } else if (inherits(supplied_index, "spamtp_mz_index")) {
+    supplied_index$maldi_matrix
+  } else {
+    "unspecified"
+  }
+  default_ramp <- is.null(db) && is.null(supplied_index)
+  if (default_ramp) {
+    db <- .spamtp_db_resource(
+      "chem_props",
+      version = database_version,
+      source = match.arg(database_source),
+      local_dir = database_local_dir
+    )
+    verbose_message(
+      message_text = paste0("Using ", .spamtp_db_label(db), " for annotation ... "),
+      verbose = verbose
+    )
+  }
+
+  ## Extracting m/z values from SpaMTP@assay@meta.data
+  mz_df <- data[[assay]][[raw.mz.column]]
+  mz_df$mz <- mz_df[[raw.mz.column]]
+  mz_df$row_id <- seq(1, length(mz_df[[raw.mz.column]]))
+  mz_df <- mz_df[c("row_id", "mz")]
+
+  db_3 <- annotateTable(mz_df= mz_df, db = db, ppm_error = ppm_error, adducts = adducts, polarity = polarity,tof_resolution = tof_resolution,verbose = verbose, min_score = min_score, maldi_matrix = maldi_matrix, ...)
+
+
+  if (save.intermediate){
+    effective_ppm <- ppm_error
+    if (is.null(effective_ppm)) {
+      inferred_ppm <- if (is.null(tof_resolution)) Inf else {
+        1e6 / tof_resolution / sqrt(2 * log(2))
+      }
+      effective_ppm <- min(5, inferred_ppm)
+      if (!is.finite(effective_ppm)) effective_ppm <- 5
+    }
+    data@tools$mz_annotation <- .annotation_store(
+      db_3,
+      metadata = list(
+        assay = assay,
+        raw_mz_column = raw.mz.column,
+        polarity = polarity,
+        maldi_matrix = resolved_matrix,
+        ppm = effective_ppm,
+        min_score = min_score,
+        adducts = if (is.null(adducts)) {
+          if (inherits(supplied_index, "spamtp_mz_index")) {
+            "complete pre-built index rule space"
+          } else if (is.null(maldi_matrix)) {
+            "all validated general rules"
+          } else {
+            "automatically selected from MALDI matrix profile"
+          }
+        } else adducts,
+        database = if (default_ramp) {
+          .spamtp_db_label(db)
+        } else if (!is.null(supplied_index)) {
+          "pre-built annotation index"
+        } else {
+          "user-supplied database"
+        }
+      )
+    )
+    # Keep the historical location for packages and serialized objects that
+    # still inspect it directly. New pathway code reads mz_annotation first.
+    data@tools$db_3 <- db_3
+  }
+
+  if (!(is.null(filepath))){
+    path <- paste0(filepath,"_annotated_mz_peaks.csv")
+    message(paste0("Writing annotated m/z file to: '", path, "'"))
+    data.table::fwrite(db_3, path)
+  }
+
+  verbose_message(message_text = "Adding annotations to Seurat Object .... ", verbose = verbose)
+
+  result_df <- db_3 %>%
+    dplyr::group_by(observed_mz) %>%
+    dplyr::summarise(
+      all_IsomerNames = paste(IsomerNames, collapse = "; "),
+      all_Isomers = paste(Isomers, collapse = "; "),
+      all_Isomers_IDs = paste(Isomers_IDs, collapse = "; "),
+      all_Adducts = paste(unique(Adduct), collapse = "; "),
+      all_Formulas = paste(unique(Formula), collapse = "; "),
+      all_Errors = paste(round(Error,4), collapse = "; "),
+      all_Scores = paste(round(.data$Score,4), collapse = "; "),
+      all_Ramp_IDs = paste(unique(.data$Ramp_IDs[!is.na(.data$Ramp_IDs)]), collapse = "; ")
+    )
+  result_df <- data.frame(result_df)
+  annotated_mz_names <- if (nrow(result_df)) {
+    paste0("mz-", result_df$observed_mz)
+  } else {
+    character()
+  }
+  rownames(result_df) <- annotated_mz_names
+
+  result_df$mz_names <- annotated_mz_names
+
+  data[[assay]][["mz_names"]] <- rownames(data[[assay]][[]])
+
+
+  result_df$present <- rep(TRUE, nrow(result_df))
+
+
+  # Perform left join and replace NAs with "No Annotation"
+  feature_metadata <- data[[assay]][[]] %>%
+    dplyr::left_join(result_df, by = "mz_names") %>%
+    dplyr::mutate(dplyr::across(dplyr::everything(), ~ifelse(is.na(.), "No Annotation", .)))
+
+  feature_metadata <- dplyr::select(feature_metadata, -present)
+
+  data[[assay]][[]] <- feature_metadata
+  if (return.only.annotated == TRUE){
+
+    verbose_message(message_text = "Returning Seurat object that include ONLY SUCCESSFULLY ANNOTATED m/z features", verbose = verbose)
+
+    if(length(Assays(data)) != 1){
+      features = c()
+      for(non_met_assay in Assays(data)[which(Assays(data)!=assay)]){
+        features =  c(features, rownames(data@assays[[non_met_assay]]@features))
+      }
+      data <- suppressWarnings({SubsetMZFeatures(data, assay = assay, features = c(result_df$mz_names, features))})
+    }else{
+      data <- suppressWarnings({SubsetMZFeatures(data, assay = assay, features = result_df$mz_names)})
+    }
+  }
+
+  return(data)
+}
+
+
+
+
+#' Annotates m/z values stored in a data.frame based on reference metabolite dataset
+#'
+#' Helper function for `AnnotateSM()` and `FishersPathwayAnalysis()`.
+#'
+#' @param mz_df dataframe containing m/z values for annotation.
+#' @param db Reference metabolite dataset in the form of a data.frame. May be
+#'   `NULL` when `index` is supplied.
+#' @param ppm_error Mass tolerance in ppm. If `NULL`, a strict 5 ppm maximum
+#'   is used (or a smaller value inferred from `tof_resolution`). Set to zero
+#'   for exact numerical matches.
+#' @param adducts Optional adduct names/notations; see `AdductRules()`. If
+#'   `NULL`, use the complete rule space selected from `maldi_matrix`, or all
+#'   validated general rules for the selected polarity when no matrix is given.
+#' @param polarity Character string defining the ion mode. When `NULL`, infer
+#'   it from a supplied index or MALDI matrix profile, otherwise use positive.
+#' @param tof_resolution Instrument resolving power retained for compatibility;
+#'   it can only tighten, not widen, the default 5 ppm mass-accuracy threshold.
+#' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#' @param index Optional reusable index created by `BuildMZAnnotationIndex()`.
+#' @param rules Optional custom adduct rule table; see `AdductRules()`.
+#' @param ms1_spectrum Optional contextual MS1 spectrum with `mz` and `intensity`
+#'   columns for isotope and adduct-family scoring.
+#' @param use_mass_defect Apply the CHO negative mass-defect penalty.
+#' @param check_isotopes Score carbon-13 and halogen isotope evidence when a
+#'   contextual spectrum is supplied.
+#' @param check_adduct_network Downweight complex ions whose base monomer
+#'   family is absent from the contextual spectrum.
+#' @param min_score Minimum final annotation score to retain.
+#' @param maldi_matrix Optional MALDI matrix/reagent profile used for automatic
+#'   rule selection. `adducts = NULL` keeps the complete selected rule space.
+#' @param database_version SpaMTPdb/RaMP version used when `db = NULL`.
+#' @param database_source Database source used when `db = NULL`; see
+#'   [LoadSpaMTPDatabase()].
+#' @param database_local_dir Optional staged SpaMTPdb resource directory.
+#' @param infer_structure `"auto"` joins precomputed SpaMTPdb structure
+#'   features when possible, `"never"` disables inference, and `"always"`
+#'   parses missing structures at runtime.
+#' @param structure_backend SMILES parser passed to `DeconvolveSMILES()`.
+#' @param structure_workers Number of workers used for runtime SMILES parsing.
+#' @param min_structure_score Minimum rule-specific structural prior retained
+#'   during candidate-index construction.
+#'
+#' @returns Generates an intermediate annotated m/z dataframe
+#'
+#' @importFrom rlang %||%
+#'
+#' @examples
+#'
+#' ### HelperFunction
+annotateTable <- function(mz_df, db = NULL, ppm_error = NULL, adducts = NULL,
+                          polarity = NULL, tof_resolution = 30000,
+                          verbose = TRUE, index = NULL, rules = NULL,
+                          ms1_spectrum = NULL, use_mass_defect = TRUE,
+                          check_isotopes = TRUE,
+                          check_adduct_network = TRUE, min_score = 0,
+                          maldi_matrix = NULL,
+                          database_version = "latest",
+                          database_source = c("auto", "spamtpdb"),
+                          database_local_dir = NULL,
+                          infer_structure = c("auto", "never", "always"),
+                          structure_backend = c("auto", "native"),
+                          structure_workers = getOption(
+                            "SpaMTP.smiles_workers", 1L
+                          ),
+                          min_structure_score = 0.05) {
+  if (!is.data.frame(mz_df) || !all(c("row_id", "mz") %in% names(mz_df))) {
+    stop("mz_df must be a data.frame containing row_id and mz columns.")
+  }
+  mz_df$mz <- suppressWarnings(as.numeric(mz_df$mz))
+  if (any(!is.finite(mz_df$mz) | mz_df$mz <= 0)) {
+    stop("mz_df$mz must contain positive finite values.")
+  }
+  polarity <- if (is.null(polarity) && inherits(index, "spamtp_mz_index")) {
+    index$polarity
+  } else {
+    .resolve_maldi_polarity(polarity, maldi_matrix)
+  }
+
+  # Resolving power is not the same as calibrated mass accuracy. Retain the
+  # legacy argument, but cap an inferred tolerance at the high-resolution
+  # default requested by the annotation engine.
+  if (is.null(ppm_error)) {
+    inferred_ppm <- if (is.null(tof_resolution)) Inf else {
+      1e6 / tof_resolution / sqrt(2 * log(2))
+    }
+    ppm_error <- min(5, inferred_ppm)
+    if (!is.finite(ppm_error)) ppm_error <- 5
+  }
+
+  if (is.null(index)) {
+    if (is.null(db)) {
+      db <- .spamtp_db_resource(
+        "chem_props",
+        version = database_version,
+        source = match.arg(database_source),
+        local_dir = database_local_dir
+      )
+    }
+    verbose_message(
+      message_text = "Building sorted adduct candidate index ... ",
+      verbose = verbose
+    )
+    index <- BuildMZAnnotationIndex(
+      db = db, polarity = polarity, adducts = adducts, rules = rules,
+      maldi_matrix = maldi_matrix, infer_structure = infer_structure,
+      structure_backend = structure_backend,
+      structure_workers = structure_workers,
+      min_structure_score = min_structure_score
+    )
+  } else if (!inherits(index, "spamtp_mz_index")) {
+    stop("index must be created by BuildMZAnnotationIndex().")
+  } else if (!identical(index$polarity, polarity)) {
+    stop("The supplied index polarity does not match polarity.")
+  } else if (!is.null(maldi_matrix) &&
+             !identical(index$maldi_matrix, .normalise_maldi_matrix(maldi_matrix))) {
+    stop("The supplied index MALDI matrix profile does not match maldi_matrix.")
+  }
+
+  verbose_message(
+    message_text = paste0("Searching candidate index at ", ppm_error, " ppm ... "),
+    verbose = verbose
+  )
+  candidates <- QueryMZAnnotationIndex(
+    observed_mz = mz_df$mz,
+    index = index,
+    ppm = ppm_error,
+    ms1_spectrum = ms1_spectrum,
+    use_mass_defect = use_mass_defect,
+    check_isotopes = check_isotopes,
+    check_adduct_network = check_adduct_network,
+    min_score = min_score
+  )
+
+  empty_result <- function() {
+    data.frame(
+      ID = mz_df$row_id[0], Match = logical(), observed_mz = numeric(),
+      Reference_mz = numeric(), Error = numeric(), Adduct = character(),
+      Formula = character(), Exactmass = numeric(), Isomers = character(),
+      InchiKeys = character(), IsomerNames = character(),
+      Isomers_IDs = character(), Ramp_IDs = character(), Score = numeric(),
+      MassScore = numeric(), ChemicalScore = numeric(),
+      StructureScore = numeric(), StructureStatus = character(),
+      StructureRuleEvidence = character(), StructureEvidence = character(),
+      PositiveSiteAtoms = character(), NegativeSiteAtoms = character(),
+      AlkaliSiteAtoms = character(),
+      ReactiveSiteScore = numeric(), ReactiveSiteStatus = character(),
+      IsotopeScore = numeric(), AdductNetworkScore = numeric(),
+      MALDIMatrix = character(), RuleClass = character(),
+      RuleSource = character(), ReactiveGroup = character(),
+      MinimumReactiveSites = integer(),
+      MatrixTargetGroups = character(), MatrixTargetSites = numeric(),
+      MatrixTargetStatus = character(),
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!nrow(candidates)) return(empty_result())
+
+  row_map <- data.frame(ID = mz_df$row_id, observed_mz = mz_df$mz)
+  candidates$.candidate_order <- seq_len(nrow(candidates))
+  matched <- merge(
+    row_map, candidates, by = "observed_mz", all = FALSE, sort = FALSE
+  )
+  matched <- matched[order(matched$ID, matched$.candidate_order), , drop = FALSE]
+
+  standardise_ids <- function(value) {
+    if (length(value) != 1 || is.na(value) || !nzchar(value)) return("")
+    ids <- trimws(strsplit(value, ";", fixed = TRUE)[[1]])
+    ids <- ids[nzchar(ids)]
+    ids <- vapply(ids, function(id) {
+      if (grepl("^hmdb:", id, ignore.case = TRUE)) {
+        paste0("hmdb:", sub("^[^:]+:", "", id))
+      } else if (grepl("^CHEBI:", id, ignore.case = TRUE)) {
+        paste0("chebi:", sub("^[^:]+:", "", id))
+      } else if (grepl("^LIPIDMAPS:", id, ignore.case = TRUE)) {
+        paste0("LIPIDMAPS:", sub("^[^:]+:", "", id))
+      } else if (grepl("^HMDB", id, ignore.case = TRUE)) {
+        paste0("hmdb:", id)
+      } else if (grepl("^LM", id)) {
+        paste0("LIPIDMAPS:", id)
+      } else {
+        id
+      }
+    }, character(1))
+    paste(unique(ids), collapse = "; ")
+  }
+
+  data.frame(
+    ID = matched$ID,
+    Match = TRUE,
+    observed_mz = matched$observed_mz,
+    Reference_mz = matched$expected_mz,
+    Error = matched$ppm_error,
+    Adduct = matched$adduct,
+    Formula = matched$formula,
+    Exactmass = matched$neutral_mass,
+    Isomers = matched$metabolite_ids,
+    InchiKeys = matched$inchikeys,
+    IsomerNames = matched$metabolite_names,
+    Isomers_IDs = vapply(matched$metabolite_ids, standardise_ids, character(1)),
+    Ramp_IDs = matched$ramp_ids,
+    Score = matched$score,
+    MassScore = matched$mass_score,
+    ChemicalScore = matched$chemical_score,
+    StructureScore = matched$structure_score,
+    StructureStatus = matched$structure_status,
+    StructureRuleEvidence = matched$structure_rule_evidence,
+    StructureEvidence = matched$structure_evidence,
+    PositiveSiteAtoms = matched$positive_site_atoms,
+    NegativeSiteAtoms = matched$negative_site_atoms,
+    AlkaliSiteAtoms = matched$alkali_site_atoms,
+    ReactiveSiteScore = matched$reactive_site_score,
+    ReactiveSiteStatus = matched$reactive_site_status,
+    IsotopeScore = matched$isotope_score,
+    AdductNetworkScore = matched$adduct_network_score,
+    MALDIMatrix = matched$maldi_matrix,
+    RuleClass = matched$rule_class,
+    RuleSource = matched$rule_source,
+    ReactiveGroup = matched$reactive_group,
+    MinimumReactiveSites = matched$min_reactive_sites,
+    MatrixTargetGroups = matched$matrix_target_groups,
+    MatrixTargetSites = matched$matrix_target_sites,
+    MatrixTargetStatus = matched$matrix_target_status,
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
+
+
+#' Refines and reduces m/z annotations
+#'
+#' Used to subset dataset to only include annotations that have n number of entries.
+#' For example some peaks can have multiple annotations. Peaks which have above n number of annotations assigned will be removed from Seurat Object.
+#'
+#' @param obj Seurat object needing annotation refinement. This object must have annotations present in 'obj`[[assay]]@meta.data`'
+#' @param assay Character string defining the Seurat object assay where the annotation data is stored (default = "Spatial").
+#' @param n Integer defining the number of entries an annotation can have assigned. Any higher counts will be removed (default = 1).
+#'
+#' @return Refined Seurat object that only contains annotated mz values that have n number of annotations assigned (per mz value)
+#' @export
+#'
+#' @examples
+#' utils::str(formals(getRefinedAnnotations))
+#' # HMDB_db <- load("data/HMDB_1_names.rds")
+#' # AnnotatedSeuratObj <- AnnotateSeuratMALDI(SeuratObj, HMDB_db)
+#'
+#' # getRefinedAnnotations(AnnotatedSeuratObj, n = 2)
+getRefinedAnnotations <- function(obj, assay = "Spatial",n = 1){
+  n <- n-1
+  subset.metadata <- obj[[assay]]@meta.data %>% dplyr::filter(stringr::str_count(all_IsomerNames, ";") %in% c(0:n))
+  subset.obj <- SubsetMZFeatures(data = obj, features = subset.metadata$mz_names,assay = assay)
+  return(subset.obj)
+
+}
+
+########################################################################################################################################################################################################################
+
+
+#### SpaMTP Find m/z Annotation Functions #####################################################################################################################################################################################
+
+#' Adds in backslashes required to take into account special using grepl such as brackets and +
+#'
+#' @param input_string Character string requiring additional backslashes
+#'
+#' @return Character string containing double backslashes around special features
+add_backslashes_to_specialfeatures <- function(input_string) {
+  # Use gsub to replace ( with \\( and ) with \\)
+  result_string <- gsub("\\(", "\\\\(", input_string)
+  result_string <- gsub("\\)", "\\\\)", result_string)
+  result_string <- gsub("\\[", "\\\\[", result_string)
+  result_string <- gsub("\\]", "\\\\]", result_string)
+  result_string <- gsub("\\+", "\\\\+", result_string)
+  result_string <- gsub(" ", "[ ]", result_string)
+
+  return(result_string)
+}
+
+
+#' Find Annotation
+#'
+#' Searches through annotated m/z values to return all which contain the metabolite search term provided
+#'
+#' @param data Seurat Spatial Metabolomic Object containing annotated m/z values.
+#' @param metabolite Character string of metabolite search term.
+#' @param assay Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
+#' @param search.exact Boolean value defining if to only return m/z values which contain the exact match to the metabolite search term (default = FALSE).
+#' @param column.name Character string defining the column name where the annotations are stored in the slot meta.data (default = "all_IsomerNames").
+#'
+#' @return A Data.Frame containing the peak metadata corresponding to the metabolite search term provided
+#' @export
+#'
+#' @examples
+#' utils::str(formals(SearchAnnotations))
+#' # SearchAnnotations(SeuratObj, "Glucose", search.exact = TRUE)
+SearchAnnotations <- function (data, metabolite, assay = "Spatial",search.exact = FALSE, column.name = "all_IsomerNames"){
+
+  ## Takes into account '( )' in the string name
+  search_term <- add_backslashes_to_specialfeatures(metabolite)
+  feature_metadata <- data[[assay]]@meta.data
+
+  if (!column.name %in% names(feature_metadata)) {
+    compatible_columns <- c(
+      "all_IsomerNames", "all_Isomers", "IsomerNames", "annotation"
+    )
+    available <- compatible_columns[compatible_columns %in% names(feature_metadata)]
+    if (identical(column.name, "all_IsomerNames") && length(available)) {
+      column.name <- available[[1]]
+    } else {
+      # Current serialized/mapped objects can retain the versioned annotation
+      # store even when an older feature-label column was not propagated.
+      annotations <- tryCatch(
+        .get_mz_annotations(data, annotation_source = "current"),
+        error = function(e) NULL
+      )
+      if (!is.null(annotations) &&
+          all(c("observed_mz", "IsomerNames") %in% names(annotations))) {
+        annotation_labels <- annotations %>%
+          dplyr::group_by(observed_mz) %>%
+          dplyr::summarise(
+            .annotation_search = paste(unique(IsomerNames), collapse = "; "),
+            .groups = "drop"
+          )
+        annotation_labels$mz_names <- paste0(
+          "mz-", annotation_labels$observed_mz
+        )
+        if (!"mz_names" %in% names(feature_metadata)) {
+          feature_metadata$mz_names <- SeuratObject::Features(
+            data, assay = assay
+          )
+        }
+        feature_metadata <- dplyr::left_join(
+          feature_metadata,
+          annotation_labels[c("mz_names", ".annotation_search")],
+          by = "mz_names"
+        )
+        column.name <- ".annotation_search"
+      } else {
+        stop(
+          "Annotation column '", column.name, "' is not present in assay '",
+          assay, "', and no current mz_annotation labels are available."
+        )
+      }
+    }
+  }
+
+  annotation_values <- as.character(feature_metadata[[column.name]])
+  indexs <- which(grepl(search_term, annotation_values, ignore.case = TRUE))
+
+  if (search.exact){
+    exact <- vapply(annotation_values[indexs], function(annotation_list) {
+      split_list <- trimws(unlist(strsplit(annotation_list, ";")))
+      tolower(metabolite) %in% tolower(split_list)
+    }, logical(1))
+    indexs <- indexs[exact]
+  }
+
+  return(feature_metadata[indexs, , drop = FALSE])
+}
+
+
+
+#' Finds if any metabolite is duplicated across multiple m/z values.
+#'
+#' @param data Seurat Spatial Metabolomic Object containing annotated m/z values.
+#' @param assay Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
+#'
+#' @return Vector of character strings describing metabolites that are assigned to multiple m/z values
+#' @export
+#'
+#' @examples
+#' utils::str(formals(FindDuplicateAnnotations))
+#' # FindDuplicateAnnotations(SeuratObj)
+FindDuplicateAnnotations <- function (data, assay = "Spatial"){
+  all_annotations <- data[[assay]]@meta.data$all_IsomerNames
+  all_terms <- unlist(strsplit(all_annotations, ";"))
+  all_terms <- trimws(all_terms)
+  terms_counts <- table(all_terms)
+  return(names(terms_counts[terms_counts > 1]))
+}
+
+#' Gets values from a single metadata column for a respective m/z value.
+#'
+#' @param obj SpaMTP Spatial Metabolomic Seurat Object containing annotated m/z values.
+#' @param mz Character string specifying the m/z value to return the metadata for.
+#' @param assay Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
+#' @param metadata.column Character string corresponding to the `@meta.data` column to extract the data from (default = "all_IsomerNames").
+#' @param separate Boolean indicating whether to separate the metadata string and return a vector. Note, if `TRUE` the metadata column should contain values separate by "; " (default = TRUE).
+#'
+#' @return Vector of character strings containing the metadata for a specific mz value.
+#' @export
+#'
+#' @examples
+#' utils::str(formals(GetMZMetadata))
+#  ##### Example for getting metabolite annotation for a m/z value
+#' # GetMZMetadata(SpaMTP, mz = "mz-100", metadata.column = "all_IsomerNames")
+#'
+#' ##### Example for getting metabolite annotation IDs for a m/z value
+#' # GetMZMetadata(SpaMTP, mz = "mz-100", metadata.column = "all_Isomers")
+GetMZMetadata <- function(obj, mz, assay = "Spatial", metadata.column = "all_IsomerNames", separate = TRUE){
+  df <- obj[[assay]]@meta.data
+  mz_row <- df[df$mz_names == mz,metadata.column]
+  if (separate){
+    return(strsplit(mz_row ,split = "; ")[[1]])
+  } else {
+    return(mz_row)
+  }
+}
+
+########################################################################################################################################################################################################################
+
+#!! ALL CODE BELOW WAS WRITEN BY Christopher Fitzgerald github https://github.com/ChemCharles !!#
+
+
+#' Checks if the complete adduct is in the data base, else returns a truncated adduct
+#'
+#' @param adduct Character string defining the adduct to be checked.
+#' @param db DataFrame of the current reference database.
+#' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#'
+#' @return Character string of the complete or truncated adduct
+#'
+#' @examples
+#' # HMDB_db <- load("data/HMDB_1_names.rds")
+#' # check_and_truncate_adduct_vector(c("M+H"), HMDB_db)
+check_and_truncate_adduct_vector <- function(adduct, db, verbose = TRUE) {
+  element_exists <- adduct %in% colnames(db)
+  missing_elements <- adduct[!element_exists]
+  if (length(missing_elements) > 0) {
+    for (missing_element in missing_elements) {
+      verbose_message(message_text =  paste0("Adduct ",
+                      missing_element,
+                      " is not in the DB, it has been removed from the search."), verbose = verbose)
+
+    }
+    truncated_adduct <- adduct[element_exists]
+    return(truncated_adduct)
+  } else {
+    return(adduct)
+  }
+}
+
+
+
+
+#' Filters the provided metabolomic database by polarity and adducts
+#'
+#' @param adduct Character string defining the adduct to be checked.
+#' @param db DataFrame of the current reference database.
+#' @param polarity Character string defining the polarity of the adducts (default = "neg").
+#' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#'
+#' @return A filtered reference metabolomic database DataFrame
+#'
+#' @examples
+#' # HMDB_db <- load("data/HMDB_1_names.rds")
+#' # db_adduct_filter(HMDB_db,c("M+H"), polarity = "pos")
+db_adduct_filter <- function(db, adduct, polarity = "neg", verbose = TRUE) {
+  # only include adducts from either neg or pos polarity
+  if (polarity == "neg") {
+    neg_adducts_1 <-
+      c(
+        "M-H2O-H",
+        "M-H",
+        "M+Na-2H",
+        "M+Cl",
+        "M+K-2H",
+        "M+FA-H",
+        "M+Hac-H",
+        "M+Br",
+        "M+TFA-H",
+        "2M-H",
+        "2M+FA-H",
+        "2M+Hac-H",
+        "3M-H"
+      )
+    pol <- neg_adducts_1
+  }
+  else if (polarity == "pos") {
+    pos_adducts_1 <-
+      c(
+        "M+H",
+        "M+NH4",
+        "M+Na",
+        "M+CH3OH+H",
+        "M+K",
+        "M+ACN+H",
+        "M+2Na-H",
+        "M+IsoProp+H",
+        "M+ACN+Na",
+        "M+2K+H",
+        "M+DMSO+H",
+        "M+2ACN+H",
+        "M+IsoProp+Na+H",
+        "2M+H",
+        "2M+NH4",
+        "2M+Na",
+        "2M+K",
+        "2M+ACN+H",
+        "2M+ACN+Na"
+      )
+    pol <- pos_adducts_1
+  } else{
+    stop("Invalid polarity. Choose 'neg' or 'pos'.")
+  }
+
+  # get rid of spaces in the adduct names
+  # in col names
+  db <- db %>%
+    dplyr::rename_all( ~ gsub(" ", "", .))
+
+  # Filter the db by polarity
+  db <- db %>%
+    dplyr::select(formula, exactmass, isomers, isomers_inchikey, isomers_names, pol)
+
+  # in adduct entry
+  adduct <- gsub(" ", "", adduct)
+
+  adduct <- check_and_truncate_adduct_vector(adduct, db, verbose = verbose)
+
+  db_filtered <- db %>%
+    dplyr::select(formula,
+           exactmass,
+           isomers,
+           isomers_inchikey,
+           isomers_names,
+           tidyr::any_of(adduct)) %>%
+    as.data.frame()
+  return(db_filtered)
+}
+
+
+
+
+#' Checks if a formula contains only the allowed elements
+#'
+#' @param formula Character string defining t
+#' @param allowed_elements Vector of character strings defining allowed elements
+#'
+#' @noRd
+#'
+#' @examples
+#' ### Helper function ###
+is_formula_valid <- function(formula,allowed_elements) {
+  elements <-
+    stringr::str_extract_all(formula, "[A-Z][a-z]*")[[1]] # defines an element as a Uppercase immediately followed by none or more lowercase letters.
+
+  all(elements %in% allowed_elements) # Then checks if they are in the vector of allowed elements.
+}
+
+
+
+
+#' Filters reference Database to only select natural elements
+#'
+#' @param df DataFrame of the reference database.
+#' @param elements Vector of character strings of elements to include (default = c("H", "C", "N", "O", "S", "Cl", "Br", "F", "Na", "P", "I", "Si")).
+#'
+#' @return A refined DataFrame which only includes annotations containing the specified elements
+#'
+#' @examples
+#' ## Get filtered DB by adduct
+#' # db_1 <- db_adduct_filter(db, test_add_pos, polarity = "pos")
+#'
+#' ## Refine to only include natural elements
+#' # db_2 <- formula_filter(db_1)
+formula_filter <- function(df, elements = NULL) {
+  if (is.null(elements)) {
+    elements <- c("H", "C", "N", "O", "S", "Cl", "Br",
+                  "F", "Na", "P", "I","Si")
+  }
+
+  # Elements to allow
+  allowed_elements <- elements
+
+  # Filter rows based on allowed elements
+  filtered_df <- df %>%
+    dplyr::filter(sapply(formula, allowed_elements = allowed_elements,is_formula_valid))
+
+  return(filtered_df)
+
+}
+
+
+
+
+#' Calculates the mz range of the observed_df
+#'
+#' @param input_df DataFrame of the observed dataframe being annotated
+#'
+#' @return A list containing the lower and upper mz range for the provided sample
+#'
+#' @examples
+#' # mz_df <- SeuratObject`[["Spatial"]][["mz"]]`
+#' # mz_df$row_id <- seq(1, length(mz_df$mz))
+#'
+#' # mass_range <- calculate_bounds(mz_df)
+#' # lower_bound <- mass_range$lower_bound
+#' # upper_bound <- mass_range$upper_bound
+calculate_bounds <- function(input_df) {
+
+  lower_bound <- min(input_df$mz, na.rm = TRUE)
+  upper_bound <- max(input_df$mz, na.rm = TRUE)
+
+  bounds <-
+    list(lower_bound = lower_bound, upper_bound = upper_bound)
+
+  return(bounds)
+}
+
+
+
+
+
+#' Calculates the ppm error as a valve
+#'
+#' @param observed_mz Numeric value defining the observed mz value.
+#' @param reference_mz Numeric value defining the reference mz value.
+#' @param ppm Numeric value defining the maximum acceptable ppm_error/threshold for searching.
+#'
+#' @return Numeric value defining the ppm_error between the observed and reference mz value
+#'
+#' @examples
+#' ### Helper Function ###
+ppm_error <- function(observed_mz, reference_mz, ppm) {
+  abs_diff_ppm <-
+    abs(observed_mz - reference_mz) / abs(reference_mz) * 1e6
+  if (abs_diff_ppm <= ppm) {
+    return(abs_diff_ppm)
+  }
+  else{
+    return("Out")
+  }
+}
+
+
+
+
+#' Check whether m/z values match within a ppm tolerance
+#'
+#' Calculates the absolute ppm difference between observed and reference m/z
+#' values and returns whether each comparison satisfies the tolerance.
+#'
+#' @param observed_mz Numeric value defining the observed mz value.
+#' @param reference_mz Numeric value defining the reference mz value.
+#' @param ppm Numeric value defining the maximum acceptable ppm_error/threshold for searching.
+#'
+#' @return Boolean value indicating if a match is found (TRUE) or not (FALSE)
+#'
+#' @examples
+#' ### Helper Function ###
+ppm_range_match <- function(observed_mz, reference_mz, ppm) {
+  abs_diff_ppm <-
+    abs(observed_mz - reference_mz) / abs(reference_mz) * 1e6
+  abs_diff_ppm <= ppm
+}
+
+
+
+#' Searches observed mz values against the data base list and returns matching annotations
+#'
+#' @param observed_df DataFrame containing the observed mz values
+#' @param reference_df DataFrame contating the reference mz values and relative annotations.
+#' @param ppm_threshold Numeric value defining the maximum acceptable ppm_error/threshold allowed between observed and reference mz values
+#'
+#' @return A DataFrame containing matched mz values between the observed and reference dataframes
+#'
+#' @noRd
+#'
+#' @examples
+#' # HMDB_db <- load("data/HMDB_1_names.rds")
+#' # mz_df <- SeuratObject[["Spatial"]][["mz"]]
+#' # mz_df$row_id <- seq(1, length(mz_df$mz))
+#'
+#' ## 1) Filter DB by adduct.
+#' # db_1 <- db_adduct_filter(HMDB_db, c("M+H"), polarity = "pos")
+#'
+#' ## 2) only select natural elements
+#' # db_2 <- formula_filter(db_1)
+#'
+#' ## 3) search db against mz df return results
+#' # db_3 <- proc_db(mz_df, db_2, ppm_threshold = 5)
+proc_db <- function(observed_df,
+                    reference_df,
+                    ppm_threshold = 10,
+                    verbose = TRUE) {
+  # create an empty list to store matched results.
+  result_list <- list()
+
+  # Check if observed_df has only one row
+  if (nrow(observed_df) == 1) {
+    # Create a dummy entry with all values set to 0
+    dummy_row <-
+      data.frame(row_id = 0, mz = 0)  # Modify this line based on your column names
+
+    # Combine the dummy entry with the original observed_df
+    observed_df <- rbind(observed_df, dummy_row)
+  } else if (nrow(observed_df) == 0) {
+    # Handle the case when observed_df is empty
+    verbose_message(message_text =  "Warning: No entries detected in input mz list.\n Please check format of input list,\n it must contain row_id and mz as the headers", verbose = verbose)
+
+    return(NULL)
+  }
+
+  # extract out bounds
+  lower_bound <- calculate_bounds(observed_df)$lower_bound
+  upper_bound <- calculate_bounds(observed_df)$upper_bound
+
+  #  For loop to go through each column of the reference_df that is provided.
+  #  probably a good idea to filter reference_df to only adducts that you want before putting it into this function.
+  # the -c(1:4) essentially makes it loop over the numeric portions of the DBs.
+
+  for (col_name in names(reference_df)[-c(1:5)]) {
+    result_col <- list()
+    for (i in seq_len(nrow(observed_df))) {
+      # Check if the reference mz is within the range
+      within_range <-
+        reference_df[[col_name]] >= lower_bound &
+        reference_df[[col_name]] <= upper_bound
+
+      # Condition 1: Only proceed if there are values within the range
+      if (!any(within_range)) {
+        next
+      }
+
+      # check for matches
+      matches <- ppm_range_match(
+        observed_mz = observed_df$mz[i],
+        reference_mz = reference_df[[col_name]],
+        ppm = ppm_threshold
+      )
+
+      # Condition 2: skip to the next iteration if no match
+      if (!any(matches)) {
+        next
+      }
+
+      # Condition 3: index the matches in the reference df
+      # which keeps things that are TRUE.
+      # This allows referencing to be quicker below.
+      matching_indices <- which(matches)
+      # print(matching_indices)
+
+      # Calculate ppm error for each match.
+      error <- mapply(
+        ppm_error,
+        observed_mz = observed_df$mz[i],
+        reference_mz = reference_df[[col_name]][matching_indices],
+        ppm = ppm_threshold
+      )
+
+      # Extract out relevant info for each match.
+      filtered_matches <- data.frame(
+        ID = observed_df$row_id[i],
+        Match = matches[matching_indices],
+        observed_mz = observed_df$mz[i],
+        Reference_mz = reference_df[[col_name]][matching_indices],
+        Error = error,
+        Adduct = col_name,
+        # DB_ID = reference_df$compound_id[matching_indices],
+        Formula = reference_df$formula[matching_indices],
+        Exactmass = reference_df$exactmass[matching_indices],
+        Isomers = reference_df$isomers[matching_indices],
+        InchiKeys = reference_df$isomers_inchikey[matching_indices],
+        IsomerNames = reference_df$isomers_names[matching_indices]
+      )
+      # store each results df for each mz value in observed_df
+      result_col[[i]] <- filtered_matches
+    }
+    # store results df in a list for each mz value for each adduct
+    result_list[[col_name]] <- result_col
+  }
+
+  # Combine the individual matches per adduct df from the list into a dataframe
+  combined_results <-
+    do.call(rbind, lapply(result_list, function(result_col)
+      do.call(rbind, result_col)))
+}
+
+
+
+########################################################################################################################################################################################################################
+
+#' Assign custom annotations to m/z values
+#'
+#' Adds custom metabolite annotations to respective m/z values (ideal for specific matrices such as FMP10).
+#'
+#' @param data SpaMTP Seurat object containing m/z intensity values.
+#' @param annotations data.frame containing two columns named 'annotation' and 'mass'. These columns should contain the custom metabolite annotation and the relative m/z mass respectively.
+#' @param assay Character string defining the Seurat object assay to store the respective annotations in the feature meta.data dataframe (default = "Spatial").
+#' @param return.only.annotated Boolean defining whether to return a SpaMTP Seurat object containing only successfully annotated m/z values (default = FALSE).
+#' @param mass.threshold Numeric value defining the acceptable threshold (plus-minus) between the custom annotations and the actual m/z values contained within the SpaMTP object (default = 0.05).
+#' @param annotation.column Character string defining the feature meta.data column name that will contain the assigned annotations (default = "all_IsomerNames").
+#'
+#' @return SpaMTP Seurat object containing the custom annotations stored in the feature metadata dataframe.
+#' @export
+#'
+#' @examples
+#' utils::str(formals(AddCustomMZAnnotations))
+#' # annotated_data <- AddCustomMZAnnotations(SpaMTP.obj, annotation.df)
+AddCustomMZAnnotations <- function(data, annotations, assay = "Spatial", return.only.annotated = FALSE, mass.threshold = 0.05, annotation.column = "all_IsomerNames"){
+
+  if (!all(c("annotation", "mass") %in% colnames(annotations))) {
+    stop("Error: The annotation columns provided does not match the required format. Must bet 'annotation' and 'mass'")
+  }
+
+  true_mzs <- c()
+  for (mass in annotations$mass){
+    true_mz <- FindNearestMZ(data, mass, assay = assay)
+    true_mzs <- c(true_mzs,true_mz)
+  }
+
+  annotations$mz_names <- true_mzs
+  annotations$true_mzs <- gsub("mz-", "", annotations$mz_names)
+  annotations$ppm_diff <- abs(annotations$mass - as.numeric(annotations$true_mzs))
+
+  if (!is.null(mass.threshold)){
+    annotations <- annotations %>% dplyr::filter(ppm_diff < mass.threshold)
+  }
+
+  annotations <- annotations %>% dplyr::rename(!!annotation.column := annotation)
+  annotations <- annotations %>%
+    dplyr::group_by(mz_names) %>%
+    dplyr::summarise(
+      across(
+        everything(),  # Apply to all columns
+        ~ paste(unique(.), collapse = "; ")  # For each column, collapse unique values into a single string
+      )
+    )
+
+  # Re-annotation should replace stale feature-level annotation columns rather
+  # than creating .x/.y suffixes on objects serialized by older releases.
+  feature_metadata <- data[[assay]]@meta.data
+  replacement_columns <- setdiff(
+    intersect(names(feature_metadata), names(annotations)),
+    "mz_names"
+  )
+  feature_metadata[replacement_columns] <- NULL
+  data[[assay]]@meta.data <- feature_metadata %>%
+    dplyr::left_join(annotations, by = "mz_names") %>%
+    dplyr::mutate(dplyr::across(dplyr::everything(), ~tidyr::replace_na(.x, "No Annotation")))
+
+
+  if (return.only.annotated == TRUE){
+
+    annotated_mzs <- data[[assay]]@meta.data$mz_names[data[[assay]]@meta.data[[annotation.column]] != "No Annotation"]
+    #verbose_message(message_text = "Returning Seurat object that include ONLY SUCCESSFULLY ANNOTATED m/z features", verbose = verbose)
+
+    if(length(Assays(object = data)) != 1){
+      features = c()
+      for(non_met_assay in Assays(object = data)[which(Assays(object = data)!=assay)]){
+        features =  c(features, rownames(data@assays[[non_met_assay]]@features))
+      }
+      data <- suppressWarnings({SubsetMZFeatures(data, assay = assay, features = c(annotated_mzs, features))})
+    }else{
+      data <- suppressWarnings({SubsetMZFeatures(data, assay = assay, features = annotated_mzs)})
+    }
+  }
+
+  return(data)
+}
+
+
+#' Annotates FMP10 matrix data
+#'
+#' Adds metabolite annotations to respective m/z values generated using an FMP10 matrix. This is done based on a curated FMP10 matrix database.
+#'
+#' @param obj SpaMTP Seurat object containing m/z intensity values for annotation. Data should be generated with a FMP10 matrix.
+#' @param only.fmp.adduct Boolean indicating if only metabolites with FMP10+ adducts (`+FMP10`, +`2FMP10`, etc.) should be assigned to m/z values (default = FALSE).
+#' @param add.custom.annotation data.frame containing addition FMP10 metabolite annotations that are not in the current FMP10 database. Note: this data.frame must contain these column c("mass", "annotation", "Adduct", "Formula", "Isomers", "Isomers_IDs"). If set to NULL, only reference FMP10 database will be used (default = NULL).
+#' @param assay Character string defining the Seurat object assay to store the respective annotations in the feature meta.data dataframe (default = "Spatial").
+#' @param return.only.annotated Boolean defining whether to return a SpaMTP Seurat object containing only successfully annotated m/z values (default = FALSE).
+#' @param mass.threshold Numeric value defining the acceptable threshold (plus-minus) between the custom annotations and the actual m/z values contained within the SpaMTP object (default = 0.05).
+#' @param annotation.column Character string defining the feature meta.data column name that will contain the assigned annotations (default = "all_IsomerNames").
+#' @param database Optional named list of database resources, normally created
+#'   by [LoadSpaMTPDatabase()].
+#' @param database_version SpaMTPdb/RaMP version used for annotation lookup.
+#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_local_dir Optional staged SpaMTPdb resource directory.
+#'
+#' @return SpaMTP Seurat object containing the relative metabolite annotations stored in the feature metadata dataframe.
+#' @export
+#'
+#' @examples
+#' utils::str(formals(AddFMP10Annotations))
+#' # AddFMP10Annotations(spamtp, only.fmp.adduct = FALSE)
+AddFMP10Annotations <- function(obj,  only.fmp.adduct = FALSE,
+                                add.custom.annotation = NULL,
+                                assay = "Spatial",
+                                return.only.annotated = FALSE,
+                                mass.threshold = 0.05,
+                                annotation.column = "all_IsomerNames",
+                                database = NULL,
+                                database_version = "latest",
+                                database_source = c("auto", "spamtpdb"),
+                                database_local_dir = NULL){
+
+  database_resources <- .spamtp_db_bundle(
+    c("filtered_fmp10", "chem_props"),
+    database = database,
+    version = database_version,
+    source = match.arg(database_source),
+    local_dir = database_local_dir
+  )
+  filtered_fmp10 <- database_resources$filtered_fmp10
+  chem_props <- database_resources$chem_props
+
+  if (!is.null(mass.threshold) &&
+      (!is.numeric(mass.threshold) || length(mass.threshold) != 1L ||
+       !is.finite(mass.threshold) || mass.threshold <= 0)) {
+    stop("mass.threshold must be NULL or one positive finite number.")
+  }
+
+  if(only.fmp.adduct){
+    filtered_fmp10 <- filtered_fmp10[grepl(x = filtered_fmp10$Adduct, pattern = "FMP10"),]
+  }
+
+  if(!is.null(add.custom.annotation)){
+    required_columns <- c("mass", "annotation", "Adduct", "Formula", "Isomers", "Isomers_IDs")
+
+    if (all(required_columns %in% colnames(add.custom.annotation))) {
+      add.custom.annotation$IsomerNames <- add.custom.annotation$annotation
+      add.custom.annotation <- add.custom.annotation[c(required_columns, "IsomerNames")]
+      filtered_fmp10 <- dplyr::bind_rows(filtered_fmp10, add.custom.annotation)
+    } else {
+      stop("data.frame provided in `add.custom.annotation` does not contain the correct column names. Column names must be: c('mass', 'annotation', 'Adduct', 'Formula', 'Isomers', 'Isomers_IDs')")
+    }
+
+  }
+
+
+
+  obj <- AddCustomMZAnnotations(obj, filtered_fmp10,
+                                assay = assay,
+                                return.only.annotated = return.only.annotated,
+                                annotation.column = annotation.column,
+                                mass.threshold = mass.threshold)
+
+
+  # Reconstruct one row per reference/observed-mass match without the previous
+  # O(features x references) nested loop. AddCustomMZAnnotations() has already
+  # recorded the matched reference masses in feature metadata.
+  feature_matches <- data.frame(
+    mz_names = as.character(obj[[assay]]@meta.data$mz_names),
+    mass = as.character(obj[[assay]]@meta.data$mass),
+    stringsAsFactors = FALSE
+  )
+  feature_matches <- tidyr::separate_rows(feature_matches, mass, sep = "\\s*;\\s*")
+  feature_matches$mass <- suppressWarnings(as.numeric(feature_matches$mass))
+  feature_matches$observed_mz <- suppressWarnings(
+    as.numeric(sub("^mz-", "", feature_matches$mz_names))
+  )
+  feature_matches <- unique(feature_matches[
+    is.finite(feature_matches$mass) & is.finite(feature_matches$observed_mz),
+    c("mass", "observed_mz"),
+    drop = FALSE
+  ])
+
+  db_3 <- merge(
+    filtered_fmp10,
+    feature_matches,
+    by = "mass",
+    all = FALSE,
+    sort = FALSE
+  )
+
+  # Preserve the historical table, but also map source identifiers onto the
+  # current RaMP compound graph and store scored, versioned candidates for all
+  # new pathway/network functions.
+  obj@tools$db_3 <- db_3
+  current_annotations <- .fmp10_current_annotations(
+    db_3,
+    mass_threshold = mass.threshold,
+    chemical_properties = chem_props
+  )
+  obj@tools$mz_annotation <- .annotation_store(
+    current_annotations,
+    metadata = list(
+      engine = "curated-fmp10-v2",
+      assay = assay,
+      mass_tolerance_da = mass.threshold,
+      database = paste0(
+        "curated FMP10 panel mapped to ", .spamtp_db_label(chem_props)
+      ),
+      mapped_candidates = sum(nzchar(current_annotations$Ramp_IDs))
+    )
+  )
+
+  annotation_summary <- current_annotations %>%
+    dplyr::group_by(observed_mz) %>%
+    dplyr::summarise(
+      all_Ramp_IDs = paste(unique(Ramp_IDs[nzchar(Ramp_IDs)]), collapse = "; "),
+      all_Scores = paste(round(Score, 4), collapse = "; "),
+      .groups = "drop"
+    )
+  annotation_summary$mz_names <- paste0("mz-", annotation_summary$observed_mz)
+  annotation_summary$observed_mz <- NULL
+  obj[[assay]]@meta.data <- obj[[assay]]@meta.data %>%
+    dplyr::select(-dplyr::any_of(c("all_Ramp_IDs", "all_Scores"))) %>%
+    dplyr::left_join(annotation_summary, by = "mz_names") %>%
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::all_of(c("all_Ramp_IDs", "all_Scores")),
+        ~ tidyr::replace_na(.x, "No Annotation")
+      )
+    )
+
+  obj[[assay]]@meta.data$observed_mz <- obj[[assay]]@meta.data$mass
+  obj[[assay]]@meta.data$all_Isomers <- obj[[assay]]@meta.data$Isomers
+  obj[[assay]]@meta.data$all_Isomers_IDs <- obj[[assay]]@meta.data$Isomers_IDs
+  obj[[assay]]@meta.data$all_Adducts <- obj[[assay]]@meta.data$Adduct
+  obj[[assay]]@meta.data$all_Formulas <- obj[[assay]]@meta.data$Formula
+  obj[[assay]]@meta.data$all_Errors <- obj[[assay]]@meta.data$ppm_diff
+
+  obj[[assay]]@meta.data[c("mass", "Isomers", "Isomers_IDs", "Adduct","Formula", "ppm_diff", "IsomerNames", "observed_mz")] <- NULL
+
+  return(obj)
+}
+
+
+.fmp10_current_annotations <- function(db_3, mass_threshold,
+                                       chemical_properties) {
+  required <- c(
+    "mass", "observed_mz", "Adduct", "Formula", "Isomers",
+    "Isomers_IDs", "IsomerNames"
+  )
+  missing <- setdiff(required, names(db_3))
+  if (length(missing)) {
+    stop(
+      "FMP10 annotation result is missing required column(s): ",
+      paste(missing, collapse = ", ")
+    )
+  }
+  if (!all(c("ramp_id", "chem_source_id") %in% names(chemical_properties))) {
+    stop("chemical_properties must contain ramp_id and chem_source_id columns.")
+  }
+
+  result <- tidyr::separate_rows(
+    as.data.frame(db_3, stringsAsFactors = FALSE),
+    Isomers_IDs,
+    sep = "\\s*;\\s*"
+  )
+  result$.source_key <- toupper(trimws(as.character(result$Isomers_IDs)))
+
+  source_map <- unique(data.frame(
+    .source_key = toupper(trimws(as.character(chemical_properties$chem_source_id))),
+    ramp_id = toupper(trimws(as.character(chemical_properties$ramp_id))),
+    stringsAsFactors = FALSE
+  ))
+  source_map <- source_map[
+    nzchar(source_map$.source_key) & grepl("^RAMP_C_", source_map$ramp_id),
+    ,
+    drop = FALSE
+  ]
+  ramp_lookup <- vapply(
+    split(source_map$ramp_id, source_map$.source_key),
+    function(x) paste(unique(x), collapse = "; "),
+    character(1)
+  )
+  result$Ramp_IDs <- unname(ramp_lookup[result$.source_key])
+  result$Ramp_IDs[is.na(result$Ramp_IDs)] <- ""
+
+  result$observed_mz <- suppressWarnings(as.numeric(result$observed_mz))
+  result$Reference_mz <- suppressWarnings(as.numeric(result$mass))
+  absolute_error <- abs(result$observed_mz - result$Reference_mz)
+  result$Error <- absolute_error / result$Reference_mz * 1e6
+  if (is.null(mass_threshold)) {
+    result$MassScore <- rep(1, nrow(result))
+  } else {
+    result$MassScore <- exp(-0.5 * (absolute_error / (mass_threshold / 3))^2)
+  }
+  result$ChemicalScore <- rep(1, nrow(result))
+  result$IsotopeScore <- rep(NA_real_, nrow(result))
+  result$AdductNetworkScore <- rep(NA_real_, nrow(result))
+  result$Score <- result$MassScore
+  result$Match <- rep(TRUE, nrow(result))
+  result$ID <- match(result$observed_mz, unique(result$observed_mz))
+  # For derivatised FMP10 entries this is the curated panel mass, not a
+  # re-derived neutral mass; retain it as the best available exact reference.
+  result$Exactmass <- result$Reference_mz
+  if (!"InchiKeys" %in% names(result)) result$InchiKeys <- NA_character_
+  result$.source_key <- NULL
+
+  preferred <- c(
+    "ID", "Match", "observed_mz", "Reference_mz", "Error", "Adduct",
+    "Formula", "Exactmass", "Isomers", "InchiKeys", "IsomerNames",
+    "Isomers_IDs", "Ramp_IDs", "Score", "MassScore", "ChemicalScore",
+    "IsotopeScore", "AdductNetworkScore"
+  )
+  result[, c(preferred, setdiff(names(result), preferred)), drop = FALSE]
+}
+
+
+
+
+#' Annotates vector of m/z values
+#'
+#' This function assigns each valid m/z peak with one/multiple metabolite names based on the mass difference between the observed value and the theoretical value documented in the reference database.
+#' This function is to be used when dealing with large datasets as a preprocessing step. Users can annotate m/z values first and then subset their data accordinly before loading it into a SpaMTP Seurat Object.
+#'
+#' @param mzs Vector containing m/z values for annotation.
+#' @param db Reference metabolite dataset in the form of a data.frame. SpaMTP
+#'   provides four pre-cleaned databases (`HMDB_db`, `Lipidmaps_db`,
+#'   `Chebi_db`, `GNPS_db`). May be `NULL` when a pre-built `index` is supplied
+#'   through `...`.
+#' @param ppm_error Mass tolerance in ppm. If `NULL`, a strict 5 ppm maximum
+#'   is used (or a smaller value inferred from `tof_resolution`). Set to zero
+#'   for exact numerical matches.
+#' @param adducts Optional adduct names/notations; see `AdductRules()`. If
+#'   `NULL`, use the complete rule space selected from `maldi_matrix`, or all
+#'   validated general rules for the selected polarity when no matrix is given.
+#' @param polarity Character string defining the ion mode. When `NULL`, infer
+#'   it from a supplied index or MALDI matrix profile, otherwise use positive.
+#' @param tof_resolution Instrument resolving power retained for compatibility;
+#'   it can only tighten, not widen, the default 5 ppm mass-accuracy threshold.
+#' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#' @param maldi_matrix Optional MALDI matrix/reagent profile used for automatic
+#'   rule selection. The `adducts` argument remains an optional restriction.
+#' @param database_version SpaMTPdb/RaMP version used when `db = NULL`.
+#' @param database_source Database source used when `db = NULL`; see
+#'   [LoadSpaMTPDatabase()].
+#' @param database_local_dir Optional staged SpaMTPdb resource directory.
+#' @param ... Additional indexed annotation/scoring arguments passed to
+#'   `annotateTable()`, such as `index`, `rules`, or `ms1_spectrum`.
+#'
+#' @returns A data.frame containing all successfully annotated m/z values, with their corresponding annotation.
+#' @export
+#'
+#' @examples
+#' utils::str(formals(AnnotateBigData))
+#' #cardinal <- readImzML("./Test_Data/Spotted/test_data1")
+#' #mzs <- data.frame(Cardinal::featureData(cardinal))$mz
+#' #results <- AnnotateBigData(mzs, db = HMDB_db, ppm_error = 3, adducts = c("M-H", "M+Cl"), polarity = "negative")
+#' #cardinal_subset <- Cardinal::subset(cardinal, mz %in% results$observed_mz)
+#' #SpaMTP_data <- CardinalToSeurat(cardinal_subset)
+AnnotateBigData <- function(mzs, db = NULL, ppm_error = NULL, adducts = NULL,
+                            polarity = NULL, tof_resolution = 30000,
+                            verbose = TRUE, maldi_matrix = NULL,
+                            database_version = "latest",
+                            database_source = c("auto", "spamtpdb"),
+                            database_local_dir = NULL, ...){
+  mz_df <- data.frame(mz = mzs)
+  mz_df$row_id <- seq(1, length(mz_df[["mz"]]))
+  mz_df <- mz_df[c("row_id", "mz")]
+
+  annotations <- annotateTable(
+    mz_df, db = db, ppm_error = ppm_error, adducts = adducts,
+    polarity = polarity, tof_resolution = tof_resolution, verbose = verbose,
+    maldi_matrix = maldi_matrix, database_version = database_version,
+    database_source = match.arg(database_source),
+    database_local_dir = database_local_dir, ...
+  )
+
+  result_df <- annotations %>%
+    dplyr::group_by(observed_mz) %>%
+    dplyr::summarise(
+      all_IsomerNames = paste(IsomerNames, collapse = "; "),
+      all_Isomers = paste(Isomers, collapse = "; "),
+      all_Isomers_IDs = paste(Isomers_IDs, collapse = "; "),
+      all_Adducts = paste(unique(Adduct), collapse = "; "),
+      all_Formulas = paste(unique(Formula), collapse = "; "),
+      all_Errors = paste(round(Error,4), collapse = "; "),
+      all_Scores = paste(round(.data$Score,4), collapse = "; "),
+      all_Ramp_IDs = paste(unique(.data$Ramp_IDs[!is.na(.data$Ramp_IDs)]), collapse = "; ")
+    )
+
+  result_df <- data.frame(result_df)
+  result_df$mz_names <- if (nrow(result_df)) {
+    paste0("mz-", result_df$observed_mz)
+  } else {
+    character()
+  }
+  result_df$present <- rep(TRUE, nrow(result_df))
+  rownames(result_df) <- seq_len(nrow(result_df))
+  return(result_df)
+}
+
+
+
+#' Find all library spectra10 above a cosine threshold for each imaging peak,
+#' restricting to a global precursor-mz range.
+#'
+#' @param raw_mz         Numeric vector of length n_peaks
+#' @param counts         Numeric matrix n_peaks × n_pixels
+#' @param spectra10_list   List of Spectrum2 objects (length N_lib)
+#' @param ppm_tol        Precursor‐matching tolerance in ppm (default 10)
+#' @param frag_tol_da    Fragment‐matching tolerance in Da (default 0.01)
+#' @param cos_threshold  Minimum cosine similarity to report (default 0.7)
+#' @param min_precursor  Minimum allowed precursor m/z (default = 0, i.e. no lower bound)
+#' @param max_precursor  Maximum allowed precursor m/z (default = Inf, i.e. no upper bound)
+#'
+#' @return A list of length n_peaks. Each element is an integer vector giving
+#'         the indices in spectra10_list of all library spectra10 with
+#'         cosine >= cos_threshold (or integer(0) if none).
+Pseudo_msms <- function(raw_mz,
+                               counts,
+                               spectra10_list,
+                               ppm_tol       = 10,
+                               frag_tol_da   = 0.01,
+                               cos_threshold = 0.7,
+                               min_precursor = 0,
+                               max_precursor = Inf) {
+  stopifnot(length(raw_mz) == nrow(counts))
+  # extract library precursor m/z’s, and keep only those within [min, max]
+  prec_all<- vapply(spectra10_list, function(sp)
+    sp@precursorMz, numeric(1))
+  ok_lib<- (prec_all >= min_precursor) &
+    (prec_all <= max_precursor)
+  if (!any(ok_lib)) {
+    stop("No library spectra10 within the specified precursor range.")
+  }
+
+  # filter down to the “in-range” subset
+  spectra10_names <- names(spectra10_list)
+  spectra10_sub   <- mget(spectra10_names[ok_lib], envir = spectra10_list)
+  prec_sub    <- prec_all[ok_lib]
+
+  #sort the filtered library for fast window lookup
+  ord         <- order(prec_sub)
+  prec_sorted <- prec_sub[ord]
+
+  # precompute precursor ppm windows for each imaging m/z
+  lower <- raw_mz * (1 - ppm_tol / 1e6)
+  upper <- raw_mz * (1 + ppm_tol / 1e6)
+
+  # cosine function
+  cosine <- function(x, y)
+    sum(x * y) / (sqrt(sum(x^2)) * sqrt(sum(y^2)))
+
+  # prepare output list
+  candidates <- vector("list", length(raw_mz))
+
+  # loop over each imaging peak
+  for (i in seq_along(raw_mz)) {
+    # find indices in prec_sorted within the ppm window
+    li <- findInterval(lower[i], prec_sorted)
+    ui <- findInterval(upper[i], prec_sorted)
+    if (ui <= li) {
+      candidates[[i]] <- integer(0)
+      next
+    }
+    cands_sorted <- (li + 1):ui
+
+    #  compute cosine for each candidate
+    cos_vals <- vapply(cands_sorted, function(j) {
+      sp       <- spectra10_sub[[ord[j]]]
+      mz_lib   <- sp@mz
+      int_lib  <- sp@intensity
+
+      idx      <- findInterval(mz_lib, raw_mz)
+      idx[idx == 0] <- 1
+
+      keep     <- abs(raw_mz[idx] - mz_lib) <= frag_tol_da
+
+      # DEBUG: check lengths
+      if (length(idx) != length(mz_lib))
+        stop("idx length mismatch")
+      if (length(keep) != length(mz_lib))
+        stop("keep length mismatch")
+
+      if (sum(keep) < 3)
+        return(NA_real_)  # too few matched
+
+      int_img  <- counts[idx[keep]]
+      int_lib2 <- int_lib[keep]
+
+      # DEBUG: check lengths before cosine
+      if (length(int_img) != length(int_lib2)) {
+        cat("int_img:",
+            length(int_img),
+            " int_lib2:",
+            length(int_lib2),
+            "\n")
+        stop("mismatch between int_img and int_lib2 lengths")
+      }
+
+      cosine(int_img, int_lib2)
+    }, numeric(1))
+
+    # collect all whose cosine ≥ threshold
+    good <- which(!is.na(cos_vals) & (cos_vals >= cos_threshold))
+    # map back to the original spectra10_list indices
+    if (length(good) > 0) {
+      sub_idx <- which(ok_lib)[ord[cands_sorted[good]]]
+      candidates[[i]] <- sub_idx
+    } else {
+      candidates[[i]] <- NULL
+    }
+  }
+
+  names(candidates) <- raw_mz
+  return(candidates)
+}

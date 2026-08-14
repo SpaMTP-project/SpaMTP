@@ -1,0 +1,6 @@
+^LICENSE\.md$
+^\.git
+^data-raw$
+.*\.Rcheck$
+.*\.BiocCheck$
+.*\.tar\.gz$
