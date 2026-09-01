@@ -13,9 +13,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(CardinalToSeurat))
-#' # CardinalToSeurat(CardinalObj, run_name = "run_1", seurat.coord = NULL)
-CardinalToSeurat <- function(data, multi.run = FALSE, seurat.coord = NULL, assay = "Spatial", verbose = TRUE){
+#' utils::str(formals(cardinalToSeurat))
+#' # cardinalToSeurat(CardinalObj, run_name = "run_1", seurat.coord = NULL)
+cardinalToSeurat <- function(data, multi.run = FALSE, seurat.coord = NULL, assay = "Spatial", verbose = TRUE){
 
   verbose_message(message_text = "Convering Cardinal object to Seurat object .... ", verbose = verbose)
 
@@ -114,7 +114,10 @@ CardinalToSeurat <- function(data, multi.run = FALSE, seurat.coord = NULL, assay
   }
 
 
-  metadata <- data.frame("raw_mz" = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])))
+  metadata <- data.frame(
+    raw_mz = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])),
+    mz_names = rownames(seuratobj)
+  )
   rownames(metadata) <- rownames(seuratobj)
 
 
@@ -122,15 +125,12 @@ CardinalToSeurat <- function(data, multi.run = FALSE, seurat.coord = NULL, assay
                                                 metadata = metadata,
                                                 col.name = 'raw_mz')
 
-
-  seuratobj[["Spatial"]]@meta.data$mz_names <- rownames(seuratobj)
-
   return(seuratobj)
 }
 
 #' Converts a SpaMTP binned Cardinal Object into a SpaMTP Seurat Object
 #'
-#' This function is used by `LoadSM()` when `bin_package` is set to 'SpaMTP'.
+#' This function is used by `loadSM()` when `bin_package` is set to 'SpaMTP'.
 #'
 #' @param data A Cardinal Object that is being converted into a Seurat Object.
 #' @param mtx Matrix object containing
@@ -142,9 +142,9 @@ CardinalToSeurat <- function(data, multi.run = FALSE, seurat.coord = NULL, assay
 #' @export
 #'
 #' @examples
-#' utils::str(formals(BinnedCardinalToSeurat))
-#' # CardinalToSeurat(CardinalObj, run_name = "run_1")
-BinnedCardinalToSeurat <- function(data, mtx, multi.run = FALSE,  assay = "Spatial", verbose = TRUE ){
+#' utils::str(formals(binnedCardinalToSeurat))
+#' # cardinalToSeurat(CardinalObj, run_name = "run_1")
+binnedCardinalToSeurat <- function(data, mtx, multi.run = FALSE,  assay = "Spatial", verbose = TRUE ){
 
   verbose_message(message_text = "Convering Cardinal object to Seurat object .... ", verbose = verbose)
 
@@ -233,16 +233,16 @@ BinnedCardinalToSeurat <- function(data, mtx, multi.run = FALSE,  assay = "Spati
   }
 
 
-  metadata <- data.frame("raw_mz" = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])))
+  metadata <- data.frame(
+    raw_mz = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])),
+    mz_names = rownames(seuratobj)
+  )
   rownames(metadata) <- rownames(seuratobj)
 
 
   seuratobj[["Spatial"]] <- Seurat::AddMetaData(object = seuratobj[["Spatial"]],
                                                 metadata = metadata,
                                                 col.name = 'raw_mz')
-
-
-  seuratobj[["Spatial"]]@meta.data$mz_names <- rownames(seuratobj)
 
   return(seuratobj)
 }
@@ -262,32 +262,36 @@ BinnedCardinalToSeurat <- function(data, mtx, multi.run = FALSE,  assay = "Spati
 #' @export
 #'
 #' @examples
-#' utils::str(formals(ConvertSeuratToCardinal))
-#' # cardinal.obj <- ConvertSeuratToCardinal(SeuratObject, feature.metadata = TRUE)
-ConvertSeuratToCardinal <- function(data, assay = "Spatial", slot = "counts", run_col = NULL, feature.metadata = FALSE, verbose = TRUE){
+#' utils::str(formals(convertSeuratToCardinal))
+#' # cardinal.obj <- convertSeuratToCardinal(SeuratObject, feature.metadata = TRUE)
+convertSeuratToCardinal <- function(data, assay = "Spatial", slot = "counts", run_col = NULL, feature.metadata = FALSE, verbose = TRUE){
 
   verbose_message(message_text = "Gathering Intensity, m/z values and metadata from Seurat Object ...", verbose = verbose)
 
-  mzs <- unlist(lapply(rownames(data[[assay]]@features), function(x) as.numeric(stringr::str_split(x, "mz-")[[1]][2])))
+  mzs <- unlist(lapply(rownames(data[[assay]]), function(x) as.numeric(stringr::str_split(x, "mz-")[[1]][2])))
   coord <- SeuratObject::GetTissueCoordinates(data)
+  cellMetadata <- .cellMetadata(data)
 
   if (!(is.null(run_col))){
-    run <- data@meta.data[[run_col]]
+    run <- cellMetadata[[run_col]]
   } else {
     run <- factor("run0")
   }
 
   pdata <- Cardinal::PositionDataFrame(run = run,
                              coord=coord[c("x","y")],
-                             Seurat_metadata = data@meta.data[c(colnames(data@meta.data))]) #adds all other columns
+                             Seurat_metadata = cellMetadata) #adds all other columns
 
   if (feature.metadata){
-    fdata <- Cardinal::MassDataFrame(mz=mzs, feature_metadata = data[[assay]]@meta.data[c(colnames(data[[assay]]@meta.data))])
+    fdata <- Cardinal::MassDataFrame(
+      mz = mzs,
+      feature_metadata = .featureMetadata(data, assay)
+    )
   } else {
     fdata <- Cardinal::MassDataFrame(mz=mzs)
   }
 
-  mat <- data[[assay]][slot]
+  mat <- .assayData(data, assay, slot)
   rownames(mat) <- NULL
   colnames(mat) <- NULL
 
@@ -307,5 +311,4 @@ ConvertSeuratToCardinal <- function(data, assay = "Spatial", slot = "counts", ru
   return(cardinal.obj)
 }
 ########################################################################################################################################################################################################################
-
 

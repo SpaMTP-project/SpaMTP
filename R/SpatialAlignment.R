@@ -75,7 +75,7 @@
 #' @param python Optional path to a Python executable containing `STalign` and
 #'   `torch`. It must be selected before reticulate initialises Python.
 #' @param alignment.name Name used to store alignment provenance in
-#'   `SM.data@tools$spatial_alignment`.
+#'   `SeuratObject::Misc(SM.data, slot = "spatial_alignment")`.
 #' @param store Logical; store lightweight provenance and diagnostics in the
 #'   returned object.
 #' @param return Either `"object"` (default) or `"result"`. The latter returns a
@@ -92,9 +92,9 @@
 #' @export
 #'
 #' @examplesIf interactive()
-#' utils::str(formals(ApplySpatialAlignment))
+#' utils::str(formals(applySpatialAlignment))
 #' # Apply coordinates already exported by the SMINT/STalign notebook.
-#' aligned_sm <- ApplySpatialAlignment(
+#' aligned_sm <- applySpatialAlignment(
 #'   SM.data = sm,
 #'   ST.data = st,
 #'   alignment = "Ven5_z2_transformed_metabolites_coordinates.csv",
@@ -102,7 +102,7 @@
 #' )
 #'
 #' # Run the notebook's landmark-guided LDDMM workflow from R.
-#' fit <- ApplySpatialAlignment(
+#' fit <- applySpatialAlignment(
 #'   SM.data = sm,
 #'   ST.data = st,
 #'   method = "lddmm",
@@ -117,7 +117,7 @@
 #'   return = "result"
 #' )
 #' fit$diagnostics
-ApplySpatialAlignment <- function(
+applySpatialAlignment <- function(
     SM.data,
     ST.data = NULL,
     alignment = NULL,
@@ -312,7 +312,7 @@ ApplySpatialAlignment <- function(
 
   provenance <- list(
     name = alignment.name,
-    engine = "SpaMTP::ApplySpatialAlignment",
+    engine = "SpaMTP::applySpatialAlignment",
     backend = backend,
     parameters = parameters,
     preprocessing_matrix = preprocessing$matrix,
@@ -322,10 +322,9 @@ ApplySpatialAlignment <- function(
   )
 
   if (isTRUE(store)) {
-    if (is.null(output@tools$spatial_alignment)) {
-      output@tools$spatial_alignment <- list()
-    }
-    output@tools$spatial_alignment[[alignment.name]] <- provenance
+    storedAlignments <- .storedData(output, "spatial_alignment") %||% list()
+    storedAlignments[[alignment.name]] <- provenance
+    output <- .setStoredData(output, "spatial_alignment", storedAlignments)
   }
 
   coordinates <- data.frame(
@@ -380,7 +379,7 @@ ApplySpatialAlignment <- function(
 
 
 .sa_resolve_image <- function(object, image, argument) {
-  images <- names(object@images)
+  images <- SeuratObject::Images(object)
   if (!length(images)) {
     stop("`", argument, "` cannot be resolved because the object has no spatial images/FOVs.", call. = FALSE)
   }
@@ -434,11 +433,14 @@ ApplySpatialAlignment <- function(
   if (!is.character(scale_factor) || length(scale_factor) != 1L || is.na(scale_factor)) {
     stop("`ST.scale.factor` must be NULL, numeric, or one scale-factor name.", call. = FALSE)
   }
-  spatial_image <- object@images[[image]]
-  if (!"scale.factors" %in% methods::slotNames(spatial_image)) {
+  spatial_image <- object[[image]]
+  factors <- tryCatch(
+    Seurat::ScaleFactors(spatial_image),
+    error = function(e) NULL
+  )
+  if (is.null(factors)) {
     stop("Image `", image, "` does not contain named scale factors.", call. = FALSE)
   }
-  factors <- spatial_image@scale.factors
   if (!scale_factor %in% names(factors)) {
     stop(
       "Scale factor `", scale_factor, "` was not found. Available values: ",
@@ -798,12 +800,12 @@ ApplySpatialAlignment <- function(
   spatial_image <- object[[fov]]
   if (!inherits(spatial_image, "FOV")) {
     stop(
-      "`ApplySpatialAlignment()` currently updates Seurat FOV centroids; `", fov,
+      "`applySpatialAlignment()` currently updates Seurat FOV centroids; `", fov,
       "` has class ", paste(class(spatial_image), collapse = "/"), ".",
       call. = FALSE
     )
   }
-  boundary_names <- names(spatial_image@boundaries)
+  boundary_names <- SeuratObject::Boundaries(spatial_image)
   if (!boundary %in% boundary_names) {
     stop(
       "Boundary `", boundary, "` was not found in FOV `", fov,
@@ -820,13 +822,10 @@ ApplySpatialAlignment <- function(
   if (anyNA(index)) {
     stop("Aligned coordinates are missing cells stored in the FOV boundary.", call. = FALSE)
   }
-  coordinates <- as.matrix(aligned[index, c("x", "y"), drop = FALSE])
-  storage.mode(coordinates) <- "double"
-  colnames(coordinates) <- c("x", "y")
-  rownames(coordinates) <- NULL
-  centroids@coords <- coordinates
-  methods::validObject(centroids)
-  spatial_image[[boundary]] <- centroids
+  coordinates <- aligned[index, c("x", "y"), drop = FALSE]
+  coordinates$cell <- cells
+  centroids <- .centroidsWithCoordinates(centroids, coordinates)
+  spatial_image <- .fovWithBoundary(spatial_image, boundary, centroids)
   methods::validObject(spatial_image)
   object[[fov]] <- spatial_image
   object

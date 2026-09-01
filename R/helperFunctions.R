@@ -37,9 +37,9 @@ NULL
 #' @export
 #'
 #' @examples
-#' utils::str(formals(subset_SPM))
+#' utils::str(formals(subsetSPM))
 #' # sub <- subset_obt(seurat.obj, idents = "Sample1")
-subset_SPM <- function(
+subsetSPM <- function(
     object = NULL,
     subset = NULL,
     cells = NULL,

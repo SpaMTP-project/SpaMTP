@@ -1,9 +1,9 @@
-test_that("MultiOmicIntegration restores future connection diagnostics", {
+test_that("multiOmicIntegration restores future connection diagnostics", {
   previous <- getOption("future.connections.onMisuse")
 
   suppressWarnings(
     try(
-      MultiOmicIntegration(
+      multiOmicIntegration(
         NULL,
         reduction.list = list("missing-a", "missing-b"),
         dims.list = list(1, 1)

@@ -1,10 +1,10 @@
-test_that("VisualisePathways returns an informative plot for an empty min_n result", {
+test_that("visualisePathways returns an informative plot for an empty min_n result", {
   pathway_df <- data.frame(
     analytes_in_pathways = c(1L, 2L),
     p_val = c(0.01, 0.02)
   )
 
-  plot <- VisualisePathways(
+  plot <- visualisePathways(
     SpaMTP = NULL,
     pathway_df = pathway_df,
     min_n = 3,
@@ -15,7 +15,7 @@ test_that("VisualisePathways returns an informative plot for an empty min_n resu
   expect_identical(plot$labels$title, "No pathways to visualise")
 })
 
-test_that("VisualisePathways returns an informative plot after p-value filtering", {
+test_that("visualisePathways returns an informative plot after p-value filtering", {
   pathway_df <- data.frame(
     pathway_name = "Example pathway",
     pathway_id = "example:1",
@@ -25,7 +25,7 @@ test_that("VisualisePathways returns an informative plot after p-value filtering
     adduct_info = ""
   )
 
-  plot <- VisualisePathways(
+  plot <- visualisePathways(
     SpaMTP = NULL,
     pathway_df = pathway_df,
     min_n = 3,

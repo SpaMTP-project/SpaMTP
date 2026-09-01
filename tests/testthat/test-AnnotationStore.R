@@ -57,7 +57,7 @@ test_that("current mode refuses an unversioned legacy annotation", {
 
   expect_error(
     SpaMTP:::.select_mz_annotations(tools, "current"),
-    "Run AnnotateSM"
+    "Run annotateSM"
   )
   expect_warning(
     legacy <- SpaMTP:::.select_mz_annotations(tools, "auto"),
@@ -68,8 +68,10 @@ test_that("current mode refuses an unversioned legacy annotation", {
 
 test_that("current Ramp IDs map directly to current chemical metadata", {
   object <- annotation_object_fixture()
-  object@tools$mz_annotation <- SpaMTP:::.annotation_store(
-    current_annotation_fixture()
+  object <- SpaMTP:::.setStoredData(
+    object,
+    "mz_annotation",
+    SpaMTP:::.annotation_store(current_annotation_fixture())
   )
   chemical <- data.frame(
     ramp_id = "RAMP_C_000219574",
@@ -94,7 +96,9 @@ test_that("pathway resolver keeps the best scored adduct hypothesis", {
   annotations$Adduct <- c("M+Na", "M+H")
   annotations$Score <- c(0.2, 0.9)
   annotations$Error <- c(4.5, 0.4)
-  object@tools$mz_annotation <- SpaMTP:::.annotation_store(annotations)
+  object <- SpaMTP:::.setStoredData(
+    object, "mz_annotation", SpaMTP:::.annotation_store(annotations)
+  )
   chemical <- data.frame(
     ramp_id = "RAMP_C_000219574",
     chem_source_id = "hmdb:HMDB0000606",
@@ -117,7 +121,9 @@ test_that("pathway annotation score threshold is user adjustable", {
   annotations$observed_mz <- c(149.04445, 150.00000)
   annotations$Ramp_IDs <- c("RAMP_C_HIGH", "RAMP_C_LOW")
   annotations$Score <- c(0.8, 0.02)
-  object@tools$mz_annotation <- SpaMTP:::.annotation_store(annotations)
+  object <- SpaMTP:::.setStoredData(
+    object, "mz_annotation", SpaMTP:::.annotation_store(annotations)
+  )
   chemical <- data.frame(
     ramp_id = c("RAMP_C_HIGH", "RAMP_C_LOW"),
     chem_source_id = c("chebi:1", "chebi:2"),
@@ -140,15 +146,19 @@ test_that("pathway annotation score threshold is user adjustable", {
   )
 })
 
-test_that("AnnotationInfo reports legacy objects without treating them as current", {
+test_that("annotationInfo reports legacy objects without treating them as current", {
   object <- annotation_object_fixture()
-  object@tools$db_3 <- data.frame(
-    observed_mz = 100,
-    Isomers_IDs = "chebi:1",
-    stringsAsFactors = FALSE
+  object <- SpaMTP:::.setStoredData(
+    object,
+    "db_3",
+    data.frame(
+      observed_mz = 100,
+      Isomers_IDs = "chebi:1",
+      stringsAsFactors = FALSE
+    )
   )
 
-  info <- AnnotationInfo(object)
+  info <- annotationInfo(object)
 
   expect_equal(info$schema_version, 1L)
   expect_equal(info$engine, "legacy-mass-match")
@@ -192,11 +202,13 @@ test_that("curated FMP10 annotations are mapped into the current RaMP schema", {
 
 test_that("annotation search falls back to current stored labels", {
   object <- annotation_object_fixture()
-  object@tools$mz_annotation <- SpaMTP:::.annotation_store(
-    current_annotation_fixture()
+  object <- SpaMTP:::.setStoredData(
+    object,
+    "mz_annotation",
+    SpaMTP:::.annotation_store(current_annotation_fixture())
   )
 
-  result <- SearchAnnotations(object, "display name", assay = "RNA")
+  result <- searchAnnotations(object, "display name", assay = "RNA")
 
   expect_equal(nrow(result), 1L)
   expect_equal(result$mz_names, "mz-149.04445")

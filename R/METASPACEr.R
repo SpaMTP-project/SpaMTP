@@ -17,9 +17,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(metaspace_client))
-#' # ms <- metaspace_client()
-metaspace_client <- function(host = "https://metaspace2020.org", api_key = NULL) {
+#' utils::str(formals(metaspaceClient))
+#' # ms <- metaspaceClient()
+metaspaceClient <- function(host = "https://metaspace2020.org", api_key = NULL) {
   graphql_url <- paste0(host, "/graphql")
 
 
@@ -302,9 +302,9 @@ metaspace_client <- function(host = "https://metaspace2020.org", api_key = NULL)
 #' @export
 #'
 #' @examples
-#' utils::str(formals(get_metaspace))
-#' # get_metaspace(dataset_id = "2020-12-07_03h16m14s", fdr = 0.1, database= c("HMDB", "v4"), relative = TRUE)
-get_metaspace <- function(dataset_id,
+#' utils::str(formals(getMetaspace))
+#' # getMetaspace(dataset_id = "2020-12-07_03h16m14s", fdr = 0.1, database= c("HMDB", "v4"), relative = TRUE)
+getMetaspace <- function(dataset_id,
                           fdr = 0.1,
                           database = c("HMDB", "v4"),
                           include_images = TRUE,
@@ -312,7 +312,7 @@ get_metaspace <- function(dataset_id,
                           isotope_idx = 1,
                           relative = TRUE) {
 
-  sm <- metaspace_client(api_key = api_key)
+  sm <- metaspaceClient(api_key = api_key)
 
   ann_df <- sm$get_results(dataset_id, fdr = fdr, database = database)
   if (nrow(ann_df) == 0) stop("No annotations at FDR ", fdr)
@@ -353,9 +353,9 @@ get_metaspace <- function(dataset_id,
 
 #' @title Convert METASPACE Images to Feature Matrix
 #'
-#' @description Transforms the list of 2D ion image matrices from \code{get_metaspace} into a single matrix suitable for spatial analysis packages.
+#' @description Transforms the list of 2D ion image matrices from \code{getMetaspace} into a single matrix suitable for spatial analysis packages.
 #'
-#' @param metaspace_data A list object returned by \code{get_metaspace}.
+#' @param metaspace_data A list object returned by \code{getMetaspace}.
 #' @param transform Logical. If TRUE, transposes each image matrix before flattening (e.g., to align coordinate systems) (default = FALSE).
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
@@ -364,9 +364,9 @@ get_metaspace <- function(dataset_id,
 #' @export
 #'
 #' @examples
-#' utils::str(formals(metaspace_to_feature_matrix))
-#' # metaspace_to_feature_matrix(mtx, transform = TRUE)
-metaspace_to_feature_matrix <- function(metaspace_data, transform = FALSE, verbose = TRUE) {
+#' utils::str(formals(metaspaceToFeatureMatrix))
+#' # metaspaceToFeatureMatrix(mtx, transform = TRUE)
+metaspaceToFeatureMatrix <- function(metaspace_data, transform = FALSE, verbose = TRUE) {
 
   if (is.null(metaspace_data$images) || length(metaspace_data$images) == 0) {
     stop("Input 'metaspace_data' does not contain image matrices. Ensure include_images=TRUE was used.")
@@ -455,17 +455,17 @@ metaspace_to_feature_matrix <- function(metaspace_data, transform = FALSE, verbo
 #' @export
 #'
 #' @examples
-#' utils::str(formals(Load_METASPACE))
-#' # Load_METASPACE(dataset_id = "2020-12-07_03h16m14s", fdr = 0.1, database= c("HMDB", "v4"), relative = TRUE)
-Load_METASPACE <- function(dataset_id, fdr = 0.1, database = c("HMDB", "v4"), api_key= NULL, relative = FALSE, transform = FALSE, verbose = TRUE){
+#' utils::str(formals(loadMetaspace))
+#' # loadMetaspace(dataset_id = "2020-12-07_03h16m14s", fdr = 0.1, database= c("HMDB", "v4"), relative = TRUE)
+loadMetaspace <- function(dataset_id, fdr = 0.1, database = c("HMDB", "v4"), api_key= NULL, relative = FALSE, transform = FALSE, verbose = TRUE){
 
   verbose_message(message_text = paste0("Downloading dataset [",dataset_id, "] from METASPACE... "), verbose = verbose)
 
-  data <- get_metaspace(dataset_id = dataset_id,fdr=fdr, database=database, include_images = TRUE,api_key= api_key,relative= relative)
+  data <- getMetaspace(dataset_id = dataset_id,fdr=fdr, database=database, include_images = TRUE,api_key= api_key,relative= relative)
 
   verbose_message(message_text = "Gathering metabolite intensity values per pixel ...", verbose = verbose)
 
-  sparse_matrix <- metaspace_to_feature_matrix(data, transform = transform, verbose = verbose)
+  sparse_matrix <- metaspaceToFeatureMatrix(data, transform = transform, verbose = verbose)
   features <- rownames(sparse_matrix)
   pixels <- colnames(sparse_matrix)
 
@@ -512,7 +512,10 @@ Load_METASPACE <- function(dataset_id, fdr = 0.1, database = c("HMDB", "v4"), ap
 
   seuratobj[["fov"]] <- coords
 
-  metadata <- data.frame("raw_mz" = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])))
+  metadata <- data.frame(
+    raw_mz = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])),
+    mz_names = rownames(seuratobj)
+  )
 
   rownames(metadata) <- rownames(seuratobj)
 
@@ -521,12 +524,12 @@ Load_METASPACE <- function(dataset_id, fdr = 0.1, database = c("HMDB", "v4"), ap
                                                 metadata = metadata,
                                                 col.name = 'raw_mz')
 
-  seuratobj[["Spatial"]]@meta.data$mz_names <- rownames(seuratobj)
-
   metaspace_metadata_names <-  c("formula","adduct","chemMod","neutralLoss","mz","msm",
                                  "fdr","rhoSpatial","rhoSpectral","moc","offSample","intensity","moleculeNames")
 
-  seuratobj[["Spatial"]]@meta.data[metaspace_metadata_names] <- data$annotations[metaspace_metadata_names]
+  featureMetadata <- .featureMetadata(seuratobj, "Spatial")
+  featureMetadata[metaspace_metadata_names] <- data$annotations[metaspace_metadata_names]
+  seuratobj <- .setFeatureMetadata(seuratobj, featureMetadata, "Spatial")
 
   return(seuratobj)
 }

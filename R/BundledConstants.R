@@ -1,7 +1,7 @@
 #' Common adduct constants
 #'
 #' A small table of legacy adduct definitions retained for compatibility with
-#' earlier SpaMTP workflows. New annotation code should use [AdductRules()],
+#' earlier SpaMTP workflows. New annotation code should use [adductRules()],
 #' which includes charge, stoichiometry, ion-mode, and chemical-validity fields.
 #'
 #' @format A data frame with 47 rows and 6 variables:
@@ -14,7 +14,7 @@
 #'   \item{pol}{Ion polarity.}
 #' }
 #' @return A data frame of legacy adduct definitions.
-#' @seealso [AdductRules()], [MALDIMatrixRules()]
+#' @seealso [adductRules()], [maldiMatrixRules()]
 #' @keywords datasets
 "adduct_file"
 

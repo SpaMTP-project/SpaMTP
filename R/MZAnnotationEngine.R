@@ -78,9 +78,9 @@
 #'
 #' @return A data frame containing validated adduct rules.
 #' @examples
-#' utils::str(formals(AdductRules))
+#' utils::str(formals(adductRules))
 #' @export
-AdductRules <- function(polarity = c("both", "positive", "negative", "neutral"),
+adductRules <- function(polarity = c("both", "positive", "negative", "neutral"),
                         include_complex = TRUE) {
   polarity <- match.arg(polarity)
   m <- .spamtp_mass_constants()
@@ -240,9 +240,9 @@ AdductRules <- function(polarity = c("both", "positive", "negative", "neutral"),
 #' @return A data frame describing supported matrix profiles and their current
 #'   automatic-rule status.
 #' @examples
-#' utils::str(formals(MALDIMatrixProfiles))
+#' utils::str(formals(maldiMatrixProfiles))
 #' @export
-MALDIMatrixProfiles <- function(matrix = NULL) {
+maldiMatrixProfiles <- function(matrix = NULL) {
   profiles <- data.frame(
     matrix = c(
       "none", "dhb", "chca", "9aa", "dan", "norharmane",
@@ -333,7 +333,7 @@ MALDIMatrixProfiles <- function(matrix = NULL) {
   )
   if (!key %in% names(aliases)) {
     stop(
-      "Unknown MALDI matrix/reagent '", matrix, "'. See MALDIMatrixProfiles()."
+      "Unknown MALDI matrix/reagent '", matrix, "'. See maldiMatrixProfiles()."
     )
   }
   unname(aliases[[key]])
@@ -344,7 +344,7 @@ MALDIMatrixProfiles <- function(matrix = NULL) {
     return(match.arg(polarity, c("positive", "negative", "neutral")))
   }
   if (is.null(maldi_matrix)) return("positive")
-  profile <- MALDIMatrixProfiles(maldi_matrix)
+  profile <- maldiMatrixProfiles(maldi_matrix)
   selected <- profile$default_polarity[[1]]
   if (identical(selected, "both")) {
     stop(
@@ -372,7 +372,7 @@ MALDIMatrixProfiles <- function(matrix = NULL) {
 .matrix_specific_rules <- function(matrix, polarity) {
   m <- .spamtp_mass_constants()
   empty <- .decorate_matrix_rules(
-    AdductRules(polarity)[0, , drop = FALSE], matrix,
+    adductRules(polarity)[0, , drop = FALSE], matrix,
     "matrix_profile", NA_character_
   )
   if (polarity != "positive") return(empty)
@@ -461,19 +461,19 @@ MALDIMatrixProfiles <- function(matrix = NULL) {
 #'   product rules.
 #'
 #' @return A validated adduct/reaction rule data frame accepted by
-#'   [BuildMZAnnotationIndex()].
+#'   [buildMZAnnotationIndex()].
 #' @examples
-#' utils::str(formals(MALDIMatrixRules))
+#' utils::str(formals(maldiMatrixRules))
 #' @export
-MALDIMatrixRules <- function(maldi_matrix, polarity = NULL,
+maldiMatrixRules <- function(maldi_matrix, polarity = NULL,
                              include_standard = TRUE,
                              include_matrix_products = TRUE) {
   matrix <- .normalise_maldi_matrix(maldi_matrix)
-  profile <- MALDIMatrixProfiles(matrix)
+  profile <- maldiMatrixProfiles(matrix)
   polarity <- .resolve_maldi_polarity(polarity, matrix)
 
   standard <- .decorate_matrix_rules(
-    AdductRules(polarity)[if (isTRUE(include_standard)) TRUE else FALSE, , drop = FALSE],
+    adductRules(polarity)[if (isTRUE(include_standard)) TRUE else FALSE, , drop = FALSE],
     matrix, "standard_adduct", "SpaMTP validated general adduct rules"
   )
   specific <- if (isTRUE(include_matrix_products)) {
@@ -662,7 +662,7 @@ MALDIMatrixRules <- function(maldi_matrix, polarity = NULL,
           call. = FALSE
         )
       } else {
-        db <- AnnotateSMILESStructure(
+        db <- annotateSMILESStructure(
           db, smiles_column = smiles_col, backend = structure_backend,
           overwrite = infer_structure == "always", strict = FALSE,
           workers = structure_workers
@@ -895,7 +895,7 @@ MALDIMatrixRules <- function(maldi_matrix, polarity = NULL,
 .matrix_structure_compatibility <- function(compounds, matrix) {
   n <- nrow(compounds)
   matrix <- .normalise_maldi_matrix(matrix)
-  profile <- MALDIMatrixProfiles(matrix)
+  profile <- maldiMatrixProfiles(matrix)
   category <- profile$category[[1]]
   target <- profile$target_groups[[1]]
   if (!category %in% c("reactive_matrix", "otcd_reagent")) {
@@ -947,7 +947,7 @@ MALDIMatrixRules <- function(maldi_matrix, polarity = NULL,
 #' Predict a structure-aware adduct search space from SMILES
 #'
 #' This function applies the same functional-group and ion-mode logic used by
-#' [BuildMZAnnotationIndex()] before any observed m/z is supplied. It is useful
+#' [buildMZAnnotationIndex()] before any observed m/z is supplied. It is useful
 #' for auditing which protonation, deprotonation, alkali-binding, or reactive
 #' matrix hypotheses SpaMTP will retain for a structure.
 #'
@@ -959,13 +959,13 @@ MALDIMatrixRules <- function(maldi_matrix, polarity = NULL,
 #'   `maldi_matrix`.
 #' @param min_structure_score Minimum rule-specific structural prior marked as
 #'   retained.
-#' @param backend,workers Passed to [DeconvolveSMILES()].
+#' @param backend,workers Passed to [deconvolveSMILES()].
 #'
 #' @return A ranked data frame with one row per structure/rule combination.
 #' @examples
-#' utils::str(formals(PredictAdductsFromSMILES))
+#' utils::str(formals(predictAdductsFromSMILES))
 #' @export
-PredictAdductsFromSMILES <- function(
+predictAdductsFromSMILES <- function(
     smiles, polarity = NULL, maldi_matrix = NULL, rules = NULL,
     min_structure_score = 0.05,
     backend = c("auto", "native"),
@@ -974,9 +974,9 @@ PredictAdductsFromSMILES <- function(
   polarity <- .resolve_maldi_polarity(polarity, maldi_matrix)
   if (is.null(rules)) {
     rules <- if (is.null(maldi_matrix)) {
-      AdductRules(polarity)
+      adductRules(polarity)
     } else {
-      MALDIMatrixRules(maldi_matrix, polarity = polarity)
+      maldiMatrixRules(maldi_matrix, polarity = polarity)
     }
   } else {
     if (!is.null(maldi_matrix)) {
@@ -992,7 +992,7 @@ PredictAdductsFromSMILES <- function(
     stop("min_structure_score must be a single number between zero and one.")
   }
 
-  structures <- DeconvolveSMILES(
+  structures <- deconvolveSMILES(
     smiles, backend = backend, strict = FALSE, workers = workers
   )
   matrix_profile <- if (is.null(maldi_matrix)) "none" else {
@@ -1084,9 +1084,9 @@ PredictAdductsFromSMILES <- function(
 #' @param adducts Optional character vector of adduct names or bracketed
 #'   notations. When `NULL`, use the complete automatically selected rule
 #'   space; this is a filter, not a compulsory input.
-#' @param rules Optional custom rule table. See [AdductRules()].
+#' @param rules Optional custom rule table. See [adductRules()].
 #' @param maldi_matrix Optional MALDI matrix or derivatization reagent profile.
-#'   When supplied and `rules` is `NULL`, [MALDIMatrixRules()] automatically
+#'   When supplied and `rules` is `NULL`, [maldiMatrixRules()] automatically
 #'   selects standard and validated matrix-specific rules. `adducts` remains an
 #'   optional filter on that selected rule space.
 #' @param collapse_isomers Collapse records sharing formula, exact mass, and
@@ -1095,16 +1095,16 @@ PredictAdductsFromSMILES <- function(
 #'   derives them for at most `getOption("SpaMTP.max_runtime_smiles", 5000)`
 #'   unique SMILES, `"never"` disables inference, and `"always"` forces
 #'   runtime parsing and replaces precomputed structural fields.
-#' @param structure_backend SMILES parser used by [DeconvolveSMILES()].
+#' @param structure_backend SMILES parser used by [deconvolveSMILES()].
 #' @param structure_workers Number of workers used for runtime SMILES parsing.
 #' @param min_structure_score Minimum rule-specific structural prior retained
 #'   before m/z indexing. Set to zero to rank without structure-based pruning.
 #'
 #' @return An object of class `spamtp_mz_index`.
 #' @examples
-#' utils::str(formals(BuildMZAnnotationIndex))
+#' utils::str(formals(buildMZAnnotationIndex))
 #' @export
-BuildMZAnnotationIndex <- function(db, polarity = NULL,
+buildMZAnnotationIndex <- function(db, polarity = NULL,
                                    adducts = NULL, rules = NULL,
                                    maldi_matrix = NULL,
                                    collapse_isomers = TRUE,
@@ -1123,9 +1123,9 @@ BuildMZAnnotationIndex <- function(db, polarity = NULL,
   polarity <- .resolve_maldi_polarity(polarity, maldi_matrix)
   if (is.null(rules)) {
     rules <- if (is.null(maldi_matrix)) {
-      AdductRules(polarity = polarity)
+      adductRules(polarity = polarity)
     } else {
-      MALDIMatrixRules(maldi_matrix, polarity = polarity)
+      maldiMatrixRules(maldi_matrix, polarity = polarity)
     }
   } else {
     if (!is.null(maldi_matrix)) {
@@ -1247,7 +1247,7 @@ BuildMZAnnotationIndex <- function(db, polarity = NULL,
 
 #' Print an indexed metabolite annotation search space
 #'
-#' @param x A `spamtp_mz_index` returned by [BuildMZAnnotationIndex()].
+#' @param x A `spamtp_mz_index` returned by [buildMZAnnotationIndex()].
 #' @param ... Additional arguments reserved for print-method compatibility.
 #'
 #' @return `x`, invisibly.
@@ -1423,7 +1423,7 @@ print.spamtp_mz_index <- function(x, ...) {
 #' isotope, and contextual adduct-family evidence.
 #'
 #' @param observed_mz Numeric vector of observed m/z values.
-#' @param index A `spamtp_mz_index` from [BuildMZAnnotationIndex()].
+#' @param index A `spamtp_mz_index` from [buildMZAnnotationIndex()].
 #' @param ppm Mass tolerance in parts per million.
 #' @param ms1_spectrum Optional contextual spectrum with `mz` and `intensity`
 #'   columns. It should represent the same retention-time window or spatial
@@ -1437,16 +1437,16 @@ print.spamtp_mz_index <- function(x, ...) {
 #'
 #' @return A ranked candidate data frame.
 #' @examples
-#' utils::str(formals(QueryMZAnnotationIndex))
+#' utils::str(formals(queryMZAnnotationIndex))
 #' @export
-QueryMZAnnotationIndex <- function(observed_mz, index, ppm = 5,
+queryMZAnnotationIndex <- function(observed_mz, index, ppm = 5,
                                    ms1_spectrum = NULL,
                                    use_mass_defect = TRUE,
                                    check_isotopes = TRUE,
                                    check_adduct_network = TRUE,
                                    min_score = 0) {
   if (!inherits(index, "spamtp_mz_index")) {
-    stop("index must be created by BuildMZAnnotationIndex().")
+    stop("index must be created by buildMZAnnotationIndex().")
   }
   observed_mz <- suppressWarnings(as.numeric(observed_mz))
   if (!length(observed_mz) || any(!is.finite(observed_mz) | observed_mz <= 0)) {
@@ -1600,17 +1600,17 @@ QueryMZAnnotationIndex <- function(observed_mz, index, ppm = 5,
 #' @param ms1_spectrum Optional contextual spectrum.
 #' @param database_version SpaMTPdb/RaMP version used when `db = NULL`.
 #' @param database_source Database source used when `db = NULL`; see
-#'   [LoadSpaMTPDatabase()].
+#'   [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #' @param infer_structure,structure_backend,structure_workers,min_structure_score Structure-aware
-#'   rule-selection arguments passed to [BuildMZAnnotationIndex()].
-#' @param ... Additional arguments passed to [QueryMZAnnotationIndex()].
+#'   rule-selection arguments passed to [buildMZAnnotationIndex()].
+#' @param ... Additional arguments passed to [queryMZAnnotationIndex()].
 #'
 #' @return A ranked candidate data frame.
 #' @examples
-#' utils::str(formals(AnnotateMZ))
+#' utils::str(formals(annotateMZ))
 #' @export
-AnnotateMZ <- function(observed_mz, db = NULL, index = NULL,
+annotateMZ <- function(observed_mz, db = NULL, index = NULL,
                        polarity = NULL,
                        adducts = NULL, rules = NULL, maldi_matrix = NULL,
                        ppm = 5,
@@ -1625,7 +1625,7 @@ AnnotateMZ <- function(observed_mz, db = NULL, index = NULL,
                        ),
                        min_structure_score = 0.05, ...) {
   if (!is.null(index) && !inherits(index, "spamtp_mz_index")) {
-    stop("index must be created by BuildMZAnnotationIndex().")
+    stop("index must be created by buildMZAnnotationIndex().")
   }
   polarity <- if (is.null(polarity) && inherits(index, "spamtp_mz_index")) {
     index$polarity
@@ -1641,7 +1641,7 @@ AnnotateMZ <- function(observed_mz, db = NULL, index = NULL,
         local_dir = database_local_dir
       )
     }
-    index <- BuildMZAnnotationIndex(
+    index <- buildMZAnnotationIndex(
       db = db, polarity = polarity, adducts = adducts, rules = rules,
       maldi_matrix = maldi_matrix, infer_structure = infer_structure,
       structure_backend = structure_backend,
@@ -1654,7 +1654,7 @@ AnnotateMZ <- function(observed_mz, db = NULL, index = NULL,
              !identical(index$maldi_matrix, .normalise_maldi_matrix(maldi_matrix))) {
     stop("The supplied index MALDI matrix profile does not match maldi_matrix.")
   }
-  QueryMZAnnotationIndex(
+  queryMZAnnotationIndex(
     observed_mz = observed_mz, index = index, ppm = ppm,
     ms1_spectrum = ms1_spectrum, ...
   )

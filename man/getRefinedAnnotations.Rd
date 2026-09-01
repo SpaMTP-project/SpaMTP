@@ -7,7 +7,8 @@
 getRefinedAnnotations(obj, assay = "Spatial", n = 1)
 }
 \arguments{
-\item{obj}{Seurat object needing annotation refinement. This object must have annotations present in 'obj\verb{[[assay]]@meta.data}'}
+\item{obj}{Seurat object needing annotation refinement. The selected assay
+must contain annotations in its feature metadata.}
 
 \item{assay}{Character string defining the Seurat object assay where the annotation data is stored (default = "Spatial").}
 

@@ -624,9 +624,9 @@
 #' @return A data frame with functional-group counts, ion-mode scores, and a
 #'   human-readable `structure_evidence` field.
 #' @examples
-#' utils::str(formals(DeconvolveSMILES))
+#' utils::str(formals(deconvolveSMILES))
 #' @export
-DeconvolveSMILES <- function(smiles, backend = c("auto", "native"),
+deconvolveSMILES <- function(smiles, backend = c("auto", "native"),
                              strict = FALSE,
                              workers = getOption("SpaMTP.smiles_workers", 1L)) {
   backend <- match.arg(backend)
@@ -679,17 +679,17 @@ DeconvolveSMILES <- function(smiles, backend = c("auto", "native"),
 #' @param db A metabolite data frame.
 #' @param smiles_column Column containing SMILES. When `NULL`, SpaMTP detects
 #'   `iso_smiles`, `canonical_smiles`, or `smiles`.
-#' @param backend Parser backend passed to [DeconvolveSMILES()].
+#' @param backend Parser backend passed to [deconvolveSMILES()].
 #' @param overwrite Replace existing feature values. By default only absent or
 #'   missing values are filled.
-#' @param strict Passed to [DeconvolveSMILES()].
-#' @param workers Parallel workers passed to [DeconvolveSMILES()].
+#' @param strict Passed to [deconvolveSMILES()].
+#' @param workers Parallel workers passed to [deconvolveSMILES()].
 #'
 #' @return `db` with structure-derived columns appended or completed.
 #' @examples
-#' utils::str(formals(AnnotateSMILESStructure))
+#' utils::str(formals(annotateSMILESStructure))
 #' @export
-AnnotateSMILESStructure <- function(db, smiles_column = NULL,
+annotateSMILESStructure <- function(db, smiles_column = NULL,
                                     backend = c("auto", "native"),
                                     overwrite = FALSE, strict = FALSE,
                                     workers = getOption("SpaMTP.smiles_workers", 1L)) {
@@ -709,7 +709,7 @@ AnnotateSMILESStructure <- function(db, smiles_column = NULL,
   if (is.null(smiles_column) || !smiles_column %in% names(db)) {
     stop("No SMILES column was found in db.")
   }
-  features <- DeconvolveSMILES(db[[smiles_column]], backend = backend,
+  features <- deconvolveSMILES(db[[smiles_column]], backend = backend,
                               strict = strict, workers = workers)
   feature_names <- setdiff(names(features), "smiles")
   for (column in feature_names) {

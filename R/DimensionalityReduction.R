@@ -20,13 +20,13 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(RunMetabolicPCA))
+#' utils::str(formals(runMetabolicPCA))
 #' ## For running PCA on un-adjusted peak bin sizes
-#' # spamtp_obj <- RunMetabolicPCA(spamtp_obj, npcs = 50)
+#' # spamtp_obj <- runMetabolicPCA(spamtp_obj, npcs = 50)
 #'
 #' ## For running PCA on increased peak bin sizes
-#' # spamtp_obj <- RunMetabolicPCA(spamtp_obj, npcs = 50, bin_resolution = 50)
-RunMetabolicPCA <- function(SpaMTP,
+#' # spamtp_obj <- runMetabolicPCA(spamtp_obj, npcs = 50, bin_resolution = 50)
+runMetabolicPCA <- function(SpaMTP,
                             npcs = 30,
                             variance_explained_threshold = 0.9,
                             assay = "SPM",
@@ -51,7 +51,7 @@ RunMetabolicPCA <- function(SpaMTP,
       stop("Incorrect value assigned to 'bin_method'... value must be either 'sum', 'mean', 'max' or 'min', please change accordingly")
     }
 
-    data <- BinSpaMTP(data = SpaMTP,
+    data <- binSpaMTP(data = SpaMTP,
                       resolution = bin_resolution,
                       units = resolution_units,
                       assay = assay,
@@ -197,7 +197,7 @@ RunMetabolicPCA <- function(SpaMTP,
   SpaMTP_pca <- pca
 
   rownames(SpaMTP_pca$rotation) <- SeuratObject::Features(data[[temp_assay]])
-  rownames(SpaMTP_pca$x) <- rownames(data@meta.data)
+  rownames(SpaMTP_pca$x) <- colnames(data)
 
   SpaMTP_pcas <- SeuratObject::CreateDimReducObject(embeddings = SpaMTP_pca$x, loadings = SpaMTP_pca$rotation, assay = assay, key = "pca_", stdev = SpaMTP_pca$sdev)
 
@@ -213,7 +213,7 @@ RunMetabolicPCA <- function(SpaMTP,
 
 #' Perform Dimensionality Reduction using Graph-Regularised PCA on Spatial Data
 #'
-#' Computes a graph-regularised PCA using spatial coordinates and scaled expression data. A k-nearest neighbour (k-NN) graph is computed using spatial locations and used to regularise the PCA decomposition via a graph Laplacian. The result are stored in the `@reductions` section of the returned SpaMTP Seurat object.
+#' Computes a graph-regularised PCA using spatial coordinates and scaled expression data. A k-nearest neighbour (k-NN) graph is computed using spatial locations and used to regularise the PCA decomposition via a graph Laplacian. The result is available through `SeuratObject::Reductions()`.
 #'
 #' Note: This method has been adapted from the GraphPCA Python package
 #' (\doi{10.1186/s13059-024-03429-x}).
@@ -229,19 +229,19 @@ RunMetabolicPCA <- function(SpaMTP,
 #' @param include_self Boolean logical value indicating whether to include self-connections in the graph (default = FALSE).
 #' @param alg Character string specifying the algorithm to use for nearest neighbour search (passed to `FNN::get.knn()`) (default ="kd_tree").
 #' @param fast Boolean logical value stating whether to use fast approximate eigendecomposition via `RSpectra::eigs_sym()`. For large datasets this is recommended (default =TRUE).
-#' @param graph_name Character string of the name to use for storing the computed spatial graph in `@graphs`(default ="SpatialKNN").
-#' @param reduction_name Character string stating the name of the dimensionality reduction stored in `@reductions`(default ="SpatialPCA").
+#' @param graph_name Character string used to store the computed spatial graph (default ="SpatialKNN").
+#' @param reduction_name Character string used to store the dimensionality reduction (default ="SpatialPCA").
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
-#' @return A SpaMTP Seurat object with a new graph stored in `@graphs` and spatially-aware PCA reduction values stored in `@reductions`.
+#' @return A SpaMTP Seurat object with a new graph and spatially-aware PCA reduction.
 #' @export
 #'
 #' @rawNamespace import(Matrix, except = c(expand, head, pack, unpack))
 #'
 #' @examples
-#' utils::str(formals(RunSpatialGraphPCA))
-#' # spamtp_obj <- RunSpatialGraphPCA(spamtp_obj, platform = "Visium")
-RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = "scale.data", image = NULL, platform="Visium", lambda=0.5, n_neighbors=NULL, include_self = FALSE, alg = "kd_tree", fast = TRUE, graph_name = "SpatialKNN", reduction_name = "SpatialPCA", verbose = TRUE){
+#' utils::str(formals(runSpatialGraphPCA))
+#' # spamtp_obj <- runSpatialGraphPCA(spamtp_obj, platform = "Visium")
+runSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = "scale.data", image = NULL, platform="Visium", lambda=0.5, n_neighbors=NULL, include_self = FALSE, alg = "kd_tree", fast = TRUE, graph_name = "SpatialKNN", reduction_name = "SpatialPCA", verbose = TRUE){
 
   if(!platform %in% c("Visium", "ST")){
     stop("Incorrect value for plantform! platform must be assigned either 'Visium' or 'ST'... If data is not Visium 'spot'-based then set platform to 'ST'")
@@ -251,7 +251,8 @@ RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
     stop("Incorrect value for lamda! Must be numeric value ... ")
   }
 
-  Expr = t(data[[assay]][slot])
+  assayMatrix <- .assayData(data, assay, slot)
+  Expr = t(assayMatrix)
 
 
   if(is.null(n_neighbors)){
@@ -270,7 +271,7 @@ RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
 
   if(is.null(image)){
     verbose_message(message_text = "'image' set to `NULL`: All images (different spatial coordinate sets) stored in your SpaMTP Seurat object will be used.", verbose = verbose)
-    image <- names(data@images)
+    image <- SeuratObject::Images(data)
   }
 
 
@@ -279,7 +280,7 @@ RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
     location = SeuratObject::GetTissueCoordinates(data, image = image)
     location = location[c("x", "y")]
 
-    graph <- kneighbors_graph(location, n_neighbors = n_neighbors, platform = platform, include_self = include_self, alg = alg)
+    graph <- kNeighborsGraph(location, n_neighbors = n_neighbors, platform = platform, include_self = include_self, alg = alg)
     graph <- 0.5 * (graph + t(graph))
 
   } else if (length(image) > 1){
@@ -289,7 +290,7 @@ RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
       location = SeuratObject::GetTissueCoordinates(data, image = i)
       location = location[c("x", "y")]
 
-      graph <- kneighbors_graph(location, n_neighbors = n_neighbors, platform = platform, include_self = include_self, alg = alg)
+      graph <- kNeighborsGraph(location, n_neighbors = n_neighbors, platform = platform, include_self = include_self, alg = alg)
       graph <- 0.5 * (graph + t(graph))
 
     })
@@ -297,7 +298,7 @@ RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
     graph <- Matrix::bdiag(adj_mtxs)
 
   } else {
-    stop("No value for 'image' entered! Valid image names can be displayed by running `names(obj@images)`. Note: To only analyses a subset of images, a vector of image names can be provided.")
+    stop("No value for 'image' entered! Use `SeuratObject::Images(obj)` to list valid image names. To analyse a subset of images, provide a vector of image names.")
   }
 
   graphL <- igraph::graph_from_adjacency_matrix(graph, mode = "undirected", weighted = TRUE)
@@ -313,10 +314,9 @@ RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
   X <- solve(G, Expr)
 
 
-  rownames(graph) <- colnames(graph) <- colnames(data[[assay]][slot])
+  rownames(graph) <- colnames(graph) <- colnames(assayMatrix)
 
-
-  data@graphs[[graph_name]] <- as.Graph(graph)
+  data[[graph_name]] <- SeuratObject::as.Graph(graph)
 
   rm(G)
   rm(graph)
@@ -332,7 +332,7 @@ RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
   W <- eig$vectors[, seq_len(n_components), drop = FALSE]
   Z <- X %*% W
 
-  rownames(Z) <- colnames(data[[assay]][slot])      # cells
+  rownames(Z) <- colnames(assayMatrix)      # cells
   rownames(W) <- rownames(data[[assay]][slot])      # genes (or features)
   colnames(Z) <- paste0("PC_", 1:ncol(Z))
   colnames(W) <- paste0("PC_", 1:ncol(W))
@@ -367,9 +367,9 @@ RunSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
 #' @export
 #'
 #' @examples
-#' utils::str(formals(kneighbors_graph))
+#' utils::str(formals(kNeighborsGraph))
 #' ### HELPER FUNCTION
-kneighbors_graph <- function(location, n_neighbors, platform, include_self = FALSE, alg = "kd_tree") {
+kNeighborsGraph <- function(location, n_neighbors, platform, include_self = FALSE, alg = "kd_tree") {
   # Get the k-nearest neighbors using kd_tree (most similar to scikit-learn's default)
   knn_result <- FNN::get.knn(location, k = n_neighbors, algorithm = alg)
 
@@ -432,7 +432,7 @@ kneighbors_graph <- function(location, n_neighbors, platform, include_self = FAL
 #'
 #' This function runs K-means clustering on a specified reduction in a SpaMTP Seurat object and adds the cluster assignments to the object metadata.
 #'
-#' @param data A SpaMTP Seurat object containing the results from `RunSpatialGraphPCA()`.
+#' @param data A SpaMTP Seurat object containing the results from `runSpatialGraphPCA()`.
 #' @param reduction Character string stating the name of the reduction slot to use (default = "SpatialPCA").
 #' @param cluster.name Character string of the name of the metadata column to store the cluster labels (default = "spatial_clusters").
 #' @param clusters Integer defining the number of clusters to form (default = 8).
@@ -446,18 +446,18 @@ kneighbors_graph <- function(location, n_neighbors, platform, include_self = FAL
 #' @export
 #'
 #' @examples
-#' utils::str(formals(GetKmeanClusters))
-#' # seurat_object <- GetKmeanClusters(spamtp_obj, reduction = "SpatialPCA", centers = 8, cluster.name = "test_clusters")
+#' utils::str(formals(getKmeanClusters))
+#' # seurat_object <- getKmeanClusters(spamtp_obj, reduction = "SpatialPCA", centers = 8, cluster.name = "test_clusters")
 #' # SpatialDimPlot(spamtp_obj, group.by = "test_clusters")
-GetKmeanClusters <- function(data, reduction = "SpatialPCA", cluster.name = "spatial_clusters", clusters = 8, iter.max = 10, nstart = 1, algorithm = c("Hartigan-Wong", "Lloyd", "Forgy", "MacQueen"), trace = FALSE, seed = 888){
+getKmeanClusters <- function(data, reduction = "SpatialPCA", cluster.name = "spatial_clusters", clusters = 8, iter.max = 10, nstart = 1, algorithm = c("Hartigan-Wong", "Lloyd", "Forgy", "MacQueen"), trace = FALSE, seed = 888){
 
-  if (!reduction %in% names(data@reductions)){
-    stop("Reduction not present in SpaMTP Seruat Object! ", "'",reduction, "' was not found, please run names(data@reductions) to check possible reductions to use ....")
+  if (!reduction %in% SeuratObject::Reductions(data)){
+    stop("Reduction not present in SpaMTP Seurat object: '", reduction, "'. Use `SeuratObject::Reductions(data)` to list available reductions.")
   }
   res <- withr::with_seed(
     seed,
     stats::kmeans(
-      data[[reduction]]@cell.embeddings,
+      SeuratObject::Embeddings(data, reduction = reduction),
       centers = clusters,
       iter.max = iter.max,
       nstart = nstart,

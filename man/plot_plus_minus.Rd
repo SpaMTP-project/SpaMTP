@@ -14,7 +14,7 @@ plot_plus_minus(object, mz_list, plusminus)
 \item{plusminus}{Numeric value defining the range/threshold either side of each mz peak provided.}
 }
 \value{
-List contatining a Seurat data object which contains the binned counts in the \verb{@metadata} slot, the column name under where the data is stored and the title of this binned which will be plotted.
+A list containing a Seurat object with binned counts in its cell metadata, the metadata column name, and the plot title.
 }
 \description{
 Helper Function to generate merged counts within the plus minus range provided

@@ -1,7 +1,7 @@
 Package: SpaMTP
 Type: Package
 Title: Spatial Metabolomics and Multi-Omics Analysis
-Version: 0.99.0
+Version: 0.99.1
 Authors@R: c(
     person("Andrew", "Causer",
             email = "a.causer@uq.edu.au", 
@@ -80,6 +80,7 @@ Imports:
     Matrix,
     matter,
     methods,
+    MSnbase,
     naturalsort,
     parallel,
     pbapply,
@@ -99,10 +100,12 @@ Imports:
     shiny,
     shinyjs,
     SingleCellExperiment,
+    S4Vectors,
     SpaMTPdb,
     sp,
     stats,
     stringr,
+    SummarizedExperiment,
     tibble,
     tidyr,
     utils,
@@ -117,3 +120,4 @@ Depends:
     R (>= 4.6.0)
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.1.0
+RoxygenNote: 7.3.3

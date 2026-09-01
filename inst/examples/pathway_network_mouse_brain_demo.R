@@ -19,8 +19,8 @@ suppressPackageStartupMessages({
   library(Seurat)
 })
 
-if (!"max_nodes" %in% names(formals(SpaMTP::PathwayNetworkPlots))) {
-  stop("This demo requires the developmental SpaMTP PathwayNetworkPlots().")
+if (!"max_nodes" %in% names(formals(SpaMTP::pathwayNetworkPlots))) {
+  stop("This demo requires the developmental SpaMTP pathwayNetworkPlots().")
 }
 
 repo_object <- file.path(
@@ -75,7 +75,7 @@ striatum <- SeuratObject::`Idents<-`(
   value = "striatum"
 )
 
-# The published demo object contains a legacy mass-only @tools$db_3 result.
+# The published demo object contains a legacy mass-only annotation result.
 # Re-annotate its SPM features with the current indexed/scored RaMP pipeline.
 # The cache stores candidates plus provenance, not a second Seurat object.
 current_ramp_version <- as.character(SpaMTP::ramp_db_metadata$ramp_version)
@@ -94,8 +94,8 @@ cache_is_current <- is.list(cached_annotation) &&
 
 if (cache_is_current) {
   message("Using cached indexed RaMP metabolite annotations ...")
-  striatum@tools$mz_annotation <- cached_annotation
-  striatum@tools$db_3 <- cached_annotation$results
+  SeuratObject::Misc(striatum, slot = "mz_annotation") <- cached_annotation
+  SeuratObject::Misc(striatum, slot = "db_3") <- cached_annotation$results
 } else {
   message("Annotating SPM features with the current indexed RaMP pipeline ...")
   spm_counts <- SeuratObject::LayerData(striatum, assay = "SPM", layer = "counts")
@@ -103,7 +103,7 @@ if (cache_is_current) {
     mz = as.numeric(striatum[["SPM"]][[]]$raw_mz),
     intensity = Matrix::rowMeans(spm_counts)
   )
-  striatum <- SpaMTP::AnnotateSM(
+  striatum <- SpaMTP::annotateSM(
     striatum,
     db = NULL,
     assay = "SPM",
@@ -118,9 +118,13 @@ if (cache_is_current) {
     save.intermediate = TRUE,
     verbose = TRUE
   )
-  saveRDS(striatum@tools$mz_annotation, annotation_cache_file, compress = "xz")
+  saveRDS(
+    SeuratObject::Misc(striatum, slot = "mz_annotation"),
+    annotation_cache_file,
+    compress = "xz"
+  )
 }
-annotation_info <- SpaMTP::AnnotationInfo(striatum)
+annotation_info <- SpaMTP::annotationInfo(striatum)
 annotation_signature <- paste(
   annotation_info$engine,
   annotation_info$ramp_version,
@@ -174,7 +178,7 @@ if (is.list(cached_results) &&
   }
 
   message("Running multi-omic regional pathway enrichment ...")
-  regpathway <- SpaMTP::FindRegionalPathways(
+  regpathway <- SpaMTP::findRegionalPathways(
     striatum,
     analyte_types = c("genes", "metabolites"),
     SM_slot = "counts",
@@ -200,7 +204,7 @@ if (is.list(cached_results) &&
 }
 
 # Prefer pathways highlighted in the published vignette. If none survive the
-# current RaMP/database analysis, PathwayNetworkPlots selects the top four by
+# current RaMP/database analysis, pathwayNetworkPlots selects the top four by
 # summed absolute NES instead.
 preferred_pathways <- c(
   "Dopamine beta-hydroxylase deficiency",
@@ -215,7 +219,7 @@ selected_pathways <- intersect(
 if (!length(selected_pathways)) selected_pathways <- NULL
 
 message("Rendering the strict GSEA leading-edge network ...")
-strict_html_file <- SpaMTP::PathwayNetworkPlots(
+strict_html_file <- SpaMTP::pathwayNetworkPlots(
   striatum,
   ident = "striatum",
   regpathway = results$regpathway,
@@ -239,7 +243,7 @@ strict_html_file <- SpaMTP::PathwayNetworkPlots(
 
 Sys.sleep(1)
 message("Rendering the annotation-coverage network (DE significance not required) ...")
-coverage_html_file <- SpaMTP::PathwayNetworkPlots(
+coverage_html_file <- SpaMTP::pathwayNetworkPlots(
   striatum,
   ident = "striatum",
   regpathway = results$regpathway,

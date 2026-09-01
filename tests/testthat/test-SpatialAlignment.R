@@ -18,7 +18,7 @@ make_alignment_object <- function(x, y, cells = paste0("cell", seq_along(x))) {
 }
 
 
-test_that("ApplySpatialAlignment applies SMINT coordinate columns by cell ID", {
+test_that("applySpatialAlignment applies SMINT coordinate columns by cell ID", {
   sm <- make_alignment_object(c(0, 1, 2), c(5, 6, 7), c("a", "b", "c"))
   external <- data.frame(
     cell = c("c", "a", "b"),
@@ -26,7 +26,7 @@ test_that("ApplySpatialAlignment applies SMINT coordinate columns by cell ID", {
     y_transformed = c(60, 40, 50)
   )
 
-  result <- ApplySpatialAlignment(
+  result <- applySpatialAlignment(
     sm,
     alignment = external,
     return = "result",
@@ -38,15 +38,16 @@ test_that("ApplySpatialAlignment applies SMINT coordinate columns by cell ID", {
   expect_equal(coordinates$y, c(40, 50, 60))
   expect_equal(result$coordinates$cell, c("a", "b", "c"))
   expect_equal(result$provenance$backend, "precomputed")
-  expect_true("SMINT" %in% names(result$object@tools$spatial_alignment))
+  stored <- SpaMTP:::.storedData(result$object, "spatial_alignment")
+  expect_true("SMINT" %in% names(stored))
 })
 
 
-test_that("ApplySpatialAlignment accepts final coordinate conventions", {
+test_that("applySpatialAlignment accepts final coordinate conventions", {
   sm <- make_alignment_object(c(0, 1, 2), c(5, 6, 7))
   external <- data.frame(x_final = c(3, 4, 5), y_final = c(8, 9, 10))
 
-  aligned <- ApplySpatialAlignment(sm, alignment = external, verbose = FALSE)
+  aligned <- applySpatialAlignment(sm, alignment = external, verbose = FALSE)
   coordinates <- SeuratObject::GetTissueCoordinates(aligned, image = "fov")
 
   expect_equal(coordinates$x, external$x_final)
@@ -54,7 +55,7 @@ test_that("ApplySpatialAlignment accepts final coordinate conventions", {
 })
 
 
-test_that("ApplySpatialAlignment applies homogeneous matrices", {
+test_that("applySpatialAlignment applies homogeneous matrices", {
   sm <- make_alignment_object(c(0, 1, 2), c(5, 6, 7))
   transformation <- matrix(
     c(1, 0, 10, 0, 1, -2, 0, 0, 1),
@@ -62,7 +63,7 @@ test_that("ApplySpatialAlignment applies homogeneous matrices", {
     byrow = TRUE
   )
 
-  aligned <- ApplySpatialAlignment(
+  aligned <- applySpatialAlignment(
     sm,
     alignment = list(transformation = list(matrix = transformation)),
     verbose = FALSE
@@ -74,7 +75,7 @@ test_that("ApplySpatialAlignment applies homogeneous matrices", {
 })
 
 
-test_that("ApplySpatialAlignment estimates affine transforms from landmarks", {
+test_that("applySpatialAlignment estimates affine transforms from landmarks", {
   source_x <- c(0, 2, 0, 2)
   source_y <- c(0, 0, 2, 2)
   sm <- make_alignment_object(source_x, source_y)
@@ -82,7 +83,7 @@ test_that("ApplySpatialAlignment estimates affine transforms from landmarks", {
   source_landmarks <- cbind(x = source_x[1:3], y = source_y[1:3])
   target_landmarks <- source_landmarks + matrix(c(5, -3), nrow = 3, ncol = 2, byrow = TRUE)
 
-  result <- ApplySpatialAlignment(
+  result <- applySpatialAlignment(
     sm,
     ST.data = st,
     method = "affine",
@@ -139,11 +140,11 @@ test_that("point-annotator y-x landmarks can be marked as preprocessed", {
 })
 
 
-test_that("ApplySpatialAlignment validates incomplete external results", {
+test_that("applySpatialAlignment validates incomplete external results", {
   sm <- make_alignment_object(c(0, 1, 2), c(5, 6, 7), c("a", "b", "c"))
 
   expect_error(
-    ApplySpatialAlignment(
+    applySpatialAlignment(
       sm,
       alignment = data.frame(cell = c("a", "b"), x = 1:2, y = 3:4),
       verbose = FALSE
@@ -152,7 +153,7 @@ test_that("ApplySpatialAlignment validates incomplete external results", {
     fixed = TRUE
   )
   expect_error(
-    ApplySpatialAlignment(sm, alignment = data.frame(foo = 1:3), verbose = FALSE),
+    applySpatialAlignment(sm, alignment = data.frame(foo = 1:3), verbose = FALSE),
     "Could not identify aligned x-y columns",
     fixed = TRUE
   )
@@ -169,7 +170,7 @@ test_that("STalign integration is opt-in for local backend testing", {
   sm <- make_alignment_object(source$x, source$y)
   st <- make_alignment_object(target$x, target$y)
 
-  result <- ApplySpatialAlignment(
+  result <- applySpatialAlignment(
     sm,
     ST.data = st,
     method = "lddmm",

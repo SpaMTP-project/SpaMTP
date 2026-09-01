@@ -18,5 +18,5 @@ Vector containing the first n number of annotations
 Filters the annotation list to only include the first n number of annotations per m/z
 }
 \examples{
-# labels_to_show(`SeuratObject[["Spatial"]]@meta.data$annotations`, n = 3)
+# labels_to_show(SeuratObject[["Spatial"]][[]]$annotations, n = 3)
 }

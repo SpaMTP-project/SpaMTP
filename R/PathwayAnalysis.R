@@ -8,9 +8,9 @@
 #' @param pval_cutoff A numerical value defining the adjusted p value cutoff for keeing significant pathways (default = NULL).
 #' @param verbose Boolean indicating whether to show informative messages. If FALSE these messages will be suppressed (default = TRUE).
 #' @param database Optional named list of database resources, normally created
-#'   by [LoadSpaMTPDatabase()].
+#'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #' @param ... Additional parameters that can be passed through to `annotateTable()` when running `mz`-based analysis. Please see documentation for `annotateTable()` for more details.
 #'
@@ -29,16 +29,16 @@
 #' @import stringr
 #'
 #' @examples
-#' utils::str(formals(FishersPathwayAnalysis))
+#' utils::str(formals(fishersPathwayAnalysis))
 #' ## Running in 'mzs' mode:
-#' # FishersPathwayAnalysis(Analyte = list("mzs" = mz_values), ppm_error = 3)
+#' # fishersPathwayAnalysis(Analyte = list("mzs" = mz_values), ppm_error = 3)
 #'
 #' ## Running in 'metabolites' mode
-#' # FishersPathwayAnalysis(Analyte = list("metabolites" = metabolite_ids))
+#' # fishersPathwayAnalysis(Analyte = list("metabolites" = metabolite_ids))
 #'
 #' ## Running 'metabolites' and 'genes' combined
-#' # FishersPathwayAnalysis(Analyte = list("metabolites" = metabolite_ids, "genes" = gene_names))
-FishersPathwayAnalysis <- function (Analyte,
+#' # fishersPathwayAnalysis(Analyte = list("metabolites" = metabolite_ids, "genes" = gene_names))
+fishersPathwayAnalysis <- function (Analyte,
                                     max_path_size = 500,
                                     min_path_size = 5,
                                     alternative = "greater",
@@ -363,7 +363,7 @@ FishersPathwayAnalysis <- function (Analyte,
 
 .expand_pathway_annotation_ids <- function(db_3) {
   if (!"Isomers_IDs" %in% names(db_3)) {
-    stop("SpaMTP@tools$db_3 must contain an Isomers_IDs column.")
+    stop("The stored legacy db_3 result must contain an Isomers_IDs column.")
   }
   db_3 <- tidyr::separate_rows(
     as.data.frame(db_3, stringsAsFactors = FALSE),
@@ -383,8 +383,8 @@ FishersPathwayAnalysis <- function (Analyte,
 #'
 #' This the function used to compute the gene/metabolites set enrichment for multi-omics spatial data
 #'
-#' @param SpaMTP A SpaMTP Seurat object contains spatial metabolomics(SM)/transcriptomics(ST) data or both, if contains SM data, it should be annotated via SpaMTP::AnnotateSM function.
-#' @param ident A name character to specific the cluster vector for regions in `SpaMTP@meta.data` slot.
+#' @param SpaMTP A SpaMTP Seurat object contains spatial metabolomics(SM)/transcriptomics(ST) data or both, if contains SM data, it should be annotated via SpaMTP::annotateSM function.
+#' @param ident A character scalar specifying the region column in cell metadata.
 #' @param DE.list A list consisting of differential expression data.frames for each input modality. Within each data.frame column names MUST include 'cluster', 'gene', ('avg_log2FC' or 'logFC') and ('p_val_adj' or 'FDR').
 #' @param analyte_types Vector of character strings defining which analyte types to use. Options can be c("genes"), c("metabolites") or both (default = c("genes", "metabolites")).
 #' @param SM_assay A Character string defining describing slot name for spatial metabolomics data in SpaMTP to extract intensity values from (default = "SPM").
@@ -398,17 +398,17 @@ FishersPathwayAnalysis <- function (Analyte,
 #'   of DE significance (default = 0.05).
 #' @param pval_cutoff_genes A numerical value defining the adjusted p value cutoff for significant differentially expressed genes. If `NULL` cutoff = `0.05` (default = 0.05).
 #' @param annotation_score_threshold Minimum indexed annotation score used for
-#'   pathway mapping. It can be changed without re-running `AnnotateSM()` when
+#'   pathway mapping. It can be changed without re-running `annotateSM()` when
 #'   the object was annotated with `min_score = 0` (default = 0.05).
 #' @param annotation_source Metabolite annotation provenance. The default,
 #'   `"current"`, requires scored RaMP IDs from the indexed annotation
-#'   pipeline. `"auto"` permits a warned fallback to legacy `@tools$db_3`,
+#'   pipeline. `"auto"` permits a warned fallback to a legacy stored `db_3`,
 #'   while `"legacy"` explicitly requests that compatibility path.
 #' @param verbose Boolean indicating whether to show informative messages. If FALSE these messages will be suppressed (default = TRUE).
 #' @param database Optional named list of database resources, normally created
-#'   by [LoadSpaMTPDatabase()].
+#'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
 #' @return A SpaMTP object with set enrichment on given analyte types.
@@ -417,9 +417,9 @@ FishersPathwayAnalysis <- function (Analyte,
 #' @importFrom rlang %||%
 #'
 #' @examples
-#' utils::str(formals(FindRegionalPathways))
-#' # SpaMTP = FindRegionalPathways(SpaMTP, polarity = "positive")
-FindRegionalPathways = function(SpaMTP,
+#' utils::str(formals(findRegionalPathways))
+#' # SpaMTP = findRegionalPathways(SpaMTP, polarity = "positive")
+findRegionalPathways = function(SpaMTP,
                                 ident,
                                 DE.list,
                                 analyte_types = c("genes", "metabolites"),
@@ -452,14 +452,15 @@ FindRegionalPathways = function(SpaMTP,
   pathway <- database_resources$pathway
 
   ## Checks for ident in SpaMTP Object
-  if (!(ident %in% colnames(SpaMTP@meta.data))) {
+  cellMetadata <- .cellMetadata(SpaMTP)
+  if (!(ident %in% colnames(cellMetadata))) {
     stop(
       "Ident: ",
       ident,
-      " not found in SpaMTP object's @meta.data slot ... Make sure the ident column is in your @metadata and is a factor!"
+      " not found in the SpaMTP object's cell metadata. Make sure the column exists and is a factor."
     )
   }
-  cluster_vector = as.factor(SpaMTP@meta.data[[ident]])
+  cluster_vector = as.factor(cellMetadata[[ident]])
   assignment = cluster_vector
   cluster = levels(cluster_vector)
   ## Checks for data in SM and/or ST assay
@@ -703,19 +704,19 @@ FindRegionalPathways = function(SpaMTP,
 #' @param BPPARAM Parallelization parameter used in bplapply (default = NULL).
 #' @param nPermSimple Number of permutations in the simple geseca implementation for preliminary estimation of P-values (default = 1000).
 #' @param database Optional named list of database resources, normally created
-#'   by [LoadSpaMTPDatabase()].
+#'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
 #' @return A table with GESECA results. Each row corresponds to a tested RAMP_DB pathway.
 #' @export
 #'
 #' @examples
-#' utils::str(formals(RunRAMPgeseca))
-#' # E <- SpaMTP@reductions$pca.rev@feature.loadings
-#' # sig_pathways <- RunRAMPgeseca(E, minSize=15, maxSize=500)
-RunRAMPgeseca <- function(E,
+#' utils::str(formals(runRAMPGeseca))
+#' # E <- SeuratObject::Loadings(SpaMTP, reduction = "pca.rev")
+#' # sig_pathways <- runRAMPGeseca(E, minSize=15, maxSize=500)
+runRAMPGeseca <- function(E,
                           minSize     = 1,
                           maxSize     = nrow(E) - 1,
                           center      = TRUE,
@@ -770,9 +771,9 @@ RunRAMPgeseca <- function(E,
 #'   compatibility with older serialized SpaMTP objects.
 #' @param verbose Boolean logical value indicating whether to print verbose messages during execution. (default = TRUE).
 #' @param database Optional named list of database resources, normally created
-#'   by [LoadSpaMTPDatabase()].
+#'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
 #' @return A SpaMTP object with a new assay added, containing respective gene/metabolite data formatted based on RAMP_db IDs.
@@ -784,13 +785,13 @@ RunRAMPgeseca <- function(E,
 #' @importFrom SeuratObject CreateAssay5Object
 #'
 #' @examples
-#' utils::str(formals(CreatePathwayAssay))
+#' utils::str(formals(createPathwayAssay))
 #' ## Create a pathway assay from metabolite data
-#' #spamtp_obj <- CreatePathwayAssay(spamtp_obj, analyte_type = "metabolites", assay = "SPM", new_assay = "pathway")
+#' #spamtp_obj <- createPathwayAssay(spamtp_obj, analyte_type = "metabolites", assay = "SPM", new_assay = "pathway")
 #'
 #' ## Create a pathway assay from gene data with verbose output
-#' #spamtp_obj <- CreatePathwayAssay(spamtp_obj, analyte_type = "genes", assay = "SPT", new_assay = "gene_pathway", verbose = TRUE)
-CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Spatial", slot = "counts", new_assay = "pathway", annotation_score_threshold = 0.05, annotation_source = c("current", "auto", "legacy"), verbose = TRUE, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
+#' #spamtp_obj <- createPathwayAssay(spamtp_obj, analyte_type = "genes", assay = "SPT", new_assay = "gene_pathway", verbose = TRUE)
+createPathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Spatial", slot = "counts", new_assay = "pathway", annotation_score_threshold = 0.05, annotation_source = c("current", "auto", "legacy"), verbose = TRUE, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
 
   annotation_source <- match.arg(annotation_source)
   database_resources <- .spamtp_db_bundle(
@@ -808,7 +809,8 @@ CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
   }
 
   if (analyte_type == "genes") {
-    if (is.null(SpaMTP@assays[[assay]][slot])) {
+    assayMatrix <- tryCatch(.assayData(SpaMTP, assay, slot), error = function(e) NULL)
+    if (is.null(assayMatrix)) {
       stop(
         paste0(
           "No data exists in object[[",
@@ -819,7 +821,7 @@ CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
         )
       )
     } else{
-      matrix <- as.data.frame(SpaMTP[[assay]][slot])
+      matrix <- as.data.frame(assayMatrix)
       matrix$commonName <- toupper(rownames(matrix))
       matrix = merge(matrix,
                      unique(source_df[which(grepl(source_df$rampId, pattern = "RAMP_G")), ][c("rampId" ,"commonName")]),
@@ -838,7 +840,8 @@ CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
     }
   }
   if (analyte_type == "metabolites") {
-    if (is.null(SpaMTP@assays[[assay]][slot])) {
+    assayMatrix <- tryCatch(.assayData(SpaMTP, assay, slot), error = function(e) NULL)
+    if (is.null(assayMatrix)) {
       stop(
         paste0(
           "No data exists in object[[",
@@ -849,7 +852,7 @@ CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
         )
       )
     } else{
-      matrix <- as.data.frame(SpaMTP[[assay]][slot])
+      matrix <- as.data.frame(assayMatrix)
 
       # (2) Annotation
       verbose_message(
@@ -866,7 +869,7 @@ CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
       ### Adding DE Results
       db_3 <- db_3[c("mz_name",  "ramp_id")]
       db_3 <- db_3 %>% distinct()
-      matrix$mz_name <- rownames(SpaMTP@assays[[assay]])
+      matrix$mz_name <- rownames(SpaMTP[[assay]])
       matrix = merge(db_3 , matrix, by = "mz_name")
 
       meta.data <- matrix[c("ramp_id" ,"mz_name")] %>%
@@ -921,8 +924,13 @@ CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
   # Manually restore underscores
   rownames(SpaMTP[[new_assay]]) <- gsub("-", "_", x = rownames(SpaMTP[[new_assay]]))
 
-  SpaMTP[[new_assay]]@meta.data$rampId <- rownames(SpaMTP[[new_assay]])
-  SpaMTP[[new_assay]]@meta.data <- merge(SpaMTP[[new_assay]]@meta.data, meta.data, by = "rampId", all = TRUE)
+  pathwayMetadata <- data.frame(
+    rampId = rownames(SpaMTP[[new_assay]]),
+    row.names = rownames(SpaMTP[[new_assay]])
+  )
+  pathwayMetadata <- merge(pathwayMetadata, meta.data, by = "rampId", all = TRUE)
+  rownames(pathwayMetadata) <- pathwayMetadata$rampId
+  SpaMTP <- .setFeatureMetadata(SpaMTP, pathwayMetadata, new_assay)
 
 
   return(SpaMTP)
@@ -948,9 +956,9 @@ CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
 #' @param new.assay Character. Name of the new assay where pathway scores will be stored (defaults = "pathway").
 #' @param remove.nans Logical. Whether to remove pathways with all NaN values (e.g., no matched analytes) (defaults = TRUE).
 #' @param database Optional named list of database resources, normally created
-#'   by [LoadSpaMTPDatabase()].
+#'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
 #' @return A SpaMTP Seurat object with a new assay containing pathway-level expression scores.
@@ -959,9 +967,9 @@ CreatePathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
 #' @export
 #'
 #' @examples
-#' utils::str(formals(CreatePathwayObject))
-#' #object <- CreatePathwayObject(seurat_obj, assay = "RNA", slot = "scale.data")
-CreatePathwayObject <- function(object,
+#' utils::str(formals(createPathwayObject))
+#' #object <- createPathwayObject(seurat_obj, assay = "RNA", slot = "scale.data")
+createPathwayObject <- function(object,
                                 assay=SeuratObject::DefaultAssay(object),
                                 slot = "scale.data",
                                 new.assay = "pathway",
@@ -986,8 +994,7 @@ CreatePathwayObject <- function(object,
   pathway_db <- split(chempathway$rampId, chempathway$pathwayRampId)
   pathway_db <- pathway_db[!duplicated(tolower(names(pathway_db)))]
 
-  x <- Seurat::GetAssay(object, assay)
-  E <- x[slot]
+  E <- .assayData(object, assay, slot)
 
   pathway_sums <- list()
   for (i in seq_along(pathway_db)) {
@@ -1014,10 +1021,12 @@ CreatePathwayObject <- function(object,
 
   rownames(object[[new.assay]]) <- gsub(pattern = "-", replacement = "_", x = rownames(object[[new.assay]]))
 
-  object[[new.assay]]@meta.data <- chempathway %>%
+  pathwayMetadata <- chempathway %>%
     filter(pathwayRampId %in% rownames(object[[new.assay]])) %>%
     select(pathwayRampId, pathwayName) %>%
     distinct()
+  rownames(pathwayMetadata) <- pathwayMetadata$pathwayRampId
+  object <- .setFeatureMetadata(object, pathwayMetadata, new.assay)
 
   return(object)
 }

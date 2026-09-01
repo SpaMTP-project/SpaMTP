@@ -5,10 +5,10 @@
 #' - Identifying pathways associated with each possible annotated metabolite
 #' - Calculating colocalisation score between the m/z intensity and the expression of each corresponding pathway
 #' - Ranking annotations by a combined z-score based on correlation strength and number of supporting significant pathways
-#' - NOTE: this function requires `CreatePathwayAssay` and `CreatePathwayObject` to be run first
+#' - NOTE: this function requires `createPathwayAssay` and `createPathwayObject` to be run first
 #'
 #' @param mz Character or numeric. The target m/z feature. If numeric, the closest matching m/z in the dataset will be selected.
-#' @param data A SpaMTP Seurat object containing both metabolite and pathway assays generated from `CreatePathwayObject`.
+#' @param data A SpaMTP Seurat object containing both metabolite and pathway assays generated from `createPathwayObject`.
 #' @param mz.assay Character string defining the name of the assay containing m/z features.
 #' @param pathway.assay Character string matching the name of the assay containing pathway features (default = "pathway").
 #' @param mz.slot Character string stating the slot to extract m/z values from (default = "scale.data").
@@ -17,9 +17,9 @@
 #' @param corr_weight Numeric weight applied to correlation score in z-score calculation. If significance should be based more on the correlation, increase this value (default = 1).
 #' @param n_weight Numeric weight applied to number of correlated pathways in z-score calculation (default = 1).
 #' @param database Optional named list of database resources, normally created
-#'   by [LoadSpaMTPDatabase()].
+#'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
 #' @return A tibble with the ranked annotations for the m/z value, containing:
@@ -41,12 +41,12 @@
 #' @importFrom utils head
 #'
 #' @examples
-#' utils::str(formals(CalculateSingleAnnotationStatistics))
-#' #data <- CreatePathwayObject(data,assay="SPT_pathway",slot = "scale.data")
-#' #CalculateSingleAnnotationStatistics(mz = "mz-674.2805",data = data,mz.assay = "SPM",pathway.assay = "pathway",mz.slot = "scale.data")
+#' utils::str(formals(calculateSingleAnnotationStatistics))
+#' #data <- createPathwayObject(data,assay="SPT_pathway",slot = "scale.data")
+#' #calculateSingleAnnotationStatistics(mz = "mz-674.2805",data = data,mz.assay = "SPM",pathway.assay = "pathway",mz.slot = "scale.data")
 #'
 #' @export
-CalculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assay = "pathway", mz.slot= "scale.data", pathway.slot = "scale.data", corr_theshold = 0, corr_weight = 1, n_weight = 1, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
+calculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assay = "pathway", mz.slot= "scale.data", pathway.slot = "scale.data", corr_theshold = 0, corr_weight = 1, n_weight = 1, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
 
   database_resources <- .spamtp_db_bundle(
     c("source_df", "analytehaspathway"),
@@ -59,7 +59,7 @@ CalculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assa
   analytehaspathway <- database_resources$analytehaspathway
 
   if(is.numeric(mz)){
-    mz <- FindNearestMZ(data = data, target_mz = mz, assay = mz.assay)
+    mz <- findNearestMZ(data = data, target_mz = mz, assay = mz.assay)
   }
 
   DefaultAssay(data) <- pathway.assay
@@ -71,7 +71,8 @@ CalculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assa
 
   ## 2. Use source_df to match annotation sourceID to rampID
 
-  row <- data[[mz.assay]]@meta.data[data[[mz.assay]]@meta.data$mz_names == mz,]
+  featureMetadata <- .featureMetadata(data, mz.assay)
+  row <- featureMetadata[featureMetadata$mz_names == mz,]
   source_df_copy <- source_df
   named_list_copy <- named_list
 
@@ -96,7 +97,7 @@ CalculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assa
 
   gc()
 
-  main_cardinal <- ConvertSeuratToCardinal(data = data, assay = SM.assay, slot = mz.slot, verbose = FALSE)
+  main_cardinal <- convertSeuratToCardinal(data = data, assay = SM.assay, slot = mz.slot, verbose = FALSE)
 
 
 
@@ -221,10 +222,10 @@ CalculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assa
 #' - Identifying pathways associated with each possible annotated metabolite
 #' - Calculating colocalisation score between the m/z intensity and the expression of each corresponding pathway
 #' - Ranking annotations by a combined z-score based on correlation strength and number of supporting significant pathways
-#' - NOTE: this function requires `CreatePathwayAssay` to be run first
+#' - NOTE: this function requires `createPathwayAssay` to be run first
 #'
 #' @param mz Character or numeric. The target m/z feature. If numeric, the closest matching m/z in the dataset will be selected.
-#' @param data A SpaMTP Seurat object containing both metabolite and RAMP_ID assays generated from `CreatePathwayAssay`.
+#' @param data A SpaMTP Seurat object containing both metabolite and RAMP_ID assays generated from `createPathwayAssay`.
 #' @param mz.assay Character string defining the name of the assay containing m/z features.
 #' @param pathway.assay Character string matching the name of the assay containing RAMP_ID features (default = "pathway").
 #' @param mz.slot Character string stating the slot to extract m/z values from (default = "scale.data").
@@ -234,9 +235,9 @@ CalculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assa
 #' @param corr_weight Numeric weight applied to correlation score in z-score calculation. If significance should be based more on the correlation, increase this value (default = 1).
 #' @param n_weight Numeric weight applied to number of correlated pathways in z-score calculation (default = 1).
 #' @param database Optional named list of database resources, normally created
-#'   by [LoadSpaMTPDatabase()].
+#'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
 #' @return Either a data.frame containing the original annotations for all m/z values and their corresponding most likely metabolite, or a list contating statistics for each m/z value.
@@ -249,11 +250,11 @@ CalculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assa
 #' @importFrom utils head
 #'
 #' @examples
-#' utils::str(formals(CalculateAnnotationStatistics))
-#' #CalculateAnnotationStatistics(data = data,mz.assay = "SPM",pathway.assay = "merged",mz.slot = "scale.data")
+#' utils::str(formals(calculateAnnotationStatistics))
+#' #calculateAnnotationStatistics(data = data,mz.assay = "SPM",pathway.assay = "merged",mz.slot = "scale.data")
 #'
 #' @export
-CalculateAnnotationStatistics <- function(data, mz.assay, pathway.assay, mz.slot= "scale.data", pathway.slot = "scale.data", return.top = TRUE, corr_theshold = 0, corr_weight = 1, n_weight = 1, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
+calculateAnnotationStatistics <- function(data, mz.assay, pathway.assay, mz.slot= "scale.data", pathway.slot = "scale.data", return.top = TRUE, corr_theshold = 0, corr_weight = 1, n_weight = 1, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
 
   database_source <- match.arg(database_source)
   database_resources <- .spamtp_db_bundle(
@@ -267,7 +268,7 @@ CalculateAnnotationStatistics <- function(data, mz.assay, pathway.assay, mz.slot
   analytehaspathway <- database_resources$analytehaspathway
 
   message("creating pathway expression object")
-  y <- CreatePathwayObject(data,
+  y <- createPathwayObject(data,
                            assay=pathway.assay,
                            slot = pathway.slot,
                            database = database_resources,
@@ -286,15 +287,15 @@ CalculateAnnotationStatistics <- function(data, mz.assay, pathway.assay, mz.slot
 
   ## 2. Use source_df to match annotation sourceID to rampID
 
-  meta_data <- y[[mz.assay]]@meta.data$raw_mz
-  meta_rows <- y[[mz.assay]]@meta.data
+  meta_rows <- .featureMetadata(y, mz.assay)
+  meta_data <- meta_rows$raw_mz
   source_df_copy <- source_df
   named_list_copy <- named_list
 
   message("Calculating top metabolites for each m/z value. ")
 
 
-  met_counts <- y[[mz.assay]][mz.slot] #[FindNearestMZ(data = y, target_mz = mz, assay = SM.assay),,drop =FALSE]
+  met_counts <- y[[mz.assay]][mz.slot] #[findNearestMZ(data = y, target_mz = mz, assay = SM.assay),,drop =FALSE]
   tran_counts <- y[["pathway"]]["counts"]
 
   gene_mappings <- data.frame(gene = rownames(tran_counts))
@@ -312,7 +313,7 @@ CalculateAnnotationStatistics <- function(data, mz.assay, pathway.assay, mz.slot
 
   gc()
 
-  main_cardinal <- ConvertSeuratToCardinal(data = y, assay = SM.assay, slot = mz.slot, verbose = FALSE)
+  main_cardinal <- convertSeuratToCardinal(data = y, assay = SM.assay, slot = mz.slot, verbose = FALSE)
 
 
   mz_pathway_annotations <- lapply(1:length(meta_data), function(idx){

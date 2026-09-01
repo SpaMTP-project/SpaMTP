@@ -192,10 +192,10 @@ test_that("network JSON template is valid and contains new controls", {
 })
 
 test_that("pathway network API exposes interactive layout selection", {
-  layouts <- eval(formals(PathwayNetworkPlots)$layout_mode)
+  layouts <- eval(formals(pathwayNetworkPlots)$layout_mode)
 
   expect_equal(layouts, c("repulsion", "force", "radial", "bipartite"))
-  expect_equal(eval(formals(PathwayNetworkPlots)$annotation_score_floor), 0.01)
+  expect_equal(eval(formals(pathwayNetworkPlots)$annotation_score_floor), 0.01)
 })
 
 test_that("standard and curated FMP10 annotation engines are current", {

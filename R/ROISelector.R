@@ -31,16 +31,16 @@
 #' @importFrom sf st_polygon st_sfc st_make_valid st_as_sf st_within
 #' @importFrom dplyr %>%
 #' @examples
-#' utils::str(formals(SelectROIs))
+#' utils::str(formals(selectROIs))
 #' @export
-SelectROIs <- function(seurat_obj, image = "fov") {
+selectROIs <- function(seurat_obj, image = "fov") {
 
   if (!inherits(seurat_obj, "Seurat")) stop("seurat_obj must be a Seurat object")
 
   coords <- GetTissueCoordinates(seurat_obj, image = image)
   if (!all(c("x", "y") %in% colnames(coords))) stop("Spatial coordinates 'x' and 'y' not found")
 
-  meta_cols <- colnames(seurat_obj@meta.data)
+  meta_cols <- colnames(.cellMetadata(seurat_obj))
 
   return(runApp(shinyApp(
     ui = fluidPage(
@@ -69,7 +69,7 @@ SelectROIs <- function(seurat_obj, image = "fov") {
       output$spatial_plot <- renderPlotly({
         meta_col <- input$meta_col
         plot_type <- input$plot_type
-        meta_data <- rv()@meta.data[[meta_col]]
+        meta_data <- .cellMetadata(rv())[[meta_col]]
         spot_size <- input$pt_size
 
         plot_ly() %>%

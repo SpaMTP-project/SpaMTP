@@ -292,7 +292,7 @@
 .pn_prepare_metabolite_map <- function(db_3, chemical_properties = NULL) {
   db_3 <- as.data.frame(db_3, stringsAsFactors = FALSE)
   if (!"mz_name" %in% names(db_3)) {
-    .pn_assert_columns(db_3, "observed_mz", "SpaMTP@tools$db_3")
+    .pn_assert_columns(db_3, "observed_mz", "stored SpaMTP db_3 result")
     db_3$mz_name <- paste0("mz-", db_3$observed_mz)
   }
   adduct <- if ("Adduct" %in% names(db_3)) as.character(db_3$Adduct) else ""
@@ -322,7 +322,7 @@
       stop("Legacy metabolite annotations require the chem_props lookup table.")
     }
     id_column <- if ("Isomers_IDs" %in% names(db_3)) "Isomers_IDs" else "Isomers"
-    .pn_assert_columns(db_3, id_column, "SpaMTP@tools$db_3")
+    .pn_assert_columns(db_3, id_column, "stored SpaMTP db_3 result")
     mapping <- .pn_expand_values(db_3, id_column)
     mapping$chem_source_id <- .pn_normalise_source_id(mapping[[id_column]])
     chem_map <- unique(chemical_properties[c("chem_source_id", "ramp_id")])
@@ -656,10 +656,6 @@
     SeuratObject::LayerData(assay_object, layer = layer),
     error = function(e) NULL
   )
-  if (is.null(value) && methods::is(assay_object, "Assay5") &&
-      layer %in% names(assay_object@layers)) {
-    value <- assay_object@layers[[layer]]
-  }
   if (is.null(value)) {
     value <- tryCatch(
       SeuratObject::GetAssayData(object, assay = assay, layer = layer),
@@ -719,7 +715,7 @@
   } else {
     rownames(coordinates)
   }
-  metadata <- object@meta.data
+  metadata <- .cellMetadata(object)
   assignment <- if (length(coordinate_cells) && all(coordinate_cells %in% rownames(metadata))) {
     as.character(metadata[coordinate_cells, ident])
   } else {

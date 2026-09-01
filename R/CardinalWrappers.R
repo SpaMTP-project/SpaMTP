@@ -14,10 +14,10 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(add_ssc_annotation))
+#' utils::str(formals(addSSCAnnotation))
 #' # ssc_data <- Cardinal::spatialShrunkenCentroids(CardinalObj, ...)
-#' # new_CardinalObj <- add_ssc_annotation(CardinalObj, ssc_data, resolution ="r=2,k=8,s=32")
-add_ssc_annotation <- function(data, data_ssc, resolution){
+#' # new_CardinalObj <- addSSCAnnotation(CardinalObj, ssc_data, resolution ="r=2,k=8,s=32")
+addSSCAnnotation <- function(data, data_ssc, resolution){
 
   data_bin <- data
 
@@ -28,7 +28,7 @@ add_ssc_annotation <- function(data, data_ssc, resolution){
     } else {
       message(paste0("Getting cluster segments for resolution ", resolution))
 
-      Cardinal::pixelData(data_bin)[["ssc"]] <- data_ssc@listData[[resolution]]$class
+      Cardinal::pixelData(data_bin)[["ssc"]] <- data_ssc[[resolution]]$class
     }
 
   } else {

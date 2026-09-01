@@ -10,9 +10,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(FindNearestMZ))
-#' # FindNearestMZ(SeuratObj, target_mz = 400.01)
-FindNearestMZ <- function(data, target_mz, assay = NULL){
+#' utils::str(formals(findNearestMZ))
+#' # findNearestMZ(SeuratObj, target_mz = 400.01)
+findNearestMZ <- function(data, target_mz, assay = NULL){
   if (is.null(assay)){
     assay <- DefaultAssay(data)
   }
@@ -25,7 +25,7 @@ FindNearestMZ <- function(data, target_mz, assay = NULL){
 #' Sums the intensity values of multiple m/z values into one
 #'
 #' This function inputs any vector of m/z values and combines their intensity values per pixel.
-#' This 'binned' data is stored in the SpaMTP Object's `@meta.data` slot.
+#' This binned data is stored in the SpaMTP object's cell metadata.
 #'
 #' @param data SpaMTP Seurat class object containing m/z intensities.
 #' @param mzs Vector of m/z names to be binned together
@@ -33,13 +33,13 @@ FindNearestMZ <- function(data, target_mz, assay = NULL){
 #' @param slot Character string indicating the assay slot to use to pull expression values form (default = "counts").
 #' @param bin_name Character string defining the name of the meta.data column that stores the data (default = "Binned_Metabolites").
 #'
-#' @return Binned intensity value stored in barcode meta.data slot
+#' @return Binned intensity value stored in the cell metadata.
 #' @export
 #'
 #' @examples
-#' utils::str(formals(BinMetabolites))
-#' # SpaMPT.obj <- BinMetabolites(SpaMPT.obj, mz = c('mz-740.471557617188','mz-784.528564453125','mz-897.603637695312'), bin_name = "Lipids")
-BinMetabolites <- function(data, mzs, assay = "Spatial", slot = "data", bin_name = "Binned_Metabolites"){
+#' utils::str(formals(binMetabolites))
+#' # SpaMPT.obj <- binMetabolites(SpaMPT.obj, mz = c('mz-740.471557617188','mz-784.528564453125','mz-897.603637695312'), bin_name = "Lipids")
+binMetabolites <- function(data, mzs, assay = "Spatial", slot = "data", bin_name = "Binned_Metabolites"){
 
   binned_counts <- bin.mz(data, mz_list = mzs, assay = assay, slot = slot) # bins m/z masses
 
@@ -50,7 +50,7 @@ BinMetabolites <- function(data, mzs, assay = "Spatial", slot = "data", bin_name
 
 #' Bins multiple m/z values into one.
 #'
-#' This function is a helper function for `BinMetabolites`.
+#' This function is a helper function for `binMetabolites`.
 #'
 #' @param data Seurat Spatial Metabolomic object containing mz values
 #' @param mz_list Vector of m/z names to be binned into one value
@@ -67,14 +67,14 @@ bin.mz <- function(data, mz_list, assay = "Spatial", slot = "counts", stored.in.
   data_copy <- data
 
   if (stored.in.metadata){
-    metadata_counts <- data_copy@meta.data[mz_list]
+    metadata_counts <- .cellMetadata(data_copy)[mz_list]
     if (length(colnames(metadata_counts)) < 2) {
       stop("One or more genes not found in the assay meta.data.")
     }
     binned.data <- Matrix::rowSums(metadata_counts)
 
   } else{
-    assay_counts <- data_copy[[assay]][slot]
+    assay_counts <- .assayData(data_copy, assay, slot)
     selected_genes <- assay_counts[mz_list, , drop = FALSE]
     if (is.null(selected_genes)) {
       stop("One or more genes not found in the assay counts.")
@@ -99,14 +99,14 @@ bin.mz <- function(data, mz_list, assay = "Spatial", slot = "counts", stored.in.
 #' # plusminus(SeuratObj, target_mz = 400.01, plus_minus = 0.005)
 plusminus <- function(data, target_mz, plus_minus){
   feature_list <- c()
-  center <- FindNearestMZ(data, target_mz)
+  center <- findNearestMZ(data, target_mz)
 
   center_value <- as.numeric(gsub("mz-", "", center))
   up_value <- center_value + as.numeric(plus_minus)
   low_value <- center_value - as.numeric(plus_minus)
 
-  upper <- FindNearestMZ(data, up_value)
-  lower <- FindNearestMZ(data, low_value)
+  upper <- findNearestMZ(data, up_value)
+  lower <- findNearestMZ(data, low_value)
 
   feature_list <- c(feature_list, center)
   if (!(upper %in% feature_list)){
@@ -130,7 +130,7 @@ plusminus <- function(data, target_mz, plus_minus){
 #' @param mz_list Vector of numeric m/z values to plot (e.g. c(mz-400.1578, mz-300.1)).
 #' @param plusminus Numeric value defining the range/threshold either side of each mz peak provided.
 #'
-#' @return List contatining a Seurat data object which contains the binned counts in the `@metadata` slot, the column name under where the data is stored and the title of this binned which will be plotted.
+#' @return A list containing a Seurat object with binned counts in its cell metadata, the metadata column name, and the plot title.
 #'
 #' @examples
 #' ### HELPER FUNCTION ###
@@ -232,7 +232,7 @@ pixelPlot <- function(plot){
 #' This function inherits from Seurat::ImageFeaturePlot().
 #'
 #' @param object Seurat Spatial Metabolomic Object to Visualise.
-#' @param mzs Vector of numeric m/z values to plot (e.g. c(400.1578, 300.1)). The function FindNearestMZ() is used to automatically find the nearest m/z value to the ones given.
+#' @param mzs Vector of numeric m/z values to plot (e.g. c(400.1578, 300.1)). The function findNearestMZ() is used to automatically find the nearest m/z value to the ones given.
 #' @param plusminus Numeric value defining the range/threshold either side of the target peak/peaks to be binned together for plotting (default = NULL).
 #' @param fov Character string of name of FOV to plot (default = NULL).
 #' @param boundaries A vector of segmentation boundaries per image to plot (default = NULL).
@@ -267,10 +267,10 @@ pixelPlot <- function(plot){
 #' @export
 #'
 #' @examples
-#' utils::str(formals(ImageMZPlot))
-#' # ImageMZPlot(SeuratObj, mzs = c(400.678, 300.1))
-#' # ImageMZPlot(SeuratObj, mzs = c(400.678, 300.1), plusminus = 0.05)
-ImageMZPlot <- function(object,
+#' utils::str(formals(imageMZPlot))
+#' # imageMZPlot(SeuratObj, mzs = c(400.678, 300.1))
+#' # imageMZPlot(SeuratObj, mzs = c(400.678, 300.1), plusminus = 0.05)
+imageMZPlot <- function(object,
                         mzs,
                         plusminus = NULL,
                         fov = NULL,
@@ -313,7 +313,7 @@ ImageMZPlot <- function(object,
 
     mz_list <- c()
     for (target_mz in mzs){
-      mz_string <- FindNearestMZ(object, target_mz, assay = assay)
+      mz_string <- findNearestMZ(object, target_mz, assay = assay)
       mz_list <- c(mz_list, mz_string)
     }
   }
@@ -425,7 +425,7 @@ ImageMZPlot <- function(object,
 #'
 #' This is for plotting annotated SM data from a SpaMTP Seurat Object that does not contain an image(i.e. H&E image).
 #' This function inputs the metabolite name such as 'Glutamine' rather then a specific m/z value.
-#' For m/z values please use `ImageMZPlot()`.This function inherits off Seurat::ImageFeaturePlot().
+#' For m/z values please use `imageMZPlot()`.This function inherits off Seurat::ImageFeaturePlot().
 #'
 #' @param object Seurat Spatial Metabolomic Object to Visualise.
 #' @param metabolites Vector of metabolite names to plot (e.g. c("Glucose", "Glutamine")). The Seurat Object provided must contain annotations in the respective assay metadata.
@@ -456,7 +456,7 @@ ImageMZPlot <- function(object,
 #' @param coord.fixed Boolean value of it to plot cartesian coordinates with fixed aspect ratio (default = TURE).
 #' @param assay Character string indicating which Seurat object assay to pull data form (default = "Spatial").
 #' @param slot Character string indicating the assay slot to use to pull expression values form (default = "counts").
-#' @param column.name Character string defining the column name where the annotations are stored in the slot meta.data (default = "all_IsomerNames").
+#' @param column.name Character string defining the feature-metadata column where annotations are stored (default = "all_IsomerNames").
 #' @param plot.exact Boolean value describing if to only plot exact matches to the metabolite search terms, else will plot all metabolites which contain serach word in name (default = TRUE).
 #' @param plot.pixel Boolean indicating if the plot should display pixel square shapes, if false will plot with spots (deafult = FALSE).
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
@@ -465,10 +465,10 @@ ImageMZPlot <- function(object,
 #' @export
 #'
 #' @examples
-#' utils::str(formals(ImageMZAnnotationPlot))
-#' # ImageMZPlot(SeuratObj, mzs = c("Glucose", "Glutamine"))
-#' # ImageMZPlot(SeuratObj, mzs = c("Glucose", "Glutamine"), plusminus = 0.05)
-ImageMZAnnotationPlot <- function(object,
+#' utils::str(formals(imageMZAnnotationPlot))
+#' # imageMZPlot(SeuratObj, mzs = c("Glucose", "Glutamine"))
+#' # imageMZPlot(SeuratObj, mzs = c("Glucose", "Glutamine"), plusminus = 0.05)
+imageMZAnnotationPlot <- function(object,
                                   metabolites,
                                   plusminus = NULL,
                                   fov = NULL,
@@ -516,11 +516,11 @@ ImageMZAnnotationPlot <- function(object,
   multi_plusminus <- NULL
   mzs <- c()
   for (metabolite in metabolites){
-    met.row <- SearchAnnotations(object,metabolite, assay = assay, column.name = column.name, search.exact = plot.exact)
+    met.row <- searchAnnotations(object,metabolite, assay = assay, column.name = column.name, search.exact = plot.exact)
 
     if (dim(met.row)[1] == 0){
       warning(paste("There are no entries for the metabolite: ", metabolite, " in the current annotation metadata ...",
-                    "\n please refine your search term. You can check for annotations using SearchAnnotations()"))
+                    "\n please refine your search term. You can check for annotations using searchAnnotations()"))
       stop("n entries must be > 1")
 
     } else if (dim(met.row)[1] > 1){
@@ -537,7 +537,7 @@ ImageMZAnnotationPlot <- function(object,
           warning(paste("There are another ", (length(all_annots)-1),
                         "annotations assocated with this metabolite ( ",metabolite,
                         " )... These being: ",
-                        "\n", paste(list(all_annots)), "\n Use SearchAnnotations() to see ..."))
+                        "\n", paste(list(all_annots)), "\n Use searchAnnotations() to see ..."))
         }
 
         mz <- met.row$mz_names[row]
@@ -579,7 +579,7 @@ ImageMZAnnotationPlot <- function(object,
         warning(paste("There are another ", (length(all_annots)-1),
                       "annotations assocated with this metabolite ( ",metabolite,
                       " )... These being: ",
-                      "\n", paste(list(all_annots)), "\n Use SearchAnnotations() to see ..."))
+                      "\n", paste(list(all_annots)), "\n Use searchAnnotations() to see ..."))
       }
 
       mz <- met.row$raw_mz
@@ -628,7 +628,7 @@ ImageMZAnnotationPlot <- function(object,
                                      combine = combine,
                                      coord.fixed = coord.fixed)
   } else {
-    plot <- ImageMZPlot(data_copy,
+    plot <- imageMZPlot(data_copy,
                         mzs,
                         plusminus = plusminus,
                         fov = fov,
@@ -693,7 +693,7 @@ ImageMZAnnotationPlot <- function(object,
 #' This function inherits off Seurat::SpatialFeaturePlot(). Look here for more detailed documentation about inputs.
 #'
 #' @param object Seurat Spatial Metabolomic Object to Visualise.
-#' @param mzs Vector of numeric m/z values to plot (e.g. c(400.1578, 300.1)). The function FindNearestMZ() is used to automatically find the nearest m/z value to the ones given.
+#' @param mzs Vector of numeric m/z values to plot (e.g. c(400.1578, 300.1)). The function findNearestMZ() is used to automatically find the nearest m/z value to the ones given.
 #' @param plusminus Numeric value defining the range/threshold either side of the target peak/peaks to be binned together for plotting (default = NULL).
 #' @param images Character string of the name of the image to plot (default = NULL).
 #' @param crop Boolean value indicating if to crop the plot to focus on only points being plotted (default = TRUE).
@@ -716,10 +716,10 @@ ImageMZAnnotationPlot <- function(object,
 #' @export
 #'
 #' @examples
-#' utils::str(formals(SpatialMZPlot))
-#' # SpatialMZPlot(SeuratObj, mzs = c(400.678, 300.1))
-#' # SpatialMZPlot(SeuratObj, mzs = c(400.678, 300.1), plusminus = 0.05)
-SpatialMZPlot <- function(object,
+#' utils::str(formals(spatialMZPlot))
+#' # spatialMZPlot(SeuratObj, mzs = c(400.678, 300.1))
+#' # spatialMZPlot(SeuratObj, mzs = c(400.678, 300.1), plusminus = 0.05)
+spatialMZPlot <- function(object,
                           mzs,
                           plusminus = NULL,
                           images = NULL,
@@ -746,7 +746,7 @@ SpatialMZPlot <- function(object,
 
     mz_list <- c()
     for (target_mz in mzs){
-      mz_string <- FindNearestMZ(object, target_mz, assay = assay)
+      mz_string <- findNearestMZ(object, target_mz, assay = assay)
       mz_list <- c(mz_list, mz_string)
     }
   }
@@ -857,7 +857,7 @@ SpatialMZPlot <- function(object,
 #' @param stroke Numeric value describing the width of the border around the spot (default. =0.25).
 #' @param interactive Boolean value of if to launch an interactive SpatialDimPlot or SpatialFeaturePlot session, see Seurat::ISpatialDimPlot() or Seurat::ISpatialFeaturePlot() for more details (default = FALSE).
 #' @param information An optional dataframe or matrix of extra infomation to be displayed on hover (default = NULL).
-#' @param column.name Character string defining the column name where the annotations are stored in the slot meta.data (default = "all_IsomerNames").
+#' @param column.name Character string defining the feature-metadata column where annotations are stored (default = "all_IsomerNames").
 #' @param plot.exact Boolean value describing if to only plot exact matches to the metabolite search terms, else will plot all metabolites which contain serach word in name (default = TRUE).
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
@@ -865,10 +865,10 @@ SpatialMZPlot <- function(object,
 #' @export
 #'
 #' @examples
-#' utils::str(formals(SpatialMZAnnotationPlot))
-#' # SpatialMZAnnotationPlot(SeuratObj, mzs = c("Glucose", "Glutamine"))
-#' # SpatialMZAnnotationPlot(SeuratObj, mzs = c("Glucose", "Glutamine"), plusminus = 0.05)
-SpatialMZAnnotationPlot <- function(object,
+#' utils::str(formals(spatialMZAnnotationPlot))
+#' # spatialMZAnnotationPlot(SeuratObj, mzs = c("Glucose", "Glutamine"))
+#' # spatialMZAnnotationPlot(SeuratObj, mzs = c("Glucose", "Glutamine"), plusminus = 0.05)
+spatialMZAnnotationPlot <- function(object,
                                     metabolites,
                                     plusminus = NULL,
                                     images = NULL,
@@ -898,11 +898,11 @@ SpatialMZAnnotationPlot <- function(object,
 
   mzs <- c()
   for (metabolite in metabolites){
-    met.row <- SearchAnnotations(object,metabolite, assay = assay, column.name = column.name,search.exact = plot.exact)
+    met.row <- searchAnnotations(object,metabolite, assay = assay, column.name = column.name,search.exact = plot.exact)
 
     if (dim(met.row)[1] != 1){
       warning(paste("There are either none or multiple entries for the metabolite: ", metabolite,
-                    "\n please check using SearchAnnotations() and FindDuplicateAnnotations"))
+                    "\n please check using searchAnnotations() and findDuplicateAnnotations"))
       stop("n entries != 1")
     }
 
@@ -911,14 +911,14 @@ SpatialMZAnnotationPlot <- function(object,
     if (length(all_annots) != 1){
       warning(paste("There are another ", (length(all_annots)-1),
                     "annotations assocated with this metabolite ( ",metabolite," )... These being: ",
-                    "\n", paste(list(all_annots)), "\n Use SearchAnnotations() to see ..."))
+                    "\n", paste(list(all_annots)), "\n Use searchAnnotations() to see ..."))
     }
 
     mz <- met.row$raw_mz
     mzs <- c(mzs,mz)
   }
 
-  plot <- SpatialMZPlot(object,
+  plot <- spatialMZPlot(object,
                         mzs,
                         plusminus = plusminus,
                         images = images,
@@ -989,19 +989,19 @@ SpatialMZAnnotationPlot <- function(object,
 #' @rawNamespace import(tidyr, except = c(expand, pack, unpack))
 #'
 #' @examples
-#' utils::str(formals(MassIntensityPlot))
+#' utils::str(formals(massIntensityPlot))
 #' ## Plot mean of whole tissue section
-#' # MassIntensityPlot(SeuratObj)
+#' # massIntensityPlot(SeuratObj)
 #'
 #' ## Plot ssc segmentation groups on the same plot
-#' # MassIntensityPlot(SeuratObj, group.by = "ssc")
+#' # massIntensityPlot(SeuratObj, group.by = "ssc")
 #'
 #' ## Plot mean of each ssc segmentation of separate plot with mz annotations
-#' # MassIntensityPlot(SeuratObj, split.by= "ssc", mz.labels = c(329.166), plot.layout = c(5,2))
+#' # massIntensityPlot(SeuratObj, split.by= "ssc", mz.labels = c(329.166), plot.layout = c(5,2))
 #'
 #' ## Plot mean of each ssc segmentation of separate plot with metabolite annotations
-#' # MassIntensityPlot(SeuratObj, split.by= "ssc", mz.labels = c(329.166), label.annotations = TRUE)
-MassIntensityPlot <- function (data,
+#' # massIntensityPlot(SeuratObj, split.by= "ssc", mz.labels = c(329.166), label.annotations = TRUE)
+massIntensityPlot <- function (data,
                                group.by = NULL,
                                split.by = NULL,
                                cols = NULL,
@@ -1021,6 +1021,10 @@ MassIntensityPlot <- function (data,
                                labelCol = "#eb4034",
                                nlabels.to.show = NULL){
 
+  featureMetadata <- .featureMetadata(data, assay)
+  cellMetadata <- .cellMetadata(data)
+  assayMatrix <- .assayData(data, assay, slot)
+
   if (!(is.null(group.by))&!(is.null(split.by))){
     stop("'group.by' and 'split.by' cannot both be valid -> pick only one option to set = idents")
   }
@@ -1029,12 +1033,12 @@ MassIntensityPlot <- function (data,
   }
 
   if (!(is.null(annotation.column))){
-    if (!(annotation.column %in% colnames(data[[assay]]@meta.data))){
+    if (!(annotation.column %in% colnames(featureMetadata))){
       warning(paste("'",annotation.column," column not in object metadata. If data object does not have annotations set annotation.column = NULL"))
       stop("annotation.column does not exist")
     } else {
       if (!is.null(nlabels.to.show)){
-        data[[assay]]@meta.data[[annotation.column]] <- labels_to_show(data[[assay]]@meta.data[[annotation.column]], n = nlabels.to.show)
+        featureMetadata[[annotation.column]] <- labels_to_show(featureMetadata[[annotation.column]], n = nlabels.to.show)
       }
     }
   }
@@ -1043,13 +1047,13 @@ MassIntensityPlot <- function (data,
 
     metadata.column <- ifelse(!(is.null(group.by)), group.by, split.by)
 
-    if (!(metadata.column %in% colnames(data@meta.data))){
+    if (!(metadata.column %in% colnames(cellMetadata))){
       warning(paste("'",metadata.column," column not in object metadata. Pick and approprite group.by or split.by column"))
       stop("metadata columne does not exist")
     }
 
 
-    run <- unique(data@meta.data[[metadata.column]])
+    run <- unique(cellMetadata[[metadata.column]])
 
     SeuratObject::Idents(data) <- metadata.column
     data_list <- list()
@@ -1058,9 +1062,9 @@ MassIntensityPlot <- function (data,
 
 
       if (length(cells) > 1){
-        mean_data <- Matrix::rowMeans(data[[assay]][slot][,cells])
+        mean_data <- Matrix::rowMeans(assayMatrix[,cells, drop = FALSE])
       } else {
-        mean_data <- data[[assay]][slot]
+        mean_data <- assayMatrix[, cells, drop = FALSE]
       }
 
       data_list[[ident]] <- mean_data
@@ -1070,21 +1074,21 @@ MassIntensityPlot <- function (data,
     x_coord <- c(1:length(unique(run)))
 
   } else {
-    means <- Matrix::as.matrix(Matrix::rowMeans(data[[assay]][slot]))
+    means <- Matrix::as.matrix(Matrix::rowMeans(assayMatrix))
     run <- factor("Sample_Mean")
     x_coord <- c(1)
   }
 
   colnames(means) <- NULL
 
-  mzs <- unlist(lapply(rownames(data[[assay]]@features), function(x) as.numeric(stringr::str_split(x, "mz-")[[1]][2])))
+  mzs <- unlist(lapply(rownames(data[[assay]]), function(x) as.numeric(stringr::str_split(x, "mz-")[[1]][2])))
 
   if (!(is.null(mz.labels))){
 
-    labels <- data[[assay]]@meta.data$raw_mz
+    labels <- featureMetadata$raw_mz
     mz_list <- c()
     for (target_mz in mz.labels){
-      mz_string <- FindNearestMZ(data, target_mz, assay = assay)
+      mz_string <- findNearestMZ(data, target_mz, assay = assay)
       mz_list <- c(mz_list, stringr::str_split(pattern = "mz-", string = mz_string)[[1]][2])
     }
 
@@ -1095,14 +1099,14 @@ MassIntensityPlot <- function (data,
 
   } else if (!(is.null(metabolite.labels))){
 
-    labels <- data[[assay]]@meta.data$raw_mz
+    labels <- featureMetadata$raw_mz
     mzs <- c()
     for (metabolite in metabolite.labels){
-      met.row <- SearchAnnotations(data, metabolite, assay = assay, column.name = annotation.column, search.exact = TRUE)
+      met.row <- searchAnnotations(data, metabolite, assay = assay, column.name = annotation.column, search.exact = TRUE)
 
       if (dim(met.row)[1] != 1){
         warning(paste("There are either none or multiple entries for the metabolite: ", metabolite,
-                      "\n please check using SearchAnnotations() and FindDuplicateAnnotations"))
+                      "\n please check using searchAnnotations() and findDuplicateAnnotations"))
         stop("n entries != 1")
       }
 
@@ -1111,7 +1115,7 @@ MassIntensityPlot <- function (data,
       if (length(all_annots) != 1){
         warning(paste("There are another ", (length(all_annots)-1),
                       "annotations assocated with this metabolite ( ",metabolite," )... These being: ",
-                      "\n", paste(list(all_annots)), "\n Use SearchAnnotations() to see ..."))
+                      "\n", paste(list(all_annots)), "\n Use searchAnnotations() to see ..."))
       }
 
       mz <- met.row$raw_mz
@@ -1123,12 +1127,12 @@ MassIntensityPlot <- function (data,
 
     }
   } else {
-    labels <- rep(NA, length(data[[assay]]@meta.data$raw_mz))
+    labels <- rep(NA, length(featureMetadata$raw_mz))
   }
 
 
   if (label.annotations){
-    feature.metadata <- data[[assay]]@meta.data
+    feature.metadata <- featureMetadata
 
     non_na_indices <- !is.na(labels)
     labels[non_na_indices] <- feature.metadata[[annotation.column]][match(labels[non_na_indices], feature.metadata$raw_mz)]
@@ -1257,9 +1261,9 @@ MassIntensityPlot <- function (data,
 #' @rawNamespace import(plotly, except = last_plot)
 #'
 #' @examples
-#' utils::str(formals(Plot3DFeature))
-#' # Plot3DFeature(data = my_data, features = c("gene1", "gene2"), assays = c("SPT", "SPM"), show.image = "slice1")
-Plot3DFeature <- function(data,
+#' utils::str(formals(plot3DFeature))
+#' # plot3DFeature(data = my_data, features = c("gene1", "gene2"), assays = c("SPT", "SPM"), show.image = "slice1")
+plot3DFeature <- function(data,
                           features,
                           assays = c("SPT", "SPM"),
                           slots = "counts",
@@ -1311,22 +1315,23 @@ Plot3DFeature <- function(data,
 
 
   feature_data <- list()
+  cellMetadata <- .cellMetadata(data)
 
   i <- 1
   default_names <- c()
   for (feature in features) {
 
-    if (feature %in% colnames(data@meta.data)){
+    if (feature %in% colnames(cellMetadata)){
       default_names <- c(default_names, feature)
-      feature_data[[i]] <- data@meta.data[[feature]]
+      feature_data[[i]] <- cellMetadata[[feature]]
     } else {
       if (length(assays) != 0){
 
-        feature_data[[i]] <- tryCatch({data[[assays[i]]][slots[i]][feature,]},
+        feature_data[[i]] <- tryCatch({.assayData(data, assays[i], slots[i])[feature,]},
                                       error = function(err){
                                         stop("The feature provided does not exist in the ", assays[i],": ",slots[i], " object. Please provide a value feature")})
       } else {
-        stop("No assay supplied. The feature ", feature," either does not exist in @meta.data slot, or no matching assay was provided for the gene/feature. Please check SpaMTP object")
+        stop("No assay supplied. The feature ", feature," is absent from cell metadata, or no matching assay was provided. Please check the SpaMTP object.")
       }
       default_names <- c(default_names, paste0(feature,"_", assays[i]))
     }
@@ -1396,7 +1401,9 @@ Plot3DFeature <- function(data,
 
   if (!is.null(show.image)){
 
-    color_matrix <- as.raster(data@images[[show.image]]@image)
+    spatialImage <- data[[show.image]]
+    color_matrix <- as.raster(SeuratObject::GetImage(spatialImage, mode = "raw"))
+    scaleFactors <- Seurat::ScaleFactors(spatialImage)
     row_indices <- rep(seq_len(nrow(color_matrix)), each = ncol(color_matrix))
     col_indices <- rep(seq_len(ncol(color_matrix)), times = nrow(color_matrix))
 
@@ -1428,8 +1435,8 @@ Plot3DFeature <- function(data,
         )
     }
     plot <- plot %>% add_trace(df,
-                               x = df$row / data@images[[show.image]]@scale.factors[[image.sf]],
-                               y = df$col / data@images[[show.image]]@scale.factors[[image.sf]],
+                               x = df$row / scaleFactors[[image.sf]],
+                               y = df$col / scaleFactors[[image.sf]],
                                z = rep(0 - between.layer.height, times = dim(df)[1]),
                                type = "scatter3d",
                                mode = "markers",
@@ -1458,12 +1465,12 @@ Plot3DFeature <- function(data,
 #' @export
 #'
 #' @examples
-#' utils::str(formals(DensityMap))
-#' # DensityMap(SpaMTP.obj)
-DensityMap = function(object, assay = "SPM", slot = "counts", folder = getwd(),...){
+#' utils::str(formals(densityMap))
+#' # densityMap(SpaMTP.obj)
+densityMap = function(object, assay = "SPM", slot = "counts", folder = getwd(),...){
 
-  mass_matrix = Matrix::t(object[[assay]][slot])
-  annotated_table = object[[assay]]@meta.data
+  mass_matrix = Matrix::t(.assayData(object, assay, slot))
+  annotated_table = .featureMetadata(object, assay)
   indices =  GetTissueCoordinates(object)[c("x", "y")]
   mzs =  annotated_table["raw_mz"]
   annotated_json  = '['
@@ -1900,9 +1907,9 @@ DensityMap = function(object, assay = "SPM", slot = "counts", folder = getwd(),.
 #' @export
 #'
 #' @examples
-#' utils::str(formals(InteractiveSpatialPlot))
-#' #InteractiveSpatialPlot(spamtp)
-InteractiveSpatialPlot <- function(obj, assay = "Spatial", slot = "counts", image = "slice1"){
+#' utils::str(formals(interactiveSpatialPlot))
+#' #interactiveSpatialPlot(spamtp)
+interactiveSpatialPlot <- function(obj, assay = "Spatial", slot = "counts", image = "slice1"){
 
   means <- Matrix::as.matrix(Matrix::rowMeans(obj[[assay]][slot]))
   df <- data.frame(means)
@@ -2043,7 +2050,7 @@ InteractiveSpatialPlot <- function(obj, assay = "Spatial", slot = "counts", imag
         features_to_plot <- indices  # Example gene names based on index
         features_to_plot <- paste0("mz-",features_to_plot)
         feature_name <- sprintf("mz-%d \u00B1 %.1f", input$curve_center, input$curve_width)
-        binned_obj <- BinMetabolites(obj, mzs = features_to_plot, assay = "Spatial", slot = "counts", bin_name = feature_name)
+        binned_obj <- binMetabolites(obj, mzs = features_to_plot, assay = "Spatial", slot = "counts", bin_name = feature_name)
         Seurat::SpatialFeaturePlot(binned_obj, images = image, features = feature_name,  pt.size.factor = spot_size) &theme_void()
       } else {
         plot(1, type = "n", xlab = "", ylab = "", main = "No selected features")

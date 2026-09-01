@@ -16,9 +16,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(LoadSM))
-#' # data <-LoadSM(name = "run1", folder = "/Documents/SpaMTP_test_data/", mass.range = c(160,1500), resolution = 10, assay = "Spatial")
-LoadSM <- function (file, mass.range = NULL, resolution = NA, units = "ppm", verbose = TRUE, assay = "Spatial", multi.run = FALSE){
+#' utils::str(formals(loadSM))
+#' # data <-loadSM(name = "run1", folder = "/Documents/SpaMTP_test_data/", mass.range = c(160,1500), resolution = 10, assay = "Spatial")
+loadSM <- function (file, mass.range = NULL, resolution = NA, units = "ppm", verbose = TRUE, assay = "Spatial", multi.run = FALSE){
 
   if (check_cardinal_version()){
 
@@ -35,7 +35,7 @@ LoadSM <- function (file, mass.range = NULL, resolution = NA, units = "ppm", ver
           units = units,
           verbose = verbose)
     }
-    data <- CardinalToSeurat(data, multi.run = multi.run, verbose = verbose, assay = assay)
+    data <- cardinalToSeurat(data, multi.run = multi.run, verbose = verbose, assay = assay)
 
   } else {
         data <- Cardinal::readImzML(
@@ -44,7 +44,7 @@ LoadSM <- function (file, mass.range = NULL, resolution = NA, units = "ppm", ver
         mass.range = mass.range,
         resolution = resolution
       )
-      data <- CardinalToSeurat(data, multi.run = multi.run, verbose = verbose, assay = assay)
+      data <- cardinalToSeurat(data, multi.run = multi.run, verbose = verbose, assay = assay)
 
   }
   return(data)
@@ -80,13 +80,13 @@ LoadSM <- function (file, mass.range = NULL, resolution = NA, units = "ppm", ver
 #' - The first two columns (`x`, `y`) contain the respective spatial coordinates.
 #' - The subsequent columns contain the m/z values and their intensities for each spatial pixel.
 #'
-#' @return A SpaMTP Seurat class object containing the intensity values in the counts slot of the designated assay.
+#' @return A SpaMTP Seurat object containing intensity values in the `counts` layer of the designated assay.
 #' @export
 #'
 #' @examples
-#' utils::str(formals(ReadSM_mtx))
-#' # msi_data <- ReadSM_mtx("~/Documents/msi_mtx.csv")
-ReadSM_mtx <- function(mtx.file, assay = "Spatial", verbose = TRUE, feature.start.column = 1, mz.prefix = NULL, project.name = "SpaMTP"){
+#' utils::str(formals(readSMMatrix))
+#' # msi_data <- readSMMatrix("~/Documents/msi_mtx.csv")
+readSMMatrix <- function(mtx.file, assay = "Spatial", verbose = TRUE, feature.start.column = 1, mz.prefix = NULL, project.name = "SpaMTP"){
 
   verbose_message(message_text = "Reading mtx file.... ", verbose = verbose)
 
@@ -150,7 +150,10 @@ ReadSM_mtx <- function(mtx.file, assay = "Spatial", verbose = TRUE, feature.star
   seuratobj[["fov"]] <- coords
 
 
-  metadata <- data.frame("raw_mz" = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])))
+  metadata <- data.frame(
+    raw_mz = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])),
+    mz_names = rownames(seuratobj)
+  )
   rownames(metadata) <- rownames(seuratobj)
 
 
@@ -158,11 +161,6 @@ ReadSM_mtx <- function(mtx.file, assay = "Spatial", verbose = TRUE, feature.star
                                             metadata = metadata,
                                             col.name = 'raw_mz')
 
-
-  seuratobj[[assay]]@meta.data$mz_names <- rownames(seuratobj)
-
   return(seuratobj)
 }
-
-
 

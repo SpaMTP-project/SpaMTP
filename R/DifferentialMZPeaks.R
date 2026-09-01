@@ -6,7 +6,7 @@
 #' Pools SpaMTP Seurat object into random pools for pseudo-bulking.
 #'
 #' Runs pooling of a SpaMTP dataset to generate pseudo-replicates for each unique identity provided.
-#' This function is used by `FindAllDEMs()`.
+#' This function is used by `findAllDEMs()`.
 #'
 #' @param data.filt A Seurat Object containing count values for pooling.
 #' @param idents A character string defining the idents column to pool the data against.
@@ -20,11 +20,11 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(run_pooling))
-#' # run_pooling <- list(seuratObj, idents = "sample", n = 3, assay = "Spatial", slot = "counts")
-run_pooling <- function(data.filt, idents, n, assay, slot, seed = 1234, verbose = TRUE) {
+#' utils::str(formals(runPooling))
+#' # runPooling <- list(seuratObj, idents = "sample", n = 3, assay = "Spatial", slot = "counts")
+runPooling <- function(data.filt, idents, n, assay, slot, seed = 1234, verbose = TRUE) {
 
-  cell_metadata <- data.filt@meta.data
+  cell_metadata <- .cellMetadata(data.filt)
   samples <- unique(cell_metadata[[idents]])
 
   verbose_message(message_text = paste0("Pooling one sample into ", n ," replicates..."), verbose = verbose)
@@ -39,11 +39,11 @@ run_pooling <- function(data.filt, idents, n, assay, slot, seed = 1234, verbose 
     cell_metadata[wo,'orig.ident2']<-paste(samples[i], pooled_ids, sep='_')
   }
   gene_data <- row.names(data.filt)
-  filtered.sce <- SingleCellExperiment::SingleCellExperiment(assays = list(counts = data.filt[[assay]][slot]),
+  filtered.sce <- SingleCellExperiment::SingleCellExperiment(assays = list(counts = .assayData(data.filt, assay, slot)),
                                        colData = cell_metadata)
 
-
-  tempf=strsplit(filtered.sce@colData[["orig.ident2"]],'_')
+  pooledMetadata <- as.data.frame(SummarizedExperiment::colData(filtered.sce))
+  tempf=strsplit(pooledMetadata[["orig.ident2"]],'_')
   pid=NULL
   for(i in 1:length(tempf)){
     pidone=tempf[[i]]
@@ -53,7 +53,8 @@ run_pooling <- function(data.filt, idents, n, assay, slot, seed = 1234, verbose 
     pid=rbind(pid,pidone)
   }
 
-  filtered.sce@colData$type=pid[,2]
+  pooledMetadata$type <- pid[, 2]
+  SummarizedExperiment::colData(filtered.sce) <- S4Vectors::DataFrame(pooledMetadata)
 
   summed <- scater::aggregateAcrossCells(filtered.sce,
                                  id=SingleCellExperiment::colData(filtered.sce)[,'orig.ident2'])
@@ -67,7 +68,7 @@ run_pooling <- function(data.filt, idents, n, assay, slot, seed = 1234, verbose 
 #' Runs EdgeR analysis for pooled data
 #'
 #' Worker function for calculating differentially abundant metabolites per pooling group.
-#' This function is used by by `FindAllDEMs()`.
+#' This function is used by by `findAllDEMs()`.
 #'
 #' @param pooled_data A SingleCellExperiment object which contains the pooled pseudo-replicate data.
 #' @param seurat_data A Seurat object containing the merged Xenium data being analysed (this is subset).
@@ -87,16 +88,17 @@ run_pooling <- function(data.filt, idents, n, assay, slot, seed = 1234, verbose 
 #' @rawNamespace import(limma, except = show)
 #'
 #' @examples
-#' utils::str(formals(run_DE))
-#' # pooled_obj <- run_pooling(SeuratObj, "sample", n = 3)
-#' # run_DE(pooled_obj, SeuratObj, "sample", "~/Documents/DE_output/", "run_1", n = 3, logFC_threshold = 1.2, annotation.column = "all_IsomerNames", assay = "Spatial")
-run_DE <- function(pooled_data, seurat_data, ident, output_dir, run_name, n, logFC_threshold, annotation.column, assay, return.individual = FALSE, verbose = TRUE){
+#' utils::str(formals(runDE))
+#' # pooled_obj <- runPooling(SeuratObj, "sample", n = 3)
+#' # runDE(pooled_obj, SeuratObj, "sample", "~/Documents/DE_output/", "run_1", n = 3, logFC_threshold = 1.2, annotation.column = "all_IsomerNames", assay = "Spatial")
+runDE <- function(pooled_data, seurat_data, ident, output_dir, run_name, n, logFC_threshold, annotation.column, assay, return.individual = FALSE, verbose = TRUE){
 
-  verbose_message(message_text = paste("Running limma DE Analysis for ", run_name, " -> with samples [", paste(unique(unlist(seurat_data@meta.data[[ident]])), collapse = ", "), "]"), verbose = verbose)
+  cellMetadata <- .cellMetadata(seurat_data)
+  verbose_message(message_text = paste("Running limma DE Analysis for ", run_name, " -> with samples [", paste(unique(unlist(cellMetadata[[ident]])), collapse = ", "), "]"), verbose = verbose)
 
   annotation_result <- list()
 
-  for (condition in unique(seurat_data@meta.data[[ident]])) {
+  for (condition in unique(cellMetadata[[ident]])) {
 
     # Create groups
     groups <- SingleCellExperiment::colData(pooled_data)[[ident]]
@@ -153,9 +155,9 @@ run_DE <- function(pooled_data, seurat_data, ident, output_dir, run_name, n, log
 
     # Add annotations if requested
     if (!is.null(annotation.column)) {
-      annotation.data <- seurat_data[[assay]]@meta.data
+      annotation.data <- .featureMetadata(seurat_data, assay)
       if (!(annotation.column %in% colnames(annotation.data))) {
-        stop("Warning: The annotation column provided does not exist in seurat_data[[assay]]@meta.data")
+        stop("The annotation column does not exist in the assay feature metadata.")
       } else {
         rownames(annotation.data) <- annotation.data$mz_names
         annotation.data_subset <- annotation.data[rownames(de_group_limma), ]
@@ -217,7 +219,7 @@ run_DE <- function(pooled_data, seurat_data, ident, output_dir, run_name, n, log
 #' @param n An integer that defines the number of pseudo-replicates (pools) per sample (default = 3).
 #' @param logFC_threshold A numeric value indicating the logFC threshold to use for defining significant genes (default = 1.2).
 #' @param DE_output_dir A character string defining the directory path for all output files to be stored. This path must a new directory. Else, set to NULL as default.
-#' @param run_name A character string defining the title of this DE analysis that will be used when saving DEMs to .csv file (default = 'FindAllDEMs').
+#' @param run_name A character string defining the title of this DE analysis that will be used when saving DEMs to .csv file (default = 'findAllDEMs').
 #' @param annotation.column Character string defining the column where annotation information is stored in the assay metadata. This requires AnnotateSeuratMALDI() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").
 #' @param assay A character string defining the assay where the mz count data and annotations are stored (default = "Spatial").
 #' @param slot Character string defining the assay storage slot to pull the relative mz intensity values from. Note: EdgeR requires raw counts, all values must be positive (default = "counts").
@@ -229,9 +231,9 @@ run_DE <- function(pooled_data, seurat_data, ident, output_dir, run_name, n, log
 #' @export
 #'
 #' @examples
-#' utils::str(formals(FindAllDEMs))
-#' # FindAllDEMs(SeuratObj, "sample",DE_output_dir = "~/Documents/DE_output/", annotations = TRUE)
-FindAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir = NULL, run_name = "FindAllDEMs", annotation.column = NULL, assay = "Spatial", slot = "counts", return.individual = FALSE, verbose = TRUE, seed = 1234){
+#' utils::str(formals(findAllDEMs))
+#' # findAllDEMs(SeuratObj, "sample",DE_output_dir = "~/Documents/DE_output/", annotations = TRUE)
+findAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir = NULL, run_name = "findAllDEMs", annotation.column = NULL, assay = "Spatial", slot = "counts", return.individual = FALSE, verbose = TRUE, seed = 1234){
 
   if (!(is.null(DE_output_dir))){
     if (dir.exists(DE_output_dir)){
@@ -242,15 +244,15 @@ FindAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir
     }
   }
 
-  if (!is.factor(data@meta.data[[ident]])){
+  if (!is.factor(.cellMetadata(data)[[ident]])){
     stop("ident provided is not a factor! Please convert the ident column using `factor()` ...")
   }
 
   #Step 1: Run Pooling to split each unique ident into 'n' number of pseudo-replicate pools
-  pooled_data <- run_pooling(data,ident, n = n, assay = assay, slot = slot, verbose = verbose, seed = seed)
+  pooled_data <- runPooling(data,ident, n = n, assay = assay, slot = slot, verbose = verbose, seed = seed)
 
   #Step 2: Run EdgeR to calculate differentially expressed m/z peaks
-  DEM_results <- run_DE(pooled_data, data, ident = ident, output_dir = DE_output_dir, run_name = run_name, n=n, logFC_threshold=logFC_threshold, annotation.column = annotation.column, assay = assay, verbose = verbose, return.individual = return.individual)
+  DEM_results <- runDE(pooled_data, data, ident = ident, output_dir = DE_output_dir, run_name = run_name, n=n, logFC_threshold=logFC_threshold, annotation.column = annotation.column, assay = assay, verbose = verbose, return.individual = return.individual)
 
   # Returns an EDGEr object which contains the pseudo-bulk counts in $counts and DEMs in $DEMs
   return(DEM_results)
@@ -262,10 +264,10 @@ FindAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir
 
 #' Heatmap of Differentially Expressed Metabolites
 #'
-#' Generates a heatmap of DEMs generated from edgeR analysis run using `FindAllDEMs()`.
+#' Generates a heatmap of DEMs generated from edgeR analysis run using `findAllDEMs()`.
 #' This function uses `pheatmap` to plot data.
 #'
-#' @param edgeR_output A list containing outputs from edgeR analysis (from FindAllDEMs()). This includes pseudo-bulked counts and DEMs.
+#' @param edgeR_output A list containing outputs from edgeR analysis (from findAllDEMs()). This includes pseudo-bulked counts and DEMs.
 #' @param n A numeric integer that defines the number of UP and DOWN regulated peaks to plot (default = 25).
 #' @param only.pos Boolean indicating if only positive markers should be returned (default = FALSE).
 #' @param FDR.threshold Numeric value that defines the FDR threshold to use for defining most significant results (default = 0.05).
@@ -279,7 +281,7 @@ FindAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir
 #' @param fontsize_col A numeric value defining the fontsize of colnames (default = 15).
 #' @param cutree_cols A numeric value defining the number of clusters the columns are divided into, based on the hierarchical clustering(using cutree), if cols are not clustered, the argument is ignored (default = 9).
 #' @param silent Boolean value indicating if the plot should not be draw (default = TRUE).
-#' @param plot_annotations_column Character string indicating the column name that contains the metabolite annotations to plot. Annotations = TRUE must be used in FindAllDEMs() for edgeR output to include annotations. If plot_annotations_column = NULL, m/z vaues will be plotted (default = NULL).
+#' @param plot_annotations_column Character string indicating the column name that contains the metabolite annotations to plot. Annotations = TRUE must be used in findAllDEMs() for edgeR output to include annotations. If plot_annotations_column = NULL, m/z vaues will be plotted (default = NULL).
 #' @param save_to_path Character string defining the full filepath and name of the plot to be saved as.
 #' @param plot.save.width Integer value representing the width of the saved pdf plot (default = 20).
 #' @param plot.save.height Integer value representing the height of the saved pdf plot (default = 20).
@@ -292,11 +294,11 @@ FindAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir
 #' @import dplyr
 #'
 #' @examples
-#' utils::str(formals(DEMsHeatmap))
-#' # DEMs <- FindAllDEMs(SeuratObj, "sample")
+#' utils::str(formals(demsHeatmap))
+#' # DEMs <- findAllDEMs(SeuratObj, "sample")
 #'
-#' # DEMsHeatmap(DEMs)
-DEMsHeatmap <- function(edgeR_output,
+#' # demsHeatmap(DEMs)
+demsHeatmap <- function(edgeR_output,
                          n = 5,
                          only.pos = FALSE,
                          FDR.threshold = 0.05,
@@ -382,7 +384,7 @@ DEMsHeatmap <- function(edgeR_output,
   mtx <- as.matrix(as.data.frame(edgeR::cpm(edgeR_output,log=TRUE))[unique(df$gene),])
   if (!(is.null(plot_annotations_column))){
     if (is.null(edgeR_output$DEMs[[plot_annotations_column]])){
-      warning("There are no annotations present in the edgeR_output object. Run 'annotate.SeuratMALDI()' prior to 'FindAllDEMs' and set annotations = TRUE .....\n Heatmap will plot default m/z values ... ")
+      warning("There are no annotations present in the edgeR_output object. Run 'annotate.SeuratMALDI()' prior to 'findAllDEMs' and set annotations = TRUE .....\n Heatmap will plot default m/z values ... ")
     } else{
       if (!is.null(nlabels.to.show)){
         df[[plot_annotations_column]] <- labels_to_show(df[[plot_annotations_column]], n = nlabels.to.show)
@@ -395,14 +397,14 @@ DEMsHeatmap <- function(edgeR_output,
                           fontsize_row = fontsize_row, fontsize_col = fontsize_col, cutree_cols = cutree_cols, silent = silent, annotation_colors = annotation_colors)
 
    if (!(is.null(save_to_path))){
-     save_pheatmap_as_pdf(pheatmap = p, filename = save_to_path, width = plot.save.width, height = plot.save.height)
+     savePheatmapAsPDF(pheatmap = p, filename = save_to_path, width = plot.save.width, height = plot.save.height)
    }
 
   return(p)
 }
 
 
-#' Saves a DEMsHeatmap as a PDF
+#' Saves a demsHeatmap as a PDF
 #'
 #' @param pheatmap A pheatmap plot object that is being saved.
 #' @param filename Character string defining the full filepath and name of the plot to be saved as.
@@ -414,9 +416,9 @@ DEMsHeatmap <- function(edgeR_output,
 #' @export
 #'
 #' @examples
-#' utils::str(formals(save_pheatmap_as_pdf))
-#' # save_pheatmap_as_pdf(pheatmap, filename = "/Documents/plots/pheatmap1")
-save_pheatmap_as_pdf <- function(pheatmap, filename, width=20, height=20){
+#' utils::str(formals(savePheatmapAsPDF))
+#' # savePheatmapAsPDF(pheatmap, filename = "/Documents/plots/pheatmap1")
+savePheatmapAsPDF <- function(pheatmap, filename, width=20, height=20){
 
   output_file <- paste0(filename,".pdf")
   pdf(output_file, width=width, height=height)

@@ -25,9 +25,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(SaveSpaMTPData))
+#' utils::str(formals(saveSpaMTPData))
 #' # saveSpaMTPData(SeuratObject, "../output", annotations = TRUE)
-SaveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", image = NULL, annotations = FALSE, generate.h5 = TRUE, verbose = TRUE){
+saveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", image = NULL, annotations = FALSE, generate.h5 = TRUE, verbose = TRUE){
 
   if (!dir.exists(outdir)) {
     verbose_message(message_text = paste0("Generating new directory to store output here: ", outdir), verbose = verbose)
@@ -37,13 +37,14 @@ SaveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", ima
   }
 
   verbose_message(message_text = paste0("Writing ", slot," slot to matrix.mtx, barcode.tsv, genes.tsv"), verbose = verbose)
-  DropletUtils::write10xCounts(data[[assay]][slot], path = paste0(outdir,"/filtered_feature_bc_matrix/"), overwrite = TRUE)
+  assayMatrix <- .assayData(data, assay, slot)
+  DropletUtils::write10xCounts(assayMatrix, path = paste0(outdir,"/filtered_feature_bc_matrix/"), overwrite = TRUE)
 
-  verbose_message(message_text = "Writing @metadata slot to metadata.csv", verbose = verbose)
-  data.table::fwrite(data@meta.data, paste0(outdir,"/barcode_metadata.csv"))
+  verbose_message(message_text = "Writing cell metadata to metadata.csv", verbose = verbose)
+  data.table::fwrite(.cellMetadata(data), paste0(outdir,"/barcode_metadata.csv"))
 
   if(generate.h5){
-    DropletUtils::write10xCounts(data[[assay]][slot], path = paste0(outdir,"/filtered_feature_bc_matrix.h5"), type = "HDF5", overwrite = TRUE)
+    DropletUtils::write10xCounts(assayMatrix, path = paste0(outdir,"/filtered_feature_bc_matrix.h5"), type = "HDF5", overwrite = TRUE)
   }
 
 
@@ -52,11 +53,16 @@ SaveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", ima
     verbose_message(message_text ="Generating 'spatial' directory ... ", verbose = verbose)
     dir.create(paste0(outdir, "/spatial/"))
 
-    if ("scale.factors" %in% slotNames(data@images[[image]])){
-      scale.factors <- list("tissue_hires_scalef" = data@images[[image]]@scale.factors[["hires"]],
-                          "tissue_lowres_scalef" = data@images[[image]]@scale.factors[["lowres"]],
-                          "fiducial_diameter_fullres" = data@images[[image]]@scale.factors[["fiducial"]],
-                          "spot_diameter_fullres" = data@images[[image]]@scale.factors[["spot"]]* 2)
+    spatialImage <- data[[image]]
+    imageScaleFactors <- tryCatch(
+      Seurat::ScaleFactors(spatialImage),
+      error = function(e) NULL
+    )
+    if (!is.null(imageScaleFactors)){
+      scale.factors <- list("tissue_hires_scalef" = imageScaleFactors[["hires"]],
+                          "tissue_lowres_scalef" = imageScaleFactors[["lowres"]],
+                          "fiducial_diameter_fullres" = imageScaleFactors[["fiducial"]],
+                          "spot_diameter_fullres" = imageScaleFactors[["spot"]]* 2)
 
       sfJSON <- jsonlite::toJSON(
         rapply(scale.factors, function(x) if (length(x) == 1L) jsonlite::unbox(x) else x,
@@ -66,9 +72,13 @@ SaveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", ima
       write(sfJSON, file = paste0(outdir, "/spatial/scalefactors_json.json"))
     }
 
-    if ("image" %in% slotNames(data@images[[image]])){
+    imageArray <- tryCatch(
+      SeuratObject::GetImage(spatialImage, mode = "raw"),
+      error = function(e) NULL
+    )
+    if (!is.null(imageArray)){
       verbose_message(message_text ="Writing image to `spatial/tissue_lowres_image.png` ...", verbose = verbose)
-      png::writePNG(data@images[[image]]@image, paste0(outdir, "/spatial/tissue_lowres_image.png"))
+      png::writePNG(imageArray, paste0(outdir, "/spatial/tissue_lowres_image.png"))
     }
 
     coords <- GetTissueCoordinates(data, image = image)
@@ -91,7 +101,7 @@ SaveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", ima
   }
   if (annotations){
     verbose_message(message_text = "Writing feature metadata annotations to feature_metadata.csv", verbose = verbose)
-    data.table::fwrite(data[[assay]]@meta.data, paste0(outdir,"/feature_metadata.csv"))
+    data.table::fwrite(.featureMetadata(data, assay), paste0(outdir,"/feature_metadata.csv"))
   }
 
   invisible(normalizePath(outdir, mustWork = FALSE))

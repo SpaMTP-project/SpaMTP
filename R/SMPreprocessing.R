@@ -14,9 +14,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(NormalizeSMData))
-#' # normalised_data <- NormalizeSMData(SeuratObject)
-NormalizeSMData <- function(data, normalisation.type = 'TIC', scale.factor = NULL, assay = "Spatial", slot = "counts", verbose = TRUE) {
+#' utils::str(formals(normalizeSMData))
+#' # normalised_data <- normalizeSMData(SeuratObject)
+normalizeSMData <- function(data, normalisation.type = 'TIC', scale.factor = NULL, assay = "Spatial", slot = "counts", verbose = TRUE) {
 
   if (is.null(normalisation.type)) {
     stop("Error: no normalisation.type is select. Please enter either 'LogNormalize' or 'TIC'")
@@ -59,9 +59,9 @@ NormalizeSMData <- function(data, normalisation.type = 'TIC', scale.factor = NUL
 #' @export
 #'
 #' @examples
-#' utils::str(formals(TMMNormalize))
-#' # norm.data <- TMMNormalize(SeuratObj, ident = "samples", refIdent = "sample1", normalisation.type = "CPM")
-TMMNormalize <- function(combined.obj, ident, refIdent, normalisation.type = "CPM", CPM.scale.factor = 1e6, assay = "Spatial", slot = "counts", verbose = FALSE) {
+#' utils::str(formals(tmmNormalize))
+#' # norm.data <- tmmNormalize(SeuratObj, ident = "samples", refIdent = "sample1", normalisation.type = "CPM")
+tmmNormalize <- function(combined.obj, ident, refIdent, normalisation.type = "CPM", CPM.scale.factor = 1e6, assay = "Spatial", slot = "counts", verbose = FALSE) {
 
   data_list <- list()
   Seurat::Idents(combined.obj) <- ident
@@ -88,7 +88,7 @@ TMMNormalize <- function(combined.obj, ident, refIdent, normalisation.type = "CP
 
   for (name in unique(Idents(combined.obj))){
 
-        sub <- subset_SPM(combined.obj, idents = name, verbose = verbose)
+        sub <- subsetSPM(combined.obj, idents = name, verbose = verbose)
 
     data_list[[name]] <- sub
   }
@@ -106,7 +106,7 @@ TMMNormalize <- function(combined.obj, ident, refIdent, normalisation.type = "CP
 
   norm_data_list <- list()
   for (name in names(data_list)){
-    norm.data <- NormalizeSMData(data_list[[name]], normalisation.type = normalisation.type, scale.factor = (CPM.scale.factor / factors[[name]]), assay = assay, slot = slot)
+    norm.data <- normalizeSMData(data_list[[name]], normalisation.type = normalisation.type, scale.factor = (CPM.scale.factor / factors[[name]]), assay = assay, slot = slot)
     norm_data_list[[name]] <- norm.data
   }
 
@@ -143,7 +143,7 @@ statPlot <- function (seurat.obj, group.by = NULL, assay = "Spatial", slot = "co
   if (!(is.null(group.by))){
     Seurat::Idents(seurat.obj) <- group.by
     for (ident in unique(Seurat::Idents(seurat.obj))){
-          sub <- subset_SPM(seurat.obj, idents = ident, verbose = verbose)
+          sub <- subsetSPM(seurat.obj, idents = ident, verbose = verbose)
 
       data_list[[ident]] <- sub
     }
@@ -215,9 +215,9 @@ statPlot <- function (seurat.obj, group.by = NULL, assay = "Spatial", slot = "co
 #' @export
 #'
 #' @examples
-#' utils::str(formals(MZRidgePlot))
-#' # MZRidgePlot(SeuratObj, group.by = "sample")
-MZRidgePlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "RidgePlot", x.lab = "intensity", y.lab = "var", bottom.cutoff = NULL, top.cutoff = NULL, bins = 1000,log.data = FALSE, cols = NULL, verbose = FALSE){
+#' utils::str(formals(mzRidgePlot))
+#' # mzRidgePlot(SeuratObj, group.by = "sample")
+mzRidgePlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "RidgePlot", x.lab = "intensity", y.lab = "var", bottom.cutoff = NULL, top.cutoff = NULL, bins = 1000,log.data = FALSE, cols = NULL, verbose = FALSE){
   data <- statPlot(seurat.obj = seurat.obj,
                    group.by = group.by,
                    assay = assay,
@@ -275,9 +275,9 @@ MZRidgePlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spati
 #' @export
 #'
 #' @examples
-#' utils::str(formals(MZVlnPlot))
-#' # MZVlnPlot(SeuratObj, group.by = "sample",  bottom.cutoff = 0.05)
-MZVlnPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "VlnPlot", x.lab = "var", y.lab = "intensity", show.points = TRUE, bottom.cutoff = NULL, top.cutoff = NULL,log.data = FALSE, cols = NULL, verbose = FALSE){
+#' utils::str(formals(mzViolinPlot))
+#' # mzViolinPlot(SeuratObj, group.by = "sample",  bottom.cutoff = 0.05)
+mzViolinPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "VlnPlot", x.lab = "var", y.lab = "intensity", show.points = TRUE, bottom.cutoff = NULL, top.cutoff = NULL,log.data = FALSE, cols = NULL, verbose = FALSE){
 
   data <- statPlot(seurat.obj = seurat.obj,
                    group.by = group.by,
@@ -341,9 +341,9 @@ MZVlnPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial
 #' @export
 #'
 #' @examples
-#' utils::str(formals(MZBoxPlot))
-#' # MZBoxPlot(SeuratObj, group.by = "sample",  bottom.cutoff = 0.05)
-MZBoxPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "BoxPlot", x.lab = "var", y.lab = "intensity", show.points = TRUE, bottom.cutoff = NULL, top.cutoff = NULL,log.data = FALSE, cols = NULL, verbose = FALSE){
+#' utils::str(formals(mzBoxPlot))
+#' # mzBoxPlot(SeuratObj, group.by = "sample",  bottom.cutoff = 0.05)
+mzBoxPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "BoxPlot", x.lab = "var", y.lab = "intensity", show.points = TRUE, bottom.cutoff = NULL, top.cutoff = NULL,log.data = FALSE, cols = NULL, verbose = FALSE){
   data <- statPlot(seurat.obj = seurat.obj,
                    group.by = group.by,
                    assay = assay,

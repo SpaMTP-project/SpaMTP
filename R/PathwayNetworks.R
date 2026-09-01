@@ -7,9 +7,9 @@
 #'
 #' @param SpaMTP A `SpaMTP` Seurat object containing spatial metabolomics and/or
 #'   spatial transcriptomics data. Metabolomics data must first be annotated by
-#'   [AnnotateSM()].
+#'   [annotateSM()].
 #' @param ident Metadata column used to identify spatial clusters or regions.
-#' @param regpathway Data frame returned by [FindRegionalPathways()].
+#' @param regpathway Data frame returned by [findRegionalPathways()].
 #' @param DE.list One differential-expression data frame per requested analyte
 #'   type. Data frames must contain `cluster`, `gene`, `avg_log2FC` (or
 #'   `logFC`), and `p_val_adj` (or `FDR`). A named list is recommended.
@@ -29,7 +29,7 @@
 #'   explicitly.
 #' @param annotation_score_threshold Minimum indexed annotation score used for
 #'   metabolite matching. When `NULL`, the threshold recorded by
-#'   `FindRegionalPathways()` is reused (default = `NULL`).
+#'   `findRegionalPathways()` is reused (default = `NULL`).
 #' @param annotation_score_floor Lowest annotation score embedded in the HTML
 #'   for interactive filtering. It is automatically lowered when the initial
 #'   `annotation_score_threshold` is smaller (default = `0.01`).
@@ -54,21 +54,21 @@
 #'   HTML. Larger datasets are deterministically downsampled for responsive
 #'   browser rendering. Use `Inf` to retain all points.
 #' @param database Optional named list of database resources, normally created
-#'   by [LoadSpaMTPDatabase()].
+#'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [LoadSpaMTPDatabase()].
+#' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
 #' @return Invisibly returns the generated HTML file path.
 #' @export
 #'
 #' @examples
-#' utils::str(formals(PathwayNetworkPlots))
-#' # PathwayNetworkPlots(
+#' utils::str(formals(pathwayNetworkPlots))
+#' # pathwayNetworkPlots(
 #' #   SpaMTP, ident = "Custom_ident", regpathway = regpathway,
 #' #   DE.list = DE.list, selected_pathways = "WP1902"
 #' # )
-PathwayNetworkPlots <- function(SpaMTP,
+pathwayNetworkPlots <- function(SpaMTP,
                                 ident,
                                 regpathway,
                                 DE.list,
@@ -121,8 +121,8 @@ PathwayNetworkPlots <- function(SpaMTP,
   if (!is.character(ident) || length(ident) != 1L || !nzchar(ident)) {
     stop("ident must be one metadata column name.")
   }
-  if (!ident %in% names(SpaMTP@meta.data)) {
-    stop("Metadata column '", ident, "' was not found in SpaMTP@meta.data.")
+  if (!ident %in% names(.cellMetadata(SpaMTP))) {
+    stop("Metadata column '", ident, "' was not found in SpaMTP cell metadata.")
   }
   if (!dir.exists(path)) stop("Output directory does not exist: ", path)
   if (file.access(path, mode = 2) != 0) {
@@ -137,7 +137,7 @@ PathwayNetworkPlots <- function(SpaMTP,
     stop("max_spatial_points must be positive or Inf.")
   }
 
-  assays <- names(SpaMTP@assays)
+  assays <- .assayNames(SpaMTP)
   if ("genes" %in% analyte_types && !ST_assay %in% assays) {
     stop("Gene visualization requires assay '", ST_assay, "'.")
   }
@@ -169,7 +169,7 @@ PathwayNetworkPlots <- function(SpaMTP,
     if (!.pn_is_current_annotation_metadata(regpathway_annotation)) {
       stop(
         "regpathway was not generated with a current scored annotation ",
-        "pipeline. Re-run FindRegionalPathways() before plotting, or ",
+        "pipeline. Re-run findRegionalPathways() before plotting, or ",
         "explicitly select annotation_source = 'legacy'."
       )
     }
@@ -181,7 +181,7 @@ PathwayNetworkPlots <- function(SpaMTP,
       stop(
         "regpathway uses RaMP ", regpathway_annotation$ramp_version %||% "unknown",
         " but this SpaMTP build contains RaMP ", current_ramp,
-        ". Re-run FindRegionalPathways()."
+        ". Re-run findRegionalPathways()."
       )
     }
   }

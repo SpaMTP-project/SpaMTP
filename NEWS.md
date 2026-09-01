@@ -1,27 +1,45 @@
+# SpaMTP 0.99.1
+
+* Standardised all exported function names to lower camel case for the
+  Bioconductor API. This is an intentional breaking change on the submission
+  branch; the published-work development branch retains its historical API.
+* Removed direct S4 slot access from package and test code. Internal container
+  access now uses public SeuratObject, SummarizedExperiment, S4Vectors,
+  Cardinal, and MSnbase accessors. Annotation and alignment provenance is
+  stored with `SeuratObject::Misc()` while legacy `Tool()` entries remain
+  readable.
+* Added an internal container-access layer for Seurat and
+  SummarizedExperiment-derived objects, including SingleCellExperiment and
+  SpatialExperiment, as the foundation for broader Bioconductor container
+  interoperability.
+* Removed the unsupported manual mutation of Seurat modality-weight internals
+  from `multiOmicIntegration()`; weighted-nearest-neighbour construction now
+  delegates entirely to `Seurat::FindMultiModalNeighbors()`.
+
 # SpaMTP 0.99.0
 
 * Split versioned resources from the analysis code: `SpaMTPdb` now supplies
   the pruned RaMP annotation and pathway snapshot, and `SpaMTPData` provides
-  named access to large experiment/vignette objects. `LoadSpaMTPDatabase()`
-  and `SpaMTPDatabaseInfo()` form the public database interface. The software
+  named access to large experiment/vignette objects. `loadSpaMTPDatabase()`
+  and `spaMTPDatabaseInfo()` form the public database interface. The software
   package retains only the small adduct and reaction-style constant tables.
 * Updated the package citation to the peer-reviewed *Nature Methods* paper,
   designated Tianyao Lu as the current package maintainer, and added direct
   links to the developmental documentation and source branch. Andrew Causer
   remains credited as an original author and former maintainer.
-* Added `ApplySpatialAlignment()` to apply existing SMINT coordinate outputs or
+* Added `applySpatialAlignment()` to apply existing SMINT coordinate outputs or
   homogeneous transforms, estimate landmark-based affine alignment in R, and
   run the SMINT-compatible STalign LDDMM workflow through an optional Python
   backend. Alignment provenance and nearest-target diagnostics are retained in
   the returned SpaMTP object without storing large Python velocity tensors.
 * Pathway enrichment, pathway-assay construction, Fisher analysis of m/z
   inputs, and interactive pathway networks now consume the scored `Ramp_IDs`
-  produced by the indexed annotation engine. `AnnotateSM()` resolves the
+  produced by the indexed annotation engine. `annotateSM()` resolves the
   versioned RaMP 3.0.7 chemical-property table through `SpaMTPdb`, records
-  annotation provenance in `@tools$mz_annotation`, and retains `@tools$db_3`
-  only for compatibility.
+  annotation provenance through `SeuratObject::Misc()`, with a compatibility
+  fallback for legacy serialized objects.
   Legacy annotations require an explicit `annotation_source` fallback.
-* Annotation candidates can now be stored once with `AnnotateSM(min_score =
+* Annotation candidates can now be stored once with `annotateSM(min_score =
   0)` and filtered later with `annotation_score_threshold`. Interactive
   pathway networks add `metabolite_detection = "annotated"` to display
   score-filtered pathway metabolites without requiring DE significance, while
@@ -35,13 +53,13 @@
   result columns.
 * Added dependency-free SMILES graph decomposition, functional-group and atom
   site reporting, mode-specific protonation/deprotonation and alkali-binding
-  priors, and `PredictAdductsFromSMILES()`. Aromatic functional groups are
+  priors, and `predictAdductsFromSMILES()`. Aromatic functional groups are
   perceived consistently from both lowercase aromatic and alternating-bond
   six-membered Kekule SMILES. Full RaMP runs join an independent precomputed
   `SpaMTPdb::smiles_features` resource; small custom databases are inferred
   automatically at runtime.
 * `chem_props` can now be used directly as a RaMP-backed annotation database.
-* Rebuilt `PathwayNetworkPlots()` around cached topology lookup, precomputed
+* Rebuilt `pathwayNetworkPlots()` around cached topology lookup, precomputed
   edges, selective sparse-matrix extraction, and JSON serialization. The new
   responsive viewer adds zoom/pan, focused/full networks, label controls,
   shared reaction markers, spatial inspection, and SVG export.
@@ -62,9 +80,9 @@
 
 Additional Features:
 
-* Updated `LoadSM()` function for compatability with **Cardinal V3.8** 
+* Updated `loadSM()` function for compatability with **Cardinal V3.8**
 * Implementation of GraphPCA in R.
-* Additional functions for handling large datasets - `AnnotateBigData` and `SelectROI`.
+* Additional functions for handling large datasets - `annotateBigData` and `selectROIs`.
 * Function for refining m/z annotations based on correlated pathway activity or MS/MS profiles.
 * Package wide update for compatability with **Cardinal V3.8** and **Seurat V5.3**.
 

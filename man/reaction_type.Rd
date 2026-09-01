@@ -15,7 +15,7 @@ A data frame with 11 rows and 5 variables:
 }
 }
 \usage{
-data(reaction_type)
+reaction_type
 }
 \value{
 A data frame of pathway-network reaction styles.

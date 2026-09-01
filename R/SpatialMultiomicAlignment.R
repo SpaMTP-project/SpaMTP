@@ -13,9 +13,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(get_square_coordinates))
-#' get_square_coordinates(center_x = 5, center_y = 5, width = 4, name = "MySquare")
-get_square_coordinates <- function(center_x, center_y, width, name) {
+#' utils::str(formals(getSquareCoordinates))
+#' getSquareCoordinates(center_x = 5, center_y = 5, width = 4, name = "MySquare")
+getSquareCoordinates <- function(center_x, center_y, width, name) {
   # Calculate half width
   half_width <- width / 2
 
@@ -58,14 +58,14 @@ get_square_coordinates <- function(center_x, center_y, width, name) {
 #' @export
 #'
 #' @examples
-#' utils::str(formals(MapSpatialOmics))
+#' utils::str(formals(mapSpatialOmics))
 #'
 #' ## Mapping MALDI data to equivalent Visium spots
-#' # MapSpatialOmics(VisiumObj, SeuratObj, ST.scale.factor = "hires", SM.assay = "Spatial", ST.assay = "Spatial")
+#' # mapSpatialOmics(VisiumObj, SeuratObj, ST.scale.factor = "hires", SM.assay = "Spatial", ST.assay = "Spatial")
 #'
 #' #' ## Mapping MALDI data to equivalent Xenium cells
-#' # MapSpatialOmics(VisiumObj, SeuratObj, SM.assay = "Spatial", ST.assay = "Xenium")
-MapSpatialOmics <- function(SM.data, ST.data, ST.hires = FALSE,
+#' # mapSpatialOmics(VisiumObj, SeuratObj, SM.assay = "Spatial", ST.assay = "Xenium")
+mapSpatialOmics <- function(SM.data, ST.data, ST.hires = FALSE,
                             SM.assay = "Spatial", ST.assay = "Spatial",
                             SM.fov = "fov", ST.image = "slice1",
                             ST.scale.factor = "hires",
@@ -81,7 +81,7 @@ MapSpatialOmics <- function(SM.data, ST.data, ST.hires = FALSE,
 
 
   if (ST.hires){
-    verbose_message(message_text = "Running `MapSpatialOmics` in hires mode! This is normally used for single-cell spatial data (Xenium)... \n", verbose = verbose)
+    verbose_message(message_text = "Running `mapSpatialOmics` in hires mode! This is normally used for single-cell spatial data (Xenium)... \n", verbose = verbose)
     verbose_message(message_text = "Inputs of `ST.scale.factor`, `overlap.threshold` and `merge.unique.metadata` are not used for hires mode, and will be ignored ... \n", verbose = verbose)
 
     mapped.data <- hiresMapping(SM.data = SM.data,
@@ -99,7 +99,7 @@ MapSpatialOmics <- function(SM.data, ST.data, ST.hires = FALSE,
                                 verbose = verbose)
 
   } else {
-    verbose_message(message_text = "Running `MapSpatialOmics` in lowres mode! This is normally used for bin/spot-based spatial data (Visium)... \n", verbose = verbose)
+    verbose_message(message_text = "Running `mapSpatialOmics` in lowres mode! This is normally used for bin/spot-based spatial data (Visium)... \n", verbose = verbose)
     verbose_message(message_text = "Inputs of `ST.scale.factor`, `overlap.threshold` and `merge.unique.metadata` are required for lowres mode, please ensure they are included ... \n", verbose = verbose)
 
     mapped.data <- lowresMapping(SM.data = SM.data,
@@ -121,9 +121,7 @@ MapSpatialOmics <- function(SM.data, ST.data, ST.hires = FALSE,
 
   }
 
-  if(!is.null(SM.data@tools)){
-    mapped.data@tools[names(SM.data@tools)] <- SM.data@tools[names(SM.data@tools)]
-  }
+  mapped.data <- .copyStoredData(SM.data, mapped.data)
 
 
   return(mapped.data)
@@ -134,7 +132,7 @@ MapSpatialOmics <- function(SM.data, ST.data, ST.hires = FALSE,
 
 #' Maps SM pixels to low resolution ST data
 #'
-#' Function used by MapSpatialOmics to align SM data to ST spots with lower resolution (i.e. Visium Spots)
+#' Function used by mapSpatialOmics to align SM data to ST spots with lower resolution (i.e. Visium Spots)
 #'
 #' @param SM.data A SpaMTP Seurat object representing the Spatial Metabolomics data.
 #' @param ST.data A Seurat object representing the Visium Spatial Transcriptomics data.
@@ -159,7 +157,7 @@ MapSpatialOmics <- function(SM.data, ST.data, ST.hires = FALSE,
 #' @return A SpaMTP Seurat object with the Spatial Metabolomic data mapped to equivalent Spatial Transcripomics (Visium) spots.
 #'
 #' @examples
-#' # Helper function for MapSpatialOmics
+#' # Helper function for mapSpatialOmics
 lowresMapping <- function(SM.data, ST.data,
                       SM.assay = "Spatial", ST.assay = "Spatial",
                       SM.fov = "fov", ST.image = "slice1",
@@ -201,7 +199,7 @@ lowresMapping <- function(SM.data, ST.data,
 
   polygon_list <- lapply(1:nrow(df), function(idx) {
     row <- df[idx,]
-    get_square_coordinates(center_x = row$x, center_y = row$y, width = SM.pixel.width, name = row$cell)
+    getSquareCoordinates(center_x = row$x, center_y = row$y, width = SM.pixel.width, name = row$cell)
   })
 
   # Combine the list of data frames into a single data frame
@@ -234,13 +232,14 @@ lowresMapping <- function(SM.data, ST.data,
 
   ## Find Cells within each polygon
   st_coordinates <- SeuratObject::GetTissueCoordinates(sample_data[[ST.image]][["centroids"]])
-  st_coordinates$radius = sample_data[[ST.image]][["centroids"]]@radius * 0.5 #### 10X scalefactors_json.json file states @radius is actually = spot diameter
+  st_coordinates$radius = SeuratObject::Radius(sample_data[[ST.image]][["centroids"]]) * 0.5
 
   if(!is.null(ST.scale.factor)){
     if(!ST.scale.factor %in% c("hires", "lowres")){
       stop("Invalid asignment of `ST.scale.factor`! values must be either 'hires' or 'lowres'. If fullres is required set `ST.scale.factor` = `NULL`.")
     } else {
-      st_coordinates[c("x","y", "radius")] <- st_coordinates[c("x","y", "radius")] * sample_data[[ST.image]]@scale.factors[[ST.scale.factor]]
+      scaleFactors <- Seurat::ScaleFactors(sample_data[[ST.image]])
+      st_coordinates[c("x","y", "radius")] <- st_coordinates[c("x","y", "radius")] * scaleFactors[[ST.scale.factor]]
     }
   }
 
@@ -282,13 +281,15 @@ lowresMapping <- function(SM.data, ST.data,
   SpaMTP.obj <- AddMetaData(ST.data, result$polygons,"SPM_pixels")
 
   # remove cells with no SM data
-  cells_with_na <- rownames(SpaMTP.obj@meta.data)[is.na(SpaMTP.obj@meta.data$SPM_pixels)]
+  mappedMetadata <- .cellMetadata(SpaMTP.obj)
+  cells_with_na <- rownames(mappedMetadata)[is.na(mappedMetadata$SPM_pixels)]
 
   verbose_message(message_text = "Generating new Spatial Multi-Omic SpaMTP Seurat Object ... \n", verbose = verbose)
 
 
   # Subset the Seurat object based on cells with NA values
   SpaMTP.obj <- subset(SpaMTP.obj, cells = cells_with_na, invert = TRUE)
+  mappedMetadata <- .cellMetadata(SpaMTP.obj)
 
   mean_counts <- function(spm_pixels, count_matrix) {
     # Split SPM_pixels into individual pixel strings
@@ -310,12 +311,12 @@ lowresMapping <- function(SM.data, ST.data,
 
     if ("data" %in% Layers(SM.data, assay = SM.assay)){
 
-      mean_count_list <- lapply(SpaMTP.obj$SPM_pixels, mean_counts, count_matrix = SM.data[[SM.assay]]["counts"])
+      mean_count_list <- lapply(mappedMetadata$SPM_pixels, mean_counts, count_matrix = .assayData(SM.data, SM.assay, "counts"))
       mean_counts_df <- do.call(rbind, mean_count_list)
 
       verbose_message(message_text = "Averaging normalised SM intensity values stored in the `data` slot per ST spot ... \n", verbose = verbose)
 
-      mean_data_list <- lapply(SpaMTP.obj$SPM_pixels, mean_counts, count_matrix = SM.data[[SM.assay]]["data"])
+      mean_data_list <- lapply(mappedMetadata$SPM_pixels, mean_counts, count_matrix = .assayData(SM.data, SM.assay, "data"))
       mean_data_df <- do.call(rbind, mean_count_list)
       SpaMTP.obj[["SPM"]] <- CreateAssay5Object(counts = Matrix::t(mean_counts_df), data = Matrix::t(mean_data_df))
 
@@ -324,7 +325,7 @@ lowresMapping <- function(SM.data, ST.data,
     }
   } else {
     # Apply the function to each row in the reference data frame
-    mean_count_list <- lapply(SpaMTP.obj$SPM_pixels, mean_counts, count_matrix = SM.data[[SM.assay]]["counts"])
+    mean_count_list <- lapply(mappedMetadata$SPM_pixels, mean_counts, count_matrix = .assayData(SM.data, SM.assay, "counts"))
     mean_counts_df <- do.call(rbind, mean_count_list)
     colnames(mean_counts_df) <- rownames(SM.data)
     SpaMTP.obj[[new_SPM.assay]] <- CreateAssay5Object(counts = Matrix::t(mean_counts_df))
@@ -370,10 +371,10 @@ lowresMapping <- function(SM.data, ST.data,
 
     verbose_message(message_text = "Adding SM metadata to the new SpaMTP Seurat Object ... \n", verbose = verbose)
 
-    metadata_list <- lapply(SpaMTP.obj$SPM_pixels, add_metadata, SM_metadata = SM.data@meta.data)
+    metadata_list <- lapply(mappedMetadata$SPM_pixels, add_metadata, SM_metadata = .cellMetadata(SM.data))
     metadata_df <- do.call(rbind, metadata_list)
-
-    SpaMTP.obj@meta.data[colnames(metadata_df)] <- metadata_df[colnames(metadata_df)]
+    rownames(metadata_df) <- rownames(mappedMetadata)
+    SpaMTP.obj <- .setCellMetadata(SpaMTP.obj, metadata_df)
   }
 
 
@@ -383,15 +384,22 @@ lowresMapping <- function(SM.data, ST.data,
     verbose_message(message_text = "Adding metabolite annotation metadata to the new SpaMTP Seurat Object ... \n", verbose = verbose)
 
     ## adds m/z annotations to new object
-    SpaMTP.obj[[new_SPM.assay]]@meta.data <- SM.data[[SM.assay]]@meta.data
+    SpaMTP.obj <- .setFeatureMetadata(
+      SpaMTP.obj,
+      .featureMetadata(SM.data, SM.assay),
+      new_SPM.assay
+    )
     for (tool_name in c("mz_annotation", "db_3")) {
-      if (!is.null(SM.data@tools[[tool_name]])) {
-        SpaMTP.obj@tools[[tool_name]] <- SM.data@tools[[tool_name]]
+      storedValue <- .storedData(SM.data, tool_name)
+      if (!is.null(storedValue)) {
+        SpaMTP.obj <- .setStoredData(SpaMTP.obj, tool_name, storedValue)
       }
     }
-    if (!is.null(SpaMTP.obj@tools$mz_annotation$metadata)) {
-      SpaMTP.obj@tools$mz_annotation$metadata$source_assay <- SM.assay
-      SpaMTP.obj@tools$mz_annotation$metadata$assay <- new_SPM.assay
+    annotationStore <- .storedData(SpaMTP.obj, "mz_annotation")
+    if (!is.null(annotationStore$metadata)) {
+      annotationStore$metadata$source_assay <- SM.assay
+      annotationStore$metadata$assay <- new_SPM.assay
+      SpaMTP.obj <- .setStoredData(SpaMTP.obj, "mz_annotation", annotationStore)
     }
   }
 
@@ -406,7 +414,7 @@ lowresMapping <- function(SM.data, ST.data,
 
 #' Maps SM pixels to high resolution ST data
 #'
-#' Function used by MapSpatialOmics to align SM data to ST spots with higher resolution (i.e. Xenium cells)
+#' Function used by mapSpatialOmics to align SM data to ST spots with higher resolution (i.e. Xenium cells)
 #'
 #' @param SM.data A SpaMTP Seurat object representing the Spatial Metabolomics data.
 #' @param ST.data A Seurat object representing the Xenium Spatial Transcriptomics data.
@@ -428,7 +436,7 @@ lowresMapping <- function(SM.data, ST.data,
 #' @return A SpaMTP Seurat object with the Spatial Metabolomic data mapped to equivalent Spatial Transcripomics (Xenium) cells.
 #'
 #' @examples
-#' # Helper function for MapSpatialOmics
+#' # Helper function for mapSpatialOmics
 hiresMapping <- function(SM.data, ST.data,
                           SM.assay = "Spatial", ST.assay = "Xenium",
                           SM.fov = "fov", ST.image = "fov",
@@ -466,7 +474,7 @@ hiresMapping <- function(SM.data, ST.data,
 
     polygon_list <- lapply(1:nrow(df), function(idx) {
       row <- df[idx,]
-      get_square_coordinates(center_x = row$x, center_y = row$y, width = SM.pixel.width, name = row$cell)
+      getSquareCoordinates(center_x = row$x, center_y = row$y, width = SM.pixel.width, name = row$cell)
     })
 
     verbose_message(message_text = "Generating polygon from SM pixel coordinates ... \n", verbose = verbose)
@@ -505,22 +513,24 @@ hiresMapping <- function(SM.data, ST.data,
 
 
     # remove cells with no SM data
-    cells_with_na <- rownames(xenium.data@meta.data)[is.na(xenium.data@meta.data$SPM_pixels)]
+    xeniumMetadata <- .cellMetadata(xenium.data)
+    cells_with_na <- rownames(xeniumMetadata)[is.na(xeniumMetadata$SPM_pixels)]
 
     # Subset the Seurat object based on cells with NA values
     xenium.data <- subset(xenium.data, cells = cells_with_na, invert = TRUE)
+    xeniumMetadata <- .cellMetadata(xenium.data)
 
     # generate new SM counts matrix
-    MALDI_df <- SM.data[[SM.assay]]["counts"][, xenium.data@meta.data$SPM_pixels]
+    MALDI_df <- .assayData(SM.data, SM.assay, "counts")[, xeniumMetadata$SPM_pixels]
 
-    colnames(MALDI_df) <- rownames(xenium.data@meta.data)
+    colnames(MALDI_df) <- rownames(xeniumMetadata)
 
     if (map.data) {
 
       verbose_message(message_text = "Mapping normalised SM data stored in `data` slot to new SpaMTP Seurat Object ... \n", verbose = verbose)
 
-      MALDI_data_df <-  SM.data[[SM.assay]]["data"][, xenium.data@meta.data$SPM_pixels]
-      colnames(MALDI_data_df) <- rownames(xenium.data@meta.data)
+      MALDI_data_df <-  .assayData(SM.data, SM.assay, "data")[, xeniumMetadata$SPM_pixels]
+      colnames(MALDI_data_df) <- rownames(xeniumMetadata)
       xenium.data[[new_SPM.assay]] <- CreateAssay5Object(counts = MALDI_df, data = MALDI_data_df)
     } else {
       xenium.data[[new_SPM.assay]] <- CreateAssay5Object(counts = MALDI_df)
@@ -528,14 +538,15 @@ hiresMapping <- function(SM.data, ST.data,
 
 
     #add metadata from SM
-    MALDI_metadata <- SM.data@meta.data[xenium.data@meta.data$SPM_pixels,]
-    rownames(MALDI_metadata) <- rownames(xenium.data@meta.data)
+    MALDI_metadata <- .cellMetadata(SM.data)[xeniumMetadata$SPM_pixels,]
+    rownames(MALDI_metadata) <- rownames(xeniumMetadata)
 
     if (add.metadata) {
       verbose_message(message_text = "Adding SM metadata to the new SpaMTP Seurat Object ... \n", verbose = verbose)
 
       meta_data_colnames <- paste0(colnames(MALDI_metadata), "_", new_SPM.assay)
-      xenium.data@meta.data[meta_data_colnames] <- MALDI_metadata
+      colnames(MALDI_metadata) <- meta_data_colnames
+      xenium.data <- .setCellMetadata(xenium.data, MALDI_metadata)
     }
 
 
@@ -545,15 +556,22 @@ hiresMapping <- function(SM.data, ST.data,
       verbose_message(message_text = "Adding metabolite annotation metadata to the new SpaMTP Seurat Object ... \n", verbose = verbose)
 
       ## adds m/z annotations to new object
-      xenium.data[[new_SPM.assay]]@meta.data <- SM.data[[SM.assay]]@meta.data
+      xenium.data <- .setFeatureMetadata(
+        xenium.data,
+        .featureMetadata(SM.data, SM.assay),
+        new_SPM.assay
+      )
       for (tool_name in c("mz_annotation", "db_3")) {
-        if (!is.null(SM.data@tools[[tool_name]])) {
-          xenium.data@tools[[tool_name]] <- SM.data@tools[[tool_name]]
+        storedValue <- .storedData(SM.data, tool_name)
+        if (!is.null(storedValue)) {
+          xenium.data <- .setStoredData(xenium.data, tool_name, storedValue)
         }
       }
-      if (!is.null(xenium.data@tools$mz_annotation$metadata)) {
-        xenium.data@tools$mz_annotation$metadata$source_assay <- SM.assay
-        xenium.data@tools$mz_annotation$metadata$assay <- new_SPM.assay
+      annotationStore <- .storedData(xenium.data, "mz_annotation")
+      if (!is.null(annotationStore$metadata)) {
+        annotationStore$metadata$source_assay <- SM.assay
+        annotationStore$metadata$assay <- new_SPM.assay
+        xenium.data <- .setStoredData(xenium.data, "mz_annotation", annotationStore)
       }
     }
 
@@ -599,9 +617,9 @@ hiresMapping <- function(SM.data, ST.data,
 #'
 #'
 #' @examples
-#' utils::str(formals(AlignSpatialOmics))
-#' # SM_Transformed <- AlignSpatialOmics(SM.data, ST.data)
-AlignSpatialOmics <- function (
+#' utils::str(formals(alignSpatialOmics))
+#' # SM_Transformed <- alignSpatialOmics(SM.data, ST.data)
+alignSpatialOmics <- function (
     sm.data,
     st.data,
     msi.pixel.multiplier = 20,
@@ -622,12 +640,13 @@ AlignSpatialOmics <- function (
   #Get tissue coordinates from Seurat Objects
 
   ## ST cooridnates
-  df <- GetTissueCoordinates(st.data)[c("x", "y")] * st.data@images[[image.slice]]@scale.factors[[image.res]]
+  scaleFactors <- Seurat::ScaleFactors(st.data[[image.slice]])
+  df <- GetTissueCoordinates(st.data)[c("x", "y")] * scaleFactors[[image.res]]
 
   ## SM Coordinates
   df2 <- GetTissueCoordinates(sm.data)[c("x", "y")]
-  df2$x <- df2$x * msi.pixel.multiplier / (st.data@images[[image.slice]]@scale.factors[["hires"]]/st.data@images[[image.slice]]@scale.factors[[image.res]])
-  df2$y <- df2$y * msi.pixel.multiplier / (st.data@images[[image.slice]]@scale.factors[["hires"]]/st.data@images[[image.slice]]@scale.factors[[image.res]])
+  df2$x <- df2$x * msi.pixel.multiplier / (scaleFactors[["hires"]]/scaleFactors[[image.res]])
+  df2$y <- df2$y * msi.pixel.multiplier / (scaleFactors[["hires"]]/scaleFactors[[image.res]])
   df2 <- df2[c("x", "y")]
 
   # Calculate scatter for plotting
@@ -649,7 +668,7 @@ AlignSpatialOmics <- function (
              "2" = list("scatter" = sc2, "coords" = coords2))
 
 
-  arr <- st.data@images[[image.slice]]@image
+  arr <- SeuratObject::GetImage(st.data[[image.slice]], mode = "raw")
   rotated_array <- aperm(arr, c(2, 1, 3))
   rotated_array <- rotated_array[ nrow(rotated_array):1, ,]
   color_matrix <- (as.raster(rotated_array))
@@ -741,12 +760,12 @@ AlignSpatialOmics <- function (
                column(4, selectInput(
                  inputId = "sm_plot",
                  label = "SM plot feature",
-                 choices =   setNames(colnames(sm.data@meta.data), colnames(sm.data@meta.data))
+                 choices =   setNames(colnames(.cellMetadata(sm.data)), colnames(.cellMetadata(sm.data)))
                )),
                column(4, selectInput(
                  inputId = "st_plot",
                  label = "ST plot feature",
-                 choices =   setNames(colnames(st.data@meta.data), colnames(st.data@meta.data))
+                 choices =   setNames(colnames(.cellMetadata(st.data)), colnames(.cellMetadata(st.data)))
                ))
              ),
              fluidRow(
@@ -935,16 +954,18 @@ AlignSpatialOmics <- function (
       }
 
 
-      if (is.numeric(sm.data@meta.data[[sm_feature_plot()]])){
-        sm_cols <- cont_pal[as.numeric(cut(sm.data@meta.data[[sm_feature_plot()]],breaks = 9))]
+      smMetadata <- .cellMetadata(sm.data)
+      stMetadata <- .cellMetadata(st.data)
+      if (is.numeric(smMetadata[[sm_feature_plot()]])){
+        sm_cols <- cont_pal[as.numeric(cut(smMetadata[[sm_feature_plot()]],breaks = 9))]
       } else {
-        sm_cols <- cat_pal[as.factor(sm.data@meta.data[[sm_feature_plot()]])]
+        sm_cols <- cat_pal[as.factor(smMetadata[[sm_feature_plot()]])]
       }
 
-      if (is.numeric(st.data@meta.data[[st_feature_plot()]])){
-        st_cols <- cont_pal[as.numeric(cut(st.data@meta.data[[st_feature_plot()]],breaks = 9))]
+      if (is.numeric(stMetadata[[st_feature_plot()]])){
+        st_cols <- cont_pal[as.numeric(cut(stMetadata[[st_feature_plot()]],breaks = 9))]
       } else {
-        st_cols <- cat_pal[as.factor(st.data@meta.data[[st_feature_plot()]])]
+        st_cols <- cat_pal[as.factor(stMetadata[[st_feature_plot()]])]
       }
 
 
@@ -1013,8 +1034,8 @@ AlignSpatialOmics <- function (
              "- Stretch the SM coordinates in either the direction matching the blue and/or red arrow. The angle of the arrows can also be change to match the required stretching direction. <br>",
              "- Once them SM data is aligned select the 'Return Aligned Data' button to generate a SpaMTP Seurat object with the adjusted coordinates. <br>",
              "<br>",
-             "Note: If using in 'AlignSpatialOmics' mode then a SpaMTP object will be returned containing only the SM data with the ajusted coordinates. <br>",
-             "For mapping SM data to corresponding ST spots, please run 'MapSpatialOmics()' with the original ST object and now updated SM object. <br>"
+             "Note: If using in 'alignSpatialOmics' mode then a SpaMTP object will be returned containing only the SM data with the ajusted coordinates. <br>",
+             "For mapping SM data to corresponding ST spots, please run 'mapSpatialOmics()' with the original ST object and now updated SM object. <br>"
           ),
         easyClose = TRUE,
         footer = NULL
@@ -1049,8 +1070,14 @@ AlignSpatialOmics <- function (
 
   warped_mtx <- as.matrix(warped_xy)
 
-  sm.data[[fov]][["centroids"]]@coords[,"x"] <- warped_mtx[,"warped_x"]  / st.data@images[[image.slice]]@scale.factors[[image.res]]
-  sm.data[[fov]][["centroids"]]@coords[,"y"] <- warped_mtx[,"warped_y"]  / st.data@images[[image.slice]]@scale.factors[[image.res]]
+  centroids <- sm.data[[fov]][["centroids"]]
+  warpedCoordinates <- data.frame(
+    x = warped_mtx[, "warped_x"] / scaleFactors[[image.res]],
+    y = warped_mtx[, "warped_y"] / scaleFactors[[image.res]],
+    cell = SeuratObject::Cells(centroids)
+  )
+  updatedCentroids <- .centroidsWithCoordinates(centroids, warpedCoordinates)
+  sm.data[[fov]] <- .fovWithBoundary(sm.data[[fov]], "centroids", updatedCentroids)
 
   return(sm.data)
 }
@@ -1227,7 +1254,7 @@ rigid.stretch <- function (
 #' translation of points to origin (0, 0) -> reflection of points
 #' -> rotation by alpha degrees and translation of points to new center
 #'
-#' @param center.cur (x, y) image pixel coordinates specifying the current center of the tissue (stored in slot "tools" as "centers")
+#' @param center.cur (x, y) image pixel coordinates specifying the current center of the tissue (stored as the `centers` auxiliary entry)
 #' @param center.new (x, y) image pixel coordinates specifying the new center (image center)
 #' @param alpha Rotation angle
 #' @param mirror.x,mirror.y Logical values indicating reflection across the x
@@ -1236,8 +1263,8 @@ rigid.stretch <- function (
 #' @return A 3-by-3 homogeneous affine-transformation matrix.
 #'
 #' @examples
-#' utils::str(formals(combine.tr))
-#' transformation <- combine.tr(
+#' utils::str(formals(combineTransformations))
+#' transformation <- combineTransformations(
 #'   center.cur = c(0, 0),
 #'   center.new = c(10, 20),
 #'   alpha = 90
@@ -1246,7 +1273,7 @@ rigid.stretch <- function (
 #'
 #' @export
 
-combine.tr <- function (
+combineTransformations <- function (
     center.cur,
     center.new,
     alpha,
@@ -1300,9 +1327,9 @@ generate.map.affine <- function (
 #' @param plot.greyscale Boolean indicating whether to display the grey scale plot used to generate the tissue mask (default = FALSE).
 #' @param seed Integer value defining the seed to use for calculating random fake gene values for aligning the image (default = 123).
 #' @param n.spots Integer specifying the number of fake spots to generate for the aligned image. If NULL the number of spots will match that of the SpaMTP object provided (default = NULL).
-#' @param ... Additional inputs used by the AlignSpatialOmics function. Please see documentation or call ?AlignSpatialOmics for more infomation.
+#' @param ... Additional inputs used by the alignSpatialOmics function. Please see documentation or call ?alignSpatialOmics for more infomation.
 #'
-#' @return A SpaMTP Seurat object with the provided image aligned to the SM data. The image is stored in the `@image$slice1` slot.
+#' @return A SpaMTP Seurat object with the provided image available as the `slice1` spatial image.
 #'
 #' @export
 #'
@@ -1310,9 +1337,9 @@ generate.map.affine <- function (
 #' @rawNamespace import(shinyjs, except = c(runExample, show))
 #'
 #' @examples
-#' utils::str(formals(AddSMImage))
-#' # AddSMImage(image_path = "../HnE_image.png", SpaMTP = SpaMTP_obj)
-AddSMImage <- function(image_path, SpaMTP, fov = "fov", grey.scale = 0.5, plot.greyscale = FALSE, seed = 123, n.spots = NULL, ...) {
+#' utils::str(formals(addSMImage))
+#' # addSMImage(image_path = "../HnE_image.png", SpaMTP = SpaMTP_obj)
+addSMImage <- function(image_path, SpaMTP, fov = "fov", grey.scale = 0.5, plot.greyscale = FALSE, seed = 123, n.spots = NULL, ...) {
 
   ## Load Image
   img <- magick::image_read(image_path)
@@ -1383,9 +1410,11 @@ AddSMImage <- function(image_path, SpaMTP, fov = "fov", grey.scale = 0.5, plot.g
   seurat_obj <- Seurat::AddMetaData(seurat_obj, metadata)
 
   ## Add Spatial Coordinates
-  seurat_obj@meta.data$cell <- rownames(seurat_obj@meta.data)
+  seuratMetadata <- .cellMetadata(seurat_obj)
+  seuratMetadata$cell <- rownames(seuratMetadata)
+  seurat_obj <- .setCellMetadata(seurat_obj, seuratMetadata)
 
-  fake_coords <- seurat_obj@meta.data
+  fake_coords <- .cellMetadata(seurat_obj)
   fake_coords$imagerow <- fake_coords$y
   fake_coords$imagecol <- fake_coords$x
   rownames(fake_coords) <- fake_coords$cell
@@ -1394,27 +1423,37 @@ AddSMImage <- function(image_path, SpaMTP, fov = "fov", grey.scale = 0.5, plot.g
   fake_fov <- CreateFOV(
     fake_coords[, c("imagerow", "imagecol")],
     type = "centroids",
-    radius = SpaMTP@images[[fov]]$centroids@radius,
+    radius = SeuratObject::Radius(SpaMTP[[fov]][["centroids"]]),
     assay = "Spatial",
     key = Key("slice", quiet = TRUE)
   )
 
   scale.factors <- Seurat::scalefactors(spot = 1, fiducial = 30, hires = 1, lowres = 1)
+  fakeBoundaries <- SeuratObject::Boundaries(fake_fov)
+  fakeBoundaries <- stats::setNames(
+    lapply(fakeBoundaries, function(name) fake_fov[[name]]),
+    fakeBoundaries
+  )
+  fakeMolecules <- SeuratObject::Molecules(fake_fov)
+  fakeMolecules <- stats::setNames(
+    lapply(fakeMolecules, function(name) fake_fov[[name]]),
+    fakeMolecules
+  )
 
   ## Add Image to Seurat Object
   visium.fov <- new(
     Class = "VisiumV2",
-    boundaries = fake_fov@boundaries,
-    molecules = fake_fov@molecules,
-    assay = fake_fov@assay,
-    key = fake_fov@key,
+    boundaries = fakeBoundaries,
+    molecules = fakeMolecules,
+    assay = SeuratObject::DefaultAssay(fake_fov),
+    key = SeuratObject::Key(fake_fov),
     image = img_array,
     scale.factors = scale.factors
   )
-  seurat_obj@images[["slice1"]] <- visium.fov
+  seurat_obj[["slice1"]] <- visium.fov
 
   ## Manually Align H&E Image
-  aligned_SpaMTP <- AlignSpatialOmics(sm.data = SpaMTP, st.data = seurat_obj, image.slice = "slice1", fov = fov, ...)
+  aligned_SpaMTP <- alignSpatialOmics(sm.data = SpaMTP, st.data = seurat_obj, image.slice = "slice1", fov = fov, ...)
 
   real_coords <- Seurat::GetTissueCoordinates(aligned_SpaMTP, image = fov)
   real_coords$imagerow <- real_coords$x
@@ -1424,22 +1463,32 @@ AddSMImage <- function(image_path, SpaMTP, fov = "fov", grey.scale = 0.5, plot.g
   real_fov <- SeuratObject::CreateFOV(
     real_coords[, c("imagerow", "imagecol")],
     type = "centroids",
-    radius = aligned_SpaMTP@images[[fov]]$centroids@radius,
+    radius = SeuratObject::Radius(aligned_SpaMTP[[fov]][["centroids"]]),
     assay = "Spatial",
     key = SeuratObject::Key("slice", quiet = TRUE)
   )
 
+  realBoundaries <- SeuratObject::Boundaries(real_fov)
+  realBoundaries <- stats::setNames(
+    lapply(realBoundaries, function(name) real_fov[[name]]),
+    realBoundaries
+  )
+  realMolecules <- SeuratObject::Molecules(real_fov)
+  realMolecules <- stats::setNames(
+    lapply(realMolecules, function(name) real_fov[[name]]),
+    realMolecules
+  )
   new.visium.fov <- methods::new(
     Class = "VisiumV2",
-    boundaries = real_fov@boundaries,
-    molecules = real_fov@molecules,
-    assay = real_fov@assay,
-    key = real_fov@key,
+    boundaries = realBoundaries,
+    molecules = realMolecules,
+    assay = SeuratObject::DefaultAssay(real_fov),
+    key = SeuratObject::Key(real_fov),
     image = img_array,
     scale.factors = scale.factors
   )
 
-  aligned_SpaMTP@images[["slice1"]] <- new.visium.fov
+  aligned_SpaMTP[["slice1"]] <- new.visium.fov
 
   return(aligned_SpaMTP)
 }
@@ -1461,15 +1510,15 @@ AddSMImage <- function(image_path, SpaMTP, fov = "fov", grey.scale = 0.5, plot.g
 #' @export
 #'
 #' @examples
-#' utils::str(formals(CheckAlignment))
-#' # CheckAlignment(SM.data, ST.data)
-CheckAlignment <- function(SM.data, ST.data, image.res = NULL, names = c("SM", "ST"), cols = NULL, image.slice = "slice1", size = 0.5){
+#' utils::str(formals(checkAlignment))
+#' # checkAlignment(SM.data, ST.data)
+checkAlignment <- function(SM.data, ST.data, image.res = NULL, names = c("SM", "ST"), cols = NULL, image.slice = "slice1", size = 0.5){
 
   if (is.null(image.res)){
     scale.factor <- 1
   } else {
     if (image.res %in% c("hires", "lowres")){
-      scale.factor <- ST.data@images[[image.slice]]@scale.factors[[image.res]]
+      scale.factor <- Seurat::ScaleFactors(ST.data[[image.slice]])[[image.res]]
     } else {
       stop("invalid input for image.res! image.res must be either 'hires' or 'lowres'")
     }

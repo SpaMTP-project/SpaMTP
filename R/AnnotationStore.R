@@ -62,9 +62,9 @@
 
   if (annotation_source == "current") {
     stop(
-      "No current indexed RaMP annotation result was found. Run AnnotateSM() ",
+      "No current indexed RaMP annotation result was found. Run annotateSM() ",
       "again (db = chem_props, save.intermediate = TRUE), or explicitly set ",
-      "annotation_source = 'legacy' for an older @tools$db_3 result."
+      "annotation_source = 'legacy' for an older stored db_3 result."
     )
   }
   if (!is.data.frame(compatibility)) {
@@ -72,8 +72,8 @@
   }
   if (isTRUE(warn_legacy) && !.annotation_has_current_schema(compatibility)) {
     warning(
-      "Using a legacy @tools$db_3 annotation without scored RaMP IDs. ",
-      "Re-run AnnotateSM() to use the current indexed annotation pipeline.",
+      "Using a legacy db_3 annotation without scored RaMP IDs. ",
+      "Re-run annotateSM() to use the current indexed annotation pipeline.",
       call. = FALSE
     )
   }
@@ -91,7 +91,10 @@
                                 annotation_source = c("current", "auto", "legacy"),
                                 warn_legacy = TRUE) {
   .select_mz_annotations(
-    SpaMTP@tools,
+    list(
+      mz_annotation = .storedData(SpaMTP, "mz_annotation"),
+      db_3 = .storedData(SpaMTP, "db_3")
+    ),
     annotation_source = annotation_source,
     warn_legacy = warn_legacy
   )
@@ -247,14 +250,14 @@
 #' @return A named list containing annotation schema, engine, RaMP version,
 #'   provenance, and candidate count where available.
 #' @examples
-#' utils::str(formals(AnnotationInfo))
+#' utils::str(formals(annotationInfo))
 #' @export
-AnnotationInfo <- function(SpaMTP) {
-  current <- SpaMTP@tools[["mz_annotation"]]
+annotationInfo <- function(SpaMTP) {
+  current <- .storedData(SpaMTP, "mz_annotation")
   if (is.list(current) && .annotation_has_current_schema(current$results)) {
     return(current$metadata)
   }
-  compatibility <- SpaMTP@tools[["db_3"]]
+  compatibility <- .storedData(SpaMTP, "db_3")
   if (.annotation_has_current_schema(compatibility)) {
     return(list(
       schema_version = .spamtp_annotation_schema,

@@ -7,7 +7,7 @@
 \method{print}{spamtp_mz_index}(x, ...)
 }
 \arguments{
-\item{x}{A \code{spamtp_mz_index} returned by \code{\link[=BuildMZAnnotationIndex]{BuildMZAnnotationIndex()}}.}
+\item{x}{A \code{spamtp_mz_index} returned by \code{\link[=buildMZAnnotationIndex]{buildMZAnnotationIndex()}}.}
 
 \item{...}{Additional arguments reserved for print-method compatibility.}
 }

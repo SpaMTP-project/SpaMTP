@@ -35,11 +35,11 @@ library(SpaMTP)
 
 # Inspect available database resources
 
-`SpaMTPDatabaseInfo()` reads the lightweight SpaMTPdb registry without
+`spaMTPDatabaseInfo()` reads the lightweight SpaMTPdb registry without
 downloading any annotation table.
 
 ```{r database-registry}
-database_registry <- SpaMTPDatabaseInfo(version = "latest")
+database_registry <- spaMTPDatabaseInfo(version = "latest")
 database_registry[
   database_registry$resource %in% c("chem_props", "smiles_features"),
   c("resource", "version", "category", "rows", "columns")
@@ -63,7 +63,7 @@ demo_database <- data.frame(
   stringsAsFactors = FALSE
 )
 
-demo_database <- AnnotateSMILESStructure(demo_database)
+demo_database <- annotateSMILESStructure(demo_database)
 demo_database[, c(
   "common_name", "carboxyl_sites", "hydroxyl_sites",
   "max_exchangeable_protons", "positive_mode_score",
@@ -78,7 +78,7 @@ then be queried using a binary range search rather than scanning the full
 database for every peak.
 
 ```{r indexed-search}
-annotation_index <- BuildMZAnnotationIndex(
+annotation_index <- buildMZAnnotationIndex(
   db = demo_database,
   polarity = "negative",
   adducts = c("[M-H]-", "[2M-H]-"),
@@ -86,7 +86,7 @@ annotation_index <- BuildMZAnnotationIndex(
 )
 
 observed_mz <- 147.02935
-candidates <- QueryMZAnnotationIndex(
+candidates <- queryMZAnnotationIndex(
   observed_mz = observed_mz,
   index = annotation_index,
   ppm = 5
@@ -101,7 +101,7 @@ candidates[, c(
 # Reproducibility
 
 For production analyses, record the database version returned by
-`SpaMTPDatabaseInfo()` together with ion mode, matrix profile, adduct rules,
+`spaMTPDatabaseInfo()` together with ion mode, matrix profile, adduct rules,
 mass tolerance, and annotation-score threshold.
 
 ```{r session-info}

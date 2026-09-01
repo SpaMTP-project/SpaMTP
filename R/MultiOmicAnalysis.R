@@ -3,8 +3,7 @@
 #' This function performs multi-omic integration of Spatial Metabolomics and Spatial Transcriptomics data using Seurat's Weighted Nearest Neighbours function.
 #'
 #' @param multiomic.data SpaMTP dataset contain Spatial Transcriptomics and Metabolomic datasets in two different assays
-#' @param weight.list List containing the relative weightings for each modality, matching the reduction order. If NULL, weights will be automatically calculated else, two values must add to 1 (default = NULL).
-#' @param reduction.list List containing character strings defining the reduction to use for each modality, in the order matching weight.list if applicable (default = list("spt.pca", "spm.pca")).
+#' @param reduction.list List containing character strings defining the reduction to use for each modality (default = list("spt.pca", "spm.pca")).
 #' @param dims.list List containing the numeric range of principle component dimension to include for each modality (default = list(1:30,1:30)).
 #' @param return.intermediate Boolean value indicating whether to store intermediate results in misc slot of SpaMTP Seurat class object (default = FALSE).
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
@@ -14,9 +13,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(MultiOmicIntegration))
-#' # SpaMTP.obj <- MultiOmicIntegration(SpaMTP.obj, weight.list = list(0.5, 0.5), reduction.list =  list("spt.pca", "spm.pca"), dims.list = list(1:30, 1:30))
-MultiOmicIntegration <- function (multiomic.data, weight.list = NULL, reduction.list =  list("spt.pca", "spm.pca"), dims.list = list(1:30, 1:30), return.intermediate = FALSE, verbose = FALSE, ...){
+#' utils::str(formals(multiOmicIntegration))
+#' # SpaMTP.obj <- multiOmicIntegration(SpaMTP.obj, reduction.list =  list("spt.pca", "spm.pca"), dims.list = list(1:30, 1:30))
+multiOmicIntegration <- function (multiomic.data, reduction.list =  list("spt.pca", "spm.pca"), dims.list = list(1:30, 1:30), return.intermediate = FALSE, verbose = FALSE, ...){
 
   # Seurat's Annoy neighbour search uses future.apply even under a sequential
   # plan. Some R/future combinations can crash in future's post-evaluation
@@ -26,27 +25,14 @@ MultiOmicIntegration <- function (multiomic.data, weight.list = NULL, reduction.
   previous_future_options <- options(future.connections.onMisuse = "ignore")
   on.exit(options(previous_future_options), add = TRUE)
 
-  if (is.null(weight.list)){
-    mm.integration <- Seurat::FindMultiModalNeighbors(
-      multiomic.data, reduction.list = reduction.list,
-      dims.list = dims.list, return.intermediate = return.intermediate,verbose = verbose, ...)
-  } else {
-    mm.integration <- Seurat::FindMultiModalNeighbors(
-      multiomic.data, reduction.list = reduction.list,
-      dims.list = dims.list, return.intermediate = TRUE, verbose = verbose, ...)
-
-    x <- rep(weight.list[[1]], length(names(mm.integration@misc$modality.weight@modality.weight.list[[reduction.list[[1]]]]))) ## Setting the SPM weights
-    names(x) <- names(mm.integration@misc$modality.weight@modality.weight.list[[reduction.list[[1]]]])
-    mm.integration@misc$modality.weight@modality.weight.list[[reduction.list[[1]]]] <- x
-
-    x <- rep(weight.list[[2]], length(names(mm.integration@misc$modality.weight@modality.weight.list[[reduction.list[[2]]]]))) ## Setting the SPM weights
-    names(x) <- names(mm.integration@misc$modality.weight@modality.weight.list[[reduction.list[[2]]]])
-    mm.integration@misc$modality.weight@modality.weight.list[[reduction.list[[2]]]] <- x
-
-    mm.integration <- Seurat::FindMultiModalNeighbors(
-      multiomic.data, reduction.list = reduction.list,
-      dims.list = dims.list, return.intermediate = return.intermediate, modality.weight = mm.integration@misc$modality.weight, verbose = verbose, ...)
-  }
+  mm.integration <- Seurat::FindMultiModalNeighbors(
+    multiomic.data,
+    reduction.list = reduction.list,
+    dims.list = dims.list,
+    return.intermediate = return.intermediate,
+    verbose = verbose,
+    ...
+  )
 
   return(mm.integration)
 }
@@ -72,24 +58,28 @@ MultiOmicIntegration <- function (multiomic.data, weight.list = NULL, reduction.
 #' This function assumes that each specified assay has been processed with `Seurat::ScaleData()` (or an alternative scaling method), and that their `scale.data` slots contain numeric matrices. The merged assay will use the row-bound `scale.data` matrices as the `counts`, `data`, and `scale.data` slots.
 #'
 #' @examples
-#' utils::str(formals(CreateMergedModalityAssay))
-#' # merged_obj <- CreateMergedModalityAssay(SpaMTP = spamtp_obj, assays.to.merge = c("SPM", "SPT"),new.assay = "merged")
-CreateMergedModalityAssay <- function(SpaMTP, assays.to.merge, new.assay = "merged", return.original = TRUE, verbose = FALSE){
+#' utils::str(formals(createMergedModalityAssay))
+#' # merged_obj <- createMergedModalityAssay(SpaMTP = spamtp_obj, assays.to.merge = c("SPM", "SPT"),new.assay = "merged")
+createMergedModalityAssay <- function(SpaMTP, assays.to.merge, new.assay = "merged", return.original = TRUE, verbose = FALSE){
 
   if(length(assays.to.merge) < 1){
     stop("Incorrect length of assays.to.merge! atleast two assay names must be provided to combine the scale.data slots. Please adjust assays.to.merge accordingly.")
   }
 
   for (assay in assays.to.merge){
-    if(is.null(SpaMTP@assays[[assay]])){
+    if(!assay %in% .assayNames(SpaMTP)){
       stop("Assay does not exist! The provided assay name is not present in the SpaMTP Seurat Obejct.")
     }
-    if(is.null(SpaMTP@assays[[assay]]["scale.data"])){
+    scaled <- tryCatch(
+      .assayData(SpaMTP, assay, "scale.data"),
+      error = function(e) NULL
+    )
+    if(is.null(scaled)){
       stop("No scale.data slot present in the ", assay, " assay! Please run Seurat::ScaleData() first!")
     }
   }
   scaled_data <- lapply(assays.to.merge, function(x){
-    SpaMTP@assays[[x]]$scale.data
+    .assayData(SpaMTP, x, "scale.data")
   })
 
   SpaMTP[[new.assay]] <- SeuratObject::CreateAssay5Object(counts = do.call(rbind, scaled_data))
@@ -100,8 +90,9 @@ CreateMergedModalityAssay <- function(SpaMTP, assays.to.merge, new.assay = "merg
 
   verbose_message(message_text = "NOTE: the matrix containing merged scaled data has been assigned to the `$counts` and `$data`slots. The `$scaled.data` slot is rescaled values ...", verbose = verbose)
 
-  SpaMTP[[new.assay]]$data <- SpaMTP[[new.assay]]$counts
-  SpaMTP[[new.assay]]$scale.data <- scale(SpaMTP[[new.assay]]$counts)
+  mergedCounts <- .assayData(SpaMTP, new.assay, "counts")
+  SpaMTP <- .setAssayData(SpaMTP, mergedCounts, new.assay, "data")
+  SpaMTP <- .setAssayData(SpaMTP, scale(mergedCounts), new.assay, "scale.data")
 
   if (!return.original){
     Seurat::DefaultAssay(SpaMTP) <- new.assay

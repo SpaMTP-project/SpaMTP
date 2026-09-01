@@ -7,7 +7,9 @@
 #' @param data SpaMTP Seurat class object containing both Spatial Transcriptomic and Metabolic data assays.
 #' @param mz Numeric string specifying the m/z to find correlated features for. One of `mz`, `gene` or `ident` must be provided, alternatives must be `NULL` (default = NULL).
 #' @param gene Character string specifying the gene to find correlated features for. One of `mz`, `gene` or `ident` must be provided, alternatives must be `NULL` (default = NULL).
-#' @param ident Character string defining the ident column in the data object's `@meta.data` slot to find correlated features for. One of `mz`, `gene` or `ident` must be provided, alternatives must be `NULL` (default = NULL).
+#' @param ident Character string defining the column in `colData()` or Seurat
+#'   cell metadata used to find correlated features. One of `mz`, `gene`, or
+#'   `ident` must be provided (default = NULL).
 #' @param SM.assay Character string specifying the name of the assay containing the spatial metabolomics (SM) data (default = "SPM").
 #' @param ST.assay Character string specifying the name of the assay containing the spatial transcriptomics (ST) data. If NULL then only metabolites will be used (Default = NULL).
 #' @param SM.slot Character string specifying the slot of the SM assay to use (default = "counts").
@@ -19,9 +21,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(FindCorrelatedFeatures))
-#' # result <- FindCorrelatedFeatures(data = SpaMTP, gene = "GeneX", nfeatures = 5)
-FindCorrelatedFeatures <- function(data, mz = NULL, gene = NULL, ident = NULL, SM.assay = "SPM", ST.assay = NULL, SM.slot = "counts", ST.slot = "counts", nfeatures = 10){
+#' utils::str(formals(findCorrelatedFeatures))
+#' # result <- findCorrelatedFeatures(data = SpaMTP, gene = "GeneX", nfeatures = 5)
+findCorrelatedFeatures <- function(data, mz = NULL, gene = NULL, ident = NULL, SM.assay = "SPM", ST.assay = NULL, SM.slot = "counts", ST.slot = "counts", nfeatures = 10){
 
   data_list <- list()
   met_counts <- data[[SM.assay]][SM.slot]
@@ -55,15 +57,16 @@ FindCorrelatedFeatures <- function(data, mz = NULL, gene = NULL, ident = NULL, S
     mz <- mz
   } else if (!is.null(ident) & is.null(gene) & is.null(mz)){ # for ident mapping
 
-    for (i in unique(data@meta.data[[ident]])){
-      data_list[[i]] <- unlist(lapply(data@meta.data[[ident]], function(x) { ifelse(x == i, TRUE, FALSE)}))
+    cellMetadata <- .cellMetadata(data)
+    for (i in unique(cellMetadata[[ident]])){
+      data_list[[i]] <- unlist(lapply(cellMetadata[[ident]], function(x) { ifelse(x == i, TRUE, FALSE)}))
     }
 
   } else {
     stop("Invalid input for 'mz = ', 'ident' = and 'gene = '... Only one inupt can be provided. Either mz, ident or gene, alternative must be set to NULL! Please check documentation ...")
   }
 
-  data_cardinal <- ConvertSeuratToCardinal(data = data, assay = SM.assay, slot = SM.slot)
+  data_cardinal <- convertSeuratToCardinal(data = data, assay = SM.assay, slot = SM.slot)
 
   if (!is.null(ident)){
     for (i in names(data_list)){
@@ -142,9 +145,9 @@ FindCorrelatedFeatures <- function(data, mz = NULL, gene = NULL, ident = NULL, S
 #' @export
 #'
 #' @examples
-#' utils::str(formals(FindSpatiallyVariableMetabolites))
-#' # SpaMTP.obj <- FindSpatiallyVariableMetabolites(SpaMTP)
-FindSpatiallyVariableMetabolites <- function(object, assay = "SPM", slot = "counts",
+#' utils::str(formals(findSpatiallyVariableMetabolites))
+#' # SpaMTP.obj <- findSpatiallyVariableMetabolites(SpaMTP)
+findSpatiallyVariableMetabolites <- function(object, assay = "SPM", slot = "counts",
                                              image = "slice1", nfeatures = 2000,
                                              max_spots = 5000, seed = 1,
                                              verbose = TRUE){
@@ -223,9 +226,9 @@ FindSpatiallyVariableMetabolites <- function(object, assay = "SPM", slot = "coun
 #' @export
 #'
 #' @examples
-#' utils::str(formals(GetSpatiallyVariableMetabolites))
-#' # features <- GetSpatiallyVariableMetabolites(SpaMTP, n = 6)
-GetSpatiallyVariableMetabolites <- function(object, assay = "SPM", n = 10){
+#' utils::str(formals(getSpatiallyVariableMetabolites))
+#' # features <- getSpatiallyVariableMetabolites(SpaMTP, n = 6)
+getSpatiallyVariableMetabolites <- function(object, assay = "SPM", n = 10){
 
   return(rownames(object[[assay]][["moransi.spatially.variable.rank"]]%>%arrange(moransi.spatially.variable.rank))[1:n])
 }

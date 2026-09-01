@@ -51,8 +51,8 @@ hiresMapping(
 A SpaMTP Seurat object with the Spatial Metabolomic data mapped to equivalent Spatial Transcripomics (Xenium) cells.
 }
 \description{
-Function used by MapSpatialOmics to align SM data to ST spots with higher resolution (i.e. Xenium cells)
+Function used by mapSpatialOmics to align SM data to ST spots with higher resolution (i.e. Xenium cells)
 }
 \examples{
-# Helper function for MapSpatialOmics
+# Helper function for mapSpatialOmics
 }

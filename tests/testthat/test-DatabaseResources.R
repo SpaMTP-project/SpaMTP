@@ -2,7 +2,7 @@ test_that("custom database resources can be used without a Hub lookup", {
   example_database <- list(
     ramp_db_metadata = list(ramp_version = "example")
   )
-  database <- LoadSpaMTPDatabase(
+  database <- loadSpaMTPDatabase(
     "ramp_db_metadata",
     database = example_database,
     refresh = TRUE
@@ -21,7 +21,7 @@ test_that("SpaMTPdb resources load from an offline staging directory", {
   fixture <- list(ramp_version = "3.0.7")
   saveRDS(fixture, file.path(staging, "ramp_db_metadata.rds"))
 
-  database <- LoadSpaMTPDatabase(
+  database <- loadSpaMTPDatabase(
     "ramp_db_metadata",
     source = "spamtpdb",
     local_dir = staging,
@@ -54,7 +54,7 @@ test_that("custom resource bundles are validated and subset", {
 
 test_that("database registry reports canonical resource names", {
   skip_if_not_installed("SpaMTPdb")
-  registry <- SpaMTPDatabaseInfo()
+  registry <- spaMTPDatabaseInfo()
   expect_s3_class(registry, "data.frame")
   expect_true("resource" %in% names(registry))
   expect_true(all(

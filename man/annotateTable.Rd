@@ -39,7 +39,7 @@ annotateTable(
 is used (or a smaller value inferred from \code{tof_resolution}). Set to zero
 for exact numerical matches.}
 
-\item{adducts}{Optional adduct names/notations; see \code{AdductRules()}. If
+\item{adducts}{Optional adduct names/notations; see \code{adductRules()}. If
 \code{NULL}, use the complete rule space selected from \code{maldi_matrix}, or all
 validated general rules for the selected polarity when no matrix is given.}
 
@@ -51,9 +51,9 @@ it can only tighten, not widen, the default 5 ppm mass-accuracy threshold.}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 
-\item{index}{Optional reusable index created by \code{BuildMZAnnotationIndex()}.}
+\item{index}{Optional reusable index created by \code{buildMZAnnotationIndex()}.}
 
-\item{rules}{Optional custom adduct rule table; see \code{AdductRules()}.}
+\item{rules}{Optional custom adduct rule table; see \code{adductRules()}.}
 
 \item{ms1_spectrum}{Optional contextual MS1 spectrum with \code{mz} and \code{intensity}
 columns for isotope and adduct-family scoring.}
@@ -74,7 +74,7 @@ rule selection. \code{adducts = NULL} keeps the complete selected rule space.}
 \item{database_version}{SpaMTPdb/RaMP version used when \code{db = NULL}.}
 
 \item{database_source}{Database source used when \code{db = NULL}; see
-\code{\link[=LoadSpaMTPDatabase]{LoadSpaMTPDatabase()}}.}
+\code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 
 \item{database_local_dir}{Optional staged SpaMTPdb resource directory.}
 
@@ -82,7 +82,7 @@ rule selection. \code{adducts = NULL} keeps the complete selected rule space.}
 features when possible, \code{"never"} disables inference, and \code{"always"}
 parses missing structures at runtime.}
 
-\item{structure_backend}{SMILES parser passed to \code{DeconvolveSMILES()}.}
+\item{structure_backend}{SMILES parser passed to \code{deconvolveSMILES()}.}
 
 \item{structure_workers}{Number of workers used for runtime SMILES parsing.}
 
@@ -93,7 +93,7 @@ during candidate-index construction.}
 Generates an intermediate annotated m/z dataframe
 }
 \description{
-Helper function for \code{AnnotateSM()} and \code{FishersPathwayAnalysis()}.
+Helper function for \code{annotateSM()} and \code{fishersPathwayAnalysis()}.
 }
 \examples{
 

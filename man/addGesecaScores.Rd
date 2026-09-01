@@ -30,7 +30,7 @@ addGesecaScores(
 SpaMTP Seurat object with added GESECA scores in metadata.
 }
 \description{
-Adds Feature Set Enrichment Score for a specific pathway to a SpaMTP Seurat object's metadata. This is a helper function for \code{PlotPathwaysSpatially}.
+Adds Feature Set Enrichment Score for a specific pathway to a SpaMTP Seurat object's metadata. This is a helper function for \code{plotPathwaysSpatially}.
 }
 \examples{
 ### HELPER FUNCTION

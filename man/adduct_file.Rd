@@ -16,17 +16,17 @@ A data frame with 47 rows and 6 variables:
 }
 }
 \usage{
-data(adduct_file)
+adduct_file
 }
 \value{
 A data frame of legacy adduct definitions.
 }
 \description{
 A small table of legacy adduct definitions retained for compatibility with
-earlier SpaMTP workflows. New annotation code should use \code{\link[=AdductRules]{AdductRules()}},
+earlier SpaMTP workflows. New annotation code should use \code{\link[=adductRules]{adductRules()}},
 which includes charge, stoichiometry, ion-mode, and chemical-validity fields.
 }
 \seealso{
-\code{\link[=AdductRules]{AdductRules()}}, \code{\link[=MALDIMatrixRules]{MALDIMatrixRules()}}
+\code{\link[=adductRules]{adductRules()}}, \code{\link[=maldiMatrixRules]{maldiMatrixRules()}}
 }
 \keyword{datasets}

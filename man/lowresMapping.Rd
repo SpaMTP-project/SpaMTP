@@ -60,8 +60,8 @@ lowresMapping(
 A SpaMTP Seurat object with the Spatial Metabolomic data mapped to equivalent Spatial Transcripomics (Visium) spots.
 }
 \description{
-Function used by MapSpatialOmics to align SM data to ST spots with lower resolution (i.e. Visium Spots)
+Function used by mapSpatialOmics to align SM data to ST spots with lower resolution (i.e. Visium Spots)
 }
 \examples{
-# Helper function for MapSpatialOmics
+# Helper function for mapSpatialOmics
 }

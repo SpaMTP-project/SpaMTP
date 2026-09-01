@@ -4,7 +4,7 @@
 #' @importFrom data.table :=
 #' @importFrom grDevices as.raster chull dev.off pdf
 #' @importFrom graphics abline arrows par points text
-#' @importFrom methods new slotNames
+#' @importFrom methods new
 #' @importFrom purrr map_dfr
 #' @importFrom sp Polygon Polygons SpatialPointsDataFrame SpatialPolygons SpatialPolygonsDataFrame over
 #' @importFrom stats as.dendrogram as.dist cor density dnorm hclust median model.matrix na.omit prcomp quantile setNames

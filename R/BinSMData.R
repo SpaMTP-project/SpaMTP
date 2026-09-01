@@ -12,9 +12,9 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(spectral_binning))
+#' utils::str(formals(spectralBinning))
 #' #Helper function for binning data in Matrix format
-spectral_binning <- function(matrix, ref, index, method = c("sum", "mean", "max", "min"), tolerance) {
+spectralBinning <- function(matrix, ref, index, method = c("sum", "mean", "max", "min"), tolerance) {
   # Ensure method is valid
   method <- match.arg(method)
 
@@ -99,13 +99,14 @@ spectral_binning <- function(matrix, ref, index, method = c("sum", "mean", "max"
 #' @export
 #'
 #' @examples
-#' utils::str(formals(BinSpaMTP))
-#' #BinSpaMTP(spamtp.obj, resolution = 10, units = "ppm", return.only.mtx = TRUE)
-BinSpaMTP <- function(data, resolution, units = "ppm", assay = "Spatial",slot = "counts", method = c("sum"), return.only.mtx = FALSE){
+#' utils::str(formals(binSpaMTP))
+#' #binSpaMTP(spamtp.obj, resolution = 10, units = "ppm", return.only.mtx = TRUE)
+binSpaMTP <- function(data, resolution, units = "ppm", assay = "Spatial",slot = "counts", method = c("sum"), return.only.mtx = FALSE){
 
   orignal_bin_size <- resolution
-  min_ref <- min(data[[assay]]@meta.data$raw_mz)
-  max_ref <- max(data[[assay]]@meta.data$raw_mz)
+  featureMetadata <- .featureMetadata(data, assay)
+  min_ref <- min(featureMetadata$raw_mz)
+  max_ref <- max(featureMetadata$raw_mz)
 
   if (units == "ppm"){
     resolution <- 1e-6 * resolution
@@ -137,15 +138,21 @@ BinSpaMTP <- function(data, resolution, units = "ppm", assay = "Spatial",slot = 
   }
 
   names(tol) <- bin_class
-  index <- data[[assay]]@meta.data$raw_mz
+  index <- featureMetadata$raw_mz
 
   if (length(ref) < length(index)){
-    mtx <- spectral_binning(matrix=as.matrix(data[[assay]][slot]), ref = ref, index = index, method = method, tolerance = tol)
-    colnames(mtx) <- rownames(data@meta.data)
+    mtx <- spectralBinning(
+      matrix = as.matrix(.assayData(data, assay, slot)),
+      ref = ref,
+      index = index,
+      method = method,
+      tolerance = tol
+    )
+    colnames(mtx) <- rownames(.cellMetadata(data))
   } else {
     warning("Bin size is too small to bin m/z values together. Currently, with a bin size of ",
             orignal_bin_size, " ", units, " No m/z values will be binned together ... The original intensity matrix will be used!")
-    mtx <- data[[assay]][slot]
+    mtx <- .assayData(data, assay, slot)
   }
 
 
@@ -157,6 +164,5 @@ BinSpaMTP <- function(data, resolution, units = "ppm", assay = "Spatial",slot = 
     return(data)
   }
 }
-
 
 

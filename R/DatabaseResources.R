@@ -153,7 +153,7 @@
 #' supplied for offline, testing, or user-curated workflows.
 #'
 #' @param resources Character vector of resource names. Use
-#'   [SpaMTPDatabaseInfo()] to list valid names.
+#'   [spaMTPDatabaseInfo()] to list valid names.
 #' @param version SpaMTPdb/RaMP resource version, or `"latest"`.
 #' @param source Database source. `"auto"` and `"spamtpdb"` resolve versioned
 #'   resources through SpaMTPdb.
@@ -168,16 +168,16 @@
 #' @export
 #'
 #' @examples
-#' utils::str(formals(LoadSpaMTPDatabase))
+#' utils::str(formals(loadSpaMTPDatabase))
 #' example_database <- list(
 #'   ramp_db_metadata = list(ramp_version = "example")
 #' )
-#' database <- LoadSpaMTPDatabase(
+#' database <- loadSpaMTPDatabase(
 #'   "ramp_db_metadata",
 #'   database = example_database
 #' )
 #' names(database)
-LoadSpaMTPDatabase <- function(
+loadSpaMTPDatabase <- function(
     resources = c(
       "chem_props", "source_df", "analyte", "analytehaspathway", "pathway"
     ),
@@ -209,12 +209,12 @@ LoadSpaMTPDatabase <- function(
 #' @export
 #'
 #' @examples
-#' utils::str(formals(SpaMTPDatabaseInfo))
-#' SpaMTPDatabaseInfo()
-SpaMTPDatabaseInfo <- function(version = NULL) {
+#' utils::str(formals(spaMTPDatabaseInfo))
+#' spaMTPDatabaseInfo()
+spaMTPDatabaseInfo <- function(version = NULL) {
   if (!requireNamespace("SpaMTPdb", quietly = TRUE)) {
     stop(
-      "SpaMTPDatabaseInfo() requires the SpaMTPdb package.",
+      "spaMTPDatabaseInfo() requires the SpaMTPdb package.",
       call. = FALSE
     )
   }
