@@ -14,14 +14,14 @@ pathwayNetworkPlots(
   SM_slot = "counts",
   ST_slot = "counts",
   colour_palette = NULL,
-  SM_assay = "SPM",
-  ST_assay = "SPT",
+  SM_assay = "main",
+  ST_assay = "transcriptome",
   analyte_types = c("genes", "metabolites"),
   annotation_source = c("current", "auto", "legacy"),
   annotation_score_threshold = NULL,
   annotation_score_floor = 0.01,
   metabolite_detection = c("leading_edge", "annotated"),
-  image = "slice1",
+  image = NULL,
   verbose = TRUE,
   top_n_pathways = 10L,
   max_nodes = 500L,
@@ -35,8 +35,8 @@ pathwayNetworkPlots(
 )
 }
 \arguments{
-\item{SpaMTP}{A \code{SpaMTP} Seurat object containing spatial metabolomics and/or
-spatial transcriptomics data. Metabolomics data must first be annotated by
+\item{SpaMTP}{A SpatialExperiment with paired transcriptomics in altExp.
+Subset to one sample before exporting. Metabolomics must be annotated by
 \code{\link[=annotateSM]{annotateSM()}}.}
 
 \item{ident}{Metadata column used to identify spatial clusters or regions.}
@@ -83,7 +83,8 @@ for interactive filtering. It is automatically lowered when the initial
 \code{"annotated"} also includes every score-filtered annotation belonging to
 the selected pathway, regardless of DE significance.}
 
-\item{image}{Spatial image/FOV passed to \code{Seurat::GetTissueCoordinates()}.}
+\item{image}{Optional image ID validated against imgData. Coordinates always
+come from spatialCoords; the optical raster is not embedded in this viewer.}
 
 \item{verbose}{Display progress messages.}
 

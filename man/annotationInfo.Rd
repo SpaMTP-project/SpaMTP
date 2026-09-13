@@ -7,7 +7,7 @@
 annotationInfo(SpaMTP)
 }
 \arguments{
-\item{SpaMTP}{A SpaMTP Seurat object.}
+\item{SpaMTP}{A SingleCellExperiment, including SpatialExperiment.}
 }
 \value{
 A named list containing annotation schema, engine, RaMP version,

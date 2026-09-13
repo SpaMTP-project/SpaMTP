@@ -2,35 +2,33 @@
 % Please edit documentation in R/PlottingSpaMTP.R
 \name{binMetabolites}
 \alias{binMetabolites}
-\title{Sums the intensity values of multiple m/z values into one}
+\title{Sum selected metabolite features per pixel}
 \usage{
 binMetabolites(
   data,
   mzs,
-  assay = "Spatial",
-  slot = "data",
+  assay = "main",
+  slot = "counts",
   bin_name = "Binned_Metabolites"
 )
 }
 \arguments{
-\item{data}{SpaMTP Seurat class object containing m/z intensities.}
+\item{data}{A SpatialExperiment or aligned Cardinal experiment.}
 
-\item{mzs}{Vector of m/z names to be binned together}
+\item{mzs}{Character feature IDs to sum. Duplicates count once.}
 
-\item{assay}{Character string indicating which Seurat object assay to pull data form (default = "Spatial").}
+\item{assay}{Primary or alternative experiment.}
 
-\item{slot}{Character string indicating the assay slot to use to pull expression values form (default = "counts").}
+\item{slot}{Expression assay.}
 
-\item{bin_name}{Character string defining the name of the meta.data column that stores the data (default = "Binned_Metabolites").}
+\item{bin_name}{Output colData column name. Existing columns are protected.}
 }
 \value{
-Binned intensity value stored in the cell metadata.
+The updated SpatialExperiment.
 }
 \description{
-This function inputs any vector of m/z values and combines their intensity values per pixel.
-This binned data is stored in the SpaMTP object's cell metadata.
+The sum is stored in colData without modifying the expression assays.
 }
 \examples{
 utils::str(formals(binMetabolites))
-# SpaMPT.obj <- binMetabolites(SpaMPT.obj, mz = c('mz-740.471557617188','mz-784.528564453125','mz-897.603637695312'), bin_name = "Lipids")
 }

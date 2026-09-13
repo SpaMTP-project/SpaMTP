@@ -2,12 +2,12 @@
 % Please edit documentation in R/PlottingSpaMTP.R
 \name{plot3DFeature}
 \alias{plot3DFeature}
-\title{Generates a 3D spatial feature plot from a SpaMTP object}
+\title{Compare two spatial features in 3D}
 \usage{
 plot3DFeature(
   data,
   features,
-  assays = c("SPT", "SPM"),
+  assays = c("transcriptome", "main"),
   slots = "counts",
   between.layer.height = 100,
   names = NULL,
@@ -22,58 +22,52 @@ plot3DFeature(
   show.image = NULL,
   plot.height = 800,
   plot.width = 1500,
-  image.sf = "lowres",
-  downscale.image = NULL
+  image.sf = NULL,
+  downscale.image = NULL,
+  sampleId = NULL
 )
 }
 \arguments{
-\item{data}{A SpaMTP Seurat Object.}
+\item{data}{A SpatialExperiment or aligned Cardinal experiment.}
 
-\item{features}{A character vector specifying the features to be plotted.}
+\item{features}{One or two feature IDs or numeric colData column names.
+A single feature is repeated for comparison across two experiments.}
 
-\item{assays}{A character vector specifying the Seurat Object assays to be used for plotting (default = c("SPT", "SPM")).}
+\item{assays}{One or two primary/altExp names.}
 
-\item{slots}{A character vector specifying the assay slots to be used for plotting (deafult = "counts").}
+\item{slots}{One or two expression assay names.}
 
-\item{between.layer.height}{A numeric value specifying the height between layers (default = 100).}
+\item{between.layer.height}{Distance between layers.}
 
-\item{names}{A character vector specifying custom names for the features. If NULL will use feature names (default = NULL).}
+\item{names}{Optional layer labels.}
 
-\item{size}{A numeric value specifying the size of markers in the plot (default = 3).}
+\item{size}{Marker size.}
 
-\item{col.palette}{Character list defining the colour palettes to use for plotting. If only 1 is supplied than it will be used for both variables. Possible palettes to use are: Blackbody,Bluered,Blues,Cividis,Earth,Electric,Greens,Greys,Hot,Jet,Picnic,Portland,Rainbow,RdBu,Reds,Viridis,YlGnBu,YlOrRd (default = "Reds").}
+\item{col.palette}{One or two Plotly colour palettes.}
 
-\item{x.axis.label}{A character string specifying the label for the x-axis (default = "x").}
+\item{x.axis.label, y.axis.label, z.axis.label}{Axis labels.}
 
-\item{y.axis.label}{A character string specifying the label for the y-axis (default = "y").}
+\item{show.x.ticks, show.y.ticks, show.z.ticks}{Show axis tick labels.}
 
-\item{z.axis.label}{A character string specifying the label for the z-axis (default = "z").}
+\item{show.image}{Optional image ID from imgData.}
 
-\item{show.x.ticks}{A logical value specifying whether to show ticks on the x-axis (default = FALSE).}
+\item{plot.height, plot.width}{Widget dimensions.}
 
-\item{show.y.ticks}{A logical value specifying whether to show ticks on the y-axis (default = FALSE).}
+\item{image.sf}{Retired Seurat scale-factor selector; must be NULL.
+The selected imgData row supplies the scaleFactor.}
 
-\item{show.z.ticks}{A logical value specifying whether to show ticks on the z-axis (default = FALSE).}
+\item{downscale.image}{Optional positive integer raster sampling stride.}
 
-\item{show.image}{Character string specifying the image name to plot. If NULL then no image is plot (default = NULL).}
-
-\item{plot.height}{Numeric value defining the height of the returned plot (default = 800).}
-
-\item{plot.width}{Numeric value defining the width of the returned plot (default = 1500).}
-
-\item{image.sf}{Character string defining the image scalefactor to use (default = "lowres").}
-
-\item{downscale.image}{Numeric value defining the amount to downscale the image by. This parameter is only necessary when show.image != NULL. Downscaling the image is not necessary, however when rendering plotly to HTML excessively large images can cause issues whereby setting a downscaling value can improve this (default = NULL).}
+\item{sampleId}{Sample ID; required when data contains multiple samples.}
 }
 \value{
-A 3D Plotly plot
+A Plotly widget.
 }
 \description{
-This function generates an interactive plotly 3D spatial plot of 2 specified features.
-These features can include a combination of metabolites and/or genes expression values, or numerical meta.data values.
-Features must be numeric values. Please see \verb{ SpaMTP Additional Features} vignette for instructions on how to plot catagorical data, or > 2 features.
+Expression comes from the primary or alternative experiment; numeric
+colData columns can also be plotted. Coordinates and images use
+SpatialExperiment accessors. Only one sample is displayed at a time.
 }
 \examples{
 utils::str(formals(plot3DFeature))
-# plot3DFeature(data = my_data, features = c("gene1", "gene2"), assays = c("SPT", "SPM"), show.image = "slice1")
 }

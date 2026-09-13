@@ -2,24 +2,26 @@
 % Please edit documentation in R/ROISelector.R
 \name{selectROIs}
 \alias{selectROIs}
-\title{Launch an Interactive ROI Annotation App for Seurat Spatial Data}
+\title{Launch an Interactive ROI Annotation App for SpatialExperiment}
 \usage{
-selectROIs(seurat_obj, image = "fov")
+selectROIs(object, sampleId = NULL, launch = TRUE)
 }
 \arguments{
-\item{seurat_obj}{A \code{Seurat} object containing spatial coordinates and metadata.}
+\item{object}{A SpatialExperiment with spatial coordinates and metadata.}
 
-\item{image}{A character string specifying the spatial image source used by \code{GetTissueCoordinates()}.
-Default is \code{"fov"}. Set to \code{"VisiumV2"} for Visium-style spatial data.}
+\item{sampleId}{The sample to select regions from; required for multiple samples.}
+
+\item{launch}{Launch the app; FALSE returns a Shiny app for embedding or testing.}
 }
 \value{
-A modified \code{Seurat} object with added metadata columns for each saved ROI (1 = inside ROI, 0 = outside).
+A SpatialExperiment with ROI columns (1 = selected, 0 = unselected
+within sample, NA = other samples), or a Shiny app if launch is FALSE.
 }
 \description{
 This function opens a Shiny app to allow users to manually annotate Regions of Interest (ROIs)
-on spatial transcriptomics or metabolomics data stored in a Seurat object. Users can interactively
+on spatial transcriptomics or metabolomics data stored in a SpatialExperiment. Users can interactively
 select regions using lasso selection, assign custom names to each ROI, and save the results as
-binary (0/1) metadata columns in the Seurat object.
+binary (0/1) columns in colData.
 }
 \details{
 The app includes options to:
@@ -27,11 +29,11 @@ The app includes options to:
 \item Choose a metadata column to display.
 \item Adjust the spot size for display.
 \item Use lasso to select spots and name each ROI.
-\item Save each ROI to the Seurat object metadata.
-\item Export the final Seurat object upon clicking "Finish".
+\item Save each ROI to colData without overwriting existing columns.
+\item Return the final SpatialExperiment upon clicking "Finish".
 }
 
-Spatial selection uses \code{sf} geometry tools. The plot is rendered using \code{plotly}.
+Selection uses the exact points returned by plotly's lasso tool.
 }
 \examples{
 utils::str(formals(selectROIs))

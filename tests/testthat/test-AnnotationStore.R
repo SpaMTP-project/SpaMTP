@@ -23,7 +23,12 @@ annotation_object_fixture <- function() {
     ),
     sparse = TRUE
   )
-  SeuratObject::CreateSeuratObject(counts = counts)
+  object <- SpatialExperiment::SpatialExperiment(
+    assays = list(counts = counts),
+    rowData = S4Vectors::DataFrame(mz = c(149.04445, 150)),
+    spatialCoords = cbind(x = 1:2, y = c(0, 1)))
+  SingleCellExperiment::mainExpName(object) <- "RNA"
+  object
 }
 
 test_that("current annotation store is preferred over legacy db_3", {

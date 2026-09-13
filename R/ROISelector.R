@@ -1,15 +1,16 @@
-#' Launch an Interactive ROI Annotation App for Seurat Spatial Data
+#' Launch an Interactive ROI Annotation App for SpatialExperiment
 #'
 #' This function opens a Shiny app to allow users to manually annotate Regions of Interest (ROIs)
-#' on spatial transcriptomics or metabolomics data stored in a Seurat object. Users can interactively
+#' on spatial transcriptomics or metabolomics data stored in a SpatialExperiment. Users can interactively
 #' select regions using lasso selection, assign custom names to each ROI, and save the results as
-#' binary (0/1) metadata columns in the Seurat object.
+#' binary (0/1) columns in colData.
 #'
-#' @param seurat_obj A \code{Seurat} object containing spatial coordinates and metadata.
-#' @param image A character string specifying the spatial image source used by \code{GetTissueCoordinates()}.
-#'        Default is \code{"fov"}. Set to \code{"VisiumV2"} for Visium-style spatial data.
+#' @param object A SpatialExperiment with spatial coordinates and metadata.
+#' @param sampleId The sample to select regions from; required for multiple samples.
+#' @param launch Launch the app; FALSE returns a Shiny app for embedding or testing.
 #'
-#' @return A modified \code{Seurat} object with added metadata columns for each saved ROI (1 = inside ROI, 0 = outside).
+#' @return A SpatialExperiment with ROI columns (1 = selected, 0 = unselected
+#'   within sample, NA = other samples), or a Shiny app if launch is FALSE.
 #'
 #' @details
 #' The app includes options to:
@@ -17,13 +18,12 @@
 #'   \item Choose a metadata column to display.
 #'   \item Adjust the spot size for display.
 #'   \item Use lasso to select spots and name each ROI.
-#'   \item Save each ROI to the Seurat object metadata.
-#'   \item Export the final Seurat object upon clicking "Finish".
+#'   \item Save each ROI to colData without overwriting existing columns.
+#'   \item Return the final SpatialExperiment upon clicking "Finish".
 #' }
 #'
-#' Spatial selection uses \code{sf} geometry tools. The plot is rendered using \code{plotly}.
+#' Selection uses the exact points returned by plotly's lasso tool.
 #'
-#' @importFrom Seurat GetTissueCoordinates
 #' @importFrom shiny shinyApp fluidPage titlePanel sidebarLayout sidebarPanel mainPanel
 #' @importFrom shiny selectInput radioButtons sliderInput textInput actionButton verbatimTextOutput
 #' @importFrom shiny plotOutput renderPlot reactiveVal runApp showNotification stopApp
@@ -33,16 +33,21 @@
 #' @examples
 #' utils::str(formals(selectROIs))
 #' @export
-selectROIs <- function(seurat_obj, image = "fov") {
+selectROIs <- function(object, sampleId = NULL, launch = TRUE) {
+  object <- .nativeSpatialObject(object)
+  coords <- .nativeCoordinates(object)
+  if (is.null(sampleId)) {
+    if (length(unique(coords$sample_id)) != 1L)
+      stop("Choose sampleId for ROI selection on multiple samples.", call. = FALSE)
+    sampleId <- unique(coords$sample_id)
+  }
+  if (length(sampleId) != 1L || !sampleId %in% coords$sample_id)
+    stop("sampleId must identify one sample in colData.", call. = FALSE)
+  selected <- which(coords$sample_id == sampleId)
+  coords <- coords[selected, , drop = FALSE]
+  meta_cols <- colnames(.cellMetadata(object))
 
-  if (!inherits(seurat_obj, "Seurat")) stop("seurat_obj must be a Seurat object")
-
-  coords <- GetTissueCoordinates(seurat_obj, image = image)
-  if (!all(c("x", "y") %in% colnames(coords))) stop("Spatial coordinates 'x' and 'y' not found")
-
-  meta_cols <- colnames(.cellMetadata(seurat_obj))
-
-  return(runApp(shinyApp(
+  app <- shinyApp(
     ui = fluidPage(
       titlePanel("Select Regions of Interest"),
       sidebarLayout(
@@ -63,13 +68,13 @@ selectROIs <- function(seurat_obj, image = "fov") {
       )
     ),
     server = function(input, output, session) {
-      rv <- reactiveVal(seurat_obj)
+      rv <- reactiveVal(object)
       roi_mask <- reactiveVal(rep(0, nrow(coords)))
 
       output$spatial_plot <- renderPlotly({
         meta_col <- input$meta_col
         plot_type <- input$plot_type
-        meta_data <- .cellMetadata(rv())[[meta_col]]
+        meta_data <- .cellMetadata(rv())[[meta_col]][selected]
         spot_size <- input$pt_size
 
         plot_ly() %>%
@@ -98,23 +103,14 @@ selectROIs <- function(seurat_obj, image = "fov") {
         sel_data <- event_data("plotly_selected")
         if (!is.null(sel_data)) {
           sel_points <- sel_data$pointNumber + 1
-          sel_coords <- coords[sel_points, ]
-          if (nrow(sel_coords) >= 3) {
-            sel_coords <- sel_coords[chull(sel_coords[, c("x", "y")]), ]
-            poly_coords <- as.matrix(rbind(sel_coords[, c("x", "y")], sel_coords[1, c("x", "y")]))
-            poly <- st_polygon(list(poly_coords))
-            poly_sf <- st_sfc(poly)
-            poly_sf <- st_make_valid(poly_sf)
-
-            points_sf <- st_as_sf(coords, coords = c("x", "y"))
-            inside <- st_within(points_sf, poly_sf, sparse = FALSE)[, 1]
-
+          sel_points <- sel_points[sel_points >= 1L & sel_points <= nrow(coords)]
+          if (length(sel_points)) {
             new_mask <- roi_mask()
-            new_mask[inside] <- 1
+            new_mask[sel_points] <- 1
             roi_mask(new_mask)
             output$status <- renderText("Points selected for ROI.")
           } else {
-            showNotification("Select at least 3 points", type = "warning")
+            showNotification("Select at least one point", type = "warning")
           }
         }
       })
@@ -126,9 +122,16 @@ selectROIs <- function(seurat_obj, image = "fov") {
           return()
         }
 
-        seurat <- rv()
-        seurat[[name]] <- roi_mask()
-        rv(seurat)
+        updated <- rv()
+        if (name %in% colnames(SummarizedExperiment::colData(updated))) {
+          showNotification("Choose a new column name; existing metadata is preserved.",
+                           type = "error")
+          return()
+        }
+        value <- rep(NA_integer_, ncol(updated))
+        value[selected] <- roi_mask()
+        SummarizedExperiment::colData(updated)[[name]] <- value
+        rv(updated)
         roi_mask(rep(0, nrow(coords)))
         output$status <- renderText(paste0("Saved ROI to metadata column: ", name))
       })
@@ -142,5 +145,6 @@ selectROIs <- function(seurat_obj, image = "fov") {
         stopApp(rv())
       })
     }
-  )))
+  )
+  if (launch) runApp(app) else app
 }

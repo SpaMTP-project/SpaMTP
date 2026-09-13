@@ -2,48 +2,55 @@
 % Please edit documentation in R/SpatialAnalysis.R
 \name{findSpatiallyVariableMetabolites}
 \alias{findSpatiallyVariableMetabolites}
-\title{Find Spatially Variable Metabolites}
+\title{Find spatially variable metabolites using Moran's I}
 \usage{
 findSpatiallyVariableMetabolites(
   object,
-  assay = "SPM",
+  assay = "main",
   slot = "counts",
-  image = "slice1",
+  image = NULL,
   nfeatures = 2000,
   max_spots = 5000,
   seed = 1,
-  verbose = TRUE
+  verbose = TRUE,
+  sampleId = NULL
 )
 }
 \arguments{
-\item{object}{SpaMTP Seurat class object contating the intensity values for each m/z}
+\item{object}{A SpatialExperiment or aligned MSImagingExperiment.}
 
-\item{assay}{Character string indicating which Seurat object assay to pull data form (default = "SPM").}
+\item{assay}{Assay name or primary/alternative experiment to analyse.}
 
-\item{slot}{Character string indicating the assay slot to use to pull expression values form (default = "counts").}
+\item{slot}{Assay containing expression values.}
 
-\item{image}{Character string defining the image to extract the tissue coordinates from (defualt = "slice1").}
+\item{image}{Retained for compatibility; coordinates use spatialCoords.}
 
-\item{nfeatures}{Numeric values defining the top number of features to mark as the top spatially variable (default = 2000).}
+\item{nfeatures}{Maximum variable features selected.}
 
-\item{max_spots}{Maximum number of spots used to construct Seurat's dense
-Moran's I distance matrix. When the object is larger, spots are sampled
-deterministically using \code{seed}. Set to \code{NULL} to use every spot (default =
-5000).}
+\item{max_spots}{Maximum pixels for the dense distance matrix; NULL uses all.}
 
-\item{seed}{Integer random seed used only when \code{max_spots} triggers
-subsampling (default = 1).}
+\item{seed}{Random seed for sampling; caller RNG state is restored.}
 
-\item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+\item{verbose}{Show progress messages.}
+
+\item{sampleId}{A sample_id in colData. Required for multiple samples.}
 }
 \value{
-Returns SpaMTP object containing the MoransI pvalue and rank stored in the assay feature meta.data
+A SpatialExperiment with statistics, BH-adjusted p-values, flags and
+ranks in rowData of the selected experiment. Settings and sampled pixel
+IDs are stored in metadata(object)$moransi.
 }
 \description{
-Finds metabolites that display strong spatial patterns using MoransI.
-Each m/z value is ranked by MoransI score and the results are stored in the SpaMTP Seurat Object feature metadata.
+Calls ape::Moran.I with inverse squared Euclidean distance weights and zero
+diagonal, row-standardized by ape. Samples are analysed separately.
+Constant features return NA.
 }
 \examples{
-utils::str(formals(findSpatiallyVariableMetabolites))
-# SpaMTP.obj <- findSpatiallyVariableMetabolites(SpaMTP)
+x <- SpatialExperiment::SpatialExperiment(
+  assays = list(counts = rbind(a = 1:6, b = c(1, 3, 5, 2, 4, 6))),
+  rowData = S4Vectors::DataFrame(mz = c(100, 200)),
+  spatialCoords = cbind(x = 1:6, y = 0),
+  colData = S4Vectors::DataFrame(row.names = paste0("p", 1:6)))
+x <- findSpatiallyVariableMetabolites(x)
+getSpatiallyVariableMetabolites(x)
 }

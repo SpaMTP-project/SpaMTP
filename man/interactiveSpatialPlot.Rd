@@ -2,32 +2,35 @@
 % Please edit documentation in R/PlottingSpaMTP.R
 \name{interactiveSpatialPlot}
 \alias{interactiveSpatialPlot}
-\title{Interactive Spatial Plot for visualising different m/z bin sizes}
+\title{Interactively inspect mass windows in a spatial experiment}
 \usage{
 interactiveSpatialPlot(
   obj,
-  assay = "Spatial",
+  assay = "main",
   slot = "counts",
-  image = "slice1"
+  image = NULL,
+  sampleId = NULL
 )
 }
 \arguments{
-\item{obj}{SpaMTP object containing the intensity data to plot.}
+\item{obj}{A SpatialExperiment or aligned Cardinal experiment.}
 
-\item{assay}{Character defining the Seurat object assay to extract the intensity data from (default = "Spatial").}
+\item{assay}{Primary or alternative experiment.}
 
-\item{slot}{Character defining the Seurat object assay slot to extract the intensity data from (default = "counts").}
+\item{slot}{Expression assay.}
 
-\item{image}{Character defining the the name of the image to use for tissue coordinates and spatial plotting (default = "slice1").}
+\item{image}{Optional image ID from imgData.}
+
+\item{sampleId}{Optional sample ID. NULL displays separate sample panels.}
 }
 \value{
-A Shiny application object.
+A Shiny application object; use shiny::runApp to launch.
 }
 \description{
-This function implements a shinyApp for interactive viusalisation of the samples mean mass intensity spectra.
-Users can adjust the resolution/bin size and observe changes in spatial expression respectively.
+The app sums every measured feature within the selected mass window without
+changing the input assays or annotations. The mass-axis controls use rowData
+masses, never mean intensities. No browser is launched by this function.
 }
 \examples{
 utils::str(formals(interactiveSpatialPlot))
-#interactiveSpatialPlot(spamtp)
 }

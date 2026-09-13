@@ -6,7 +6,7 @@
 \usage{
 runDE(
   pooled_data,
-  seurat_data,
+  data,
   ident,
   output_dir,
   run_name,
@@ -21,7 +21,7 @@ runDE(
 \arguments{
 \item{pooled_data}{A SingleCellExperiment object which contains the pooled pseudo-replicate data.}
 
-\item{seurat_data}{A Seurat object containing the merged Xenium data being analysed (this is subset).}
+\item{data}{A Bioconductor experiment containing the merged Xenium data being analysed (this is subset).}
 
 \item{ident}{A character string defining the ident column to perform differential expression analysis against.}
 
@@ -33,7 +33,7 @@ runDE(
 
 \item{logFC_threshold}{A numeric value indicating the logFC threshold to use for defining significant genes (default = 1.2).}
 
-\item{annotation.column}{Character string defining the column where annotation information is stored in the assay metadata. This requires AnnotateSeuratMALDI() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").}
+\item{annotation.column}{Character string defining the column where annotation information is stored in the assay metadata. This requires annotateSM() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").}
 
 \item{assay}{A character string defining the assay where the mz count data and annotations are stored (default = "Spatial").}
 
@@ -50,6 +50,4 @@ This function is used by by \code{findAllDEMs()}.
 }
 \examples{
 utils::str(formals(runDE))
-# pooled_obj <- runPooling(SeuratObj, "sample", n = 3)
-# runDE(pooled_obj, SeuratObj, "sample", "~/Documents/DE_output/", "run_1", n = 3, logFC_threshold = 1.2, annotation.column = "all_IsomerNames", assay = "Spatial")
 }

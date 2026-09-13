@@ -1,36 +1,35 @@
 #### SpaMTP m/z Annotation Functions #####################################################################################################################################################################################
 
-#' Subset a SpaMTP Seurat Spatial Metabolomic object by a list of m/z's
+#' Subset a Bioconductor experiment by a list of m/z's
 #'
-#' @param data A Seurat Spatial Metabolomic Object for subsetting.
+#' @param data A Bioconductor experiment for subsetting.
 #' @param features A list of character strings defining the features/mz values to subset against.
-#' @param assay A character string identifying the Seurat assay which contains the count data being subset.
+#' @param assay A character string identifying the primary or alternative experiment which contains the count data being subset.
 #'
-#' @returns A subset Seurat object containing only m/z values that were specified
+#' @returns A subset Bioconductor experiment containing only m/z values that were specified
 #' @export
 #'
 #' @examples
 #' utils::str(formals(subsetMZFeatures))
-#' # subsetMZFeatures(SeuratObj, c("mz-160","mz-170","mz-180"))
-subsetMZFeatures <- function(data, features, assay = "Spatial"){
-  feature.metadata <- .featureMetadata(data, assay)
-  sub.data <- subset(data, features = features)
-
-  keep <- match(rownames(sub.data[[assay]]), feature.metadata[["mz_names"]])
-  .setFeatureMetadata(sub.data, feature.metadata[keep, , drop = FALSE], assay)
+subsetMZFeatures <- function(data, features, assay = "main"){
+  experiment <- .experimentForAssay(data, assay)
+  features <- as.character(features)
+  if (anyNA(features) || anyDuplicated(features) ||
+      !all(features %in% rownames(experiment))) {
+    stop("features must be unique names in the selected experiment.", call. = FALSE)
+  }
+  .replaceExperiment(data, experiment[features, , drop = FALSE], assay)
 }
 
 
 
 #' Filters the annotation list to only include the first n number of annotations per m/z
 #'
-#' @param annotation_column Vector of the meta.data column containing the m/z annotations.
+#' @param annotation_column Vector from the `rowData()` column containing m/z annotations.
 #' @param n Numeric value defining the number of annotations to keep (default = 3).
 #'
 #' @return Vector containing the first n number of annotations
 #'
-#' @examples
-#' # labels_to_show(SeuratObject[["Spatial"]][[]]$annotations, n = 3)
 labels_to_show <- function(annotation_column, n = 3) {
   new_column <- sapply(strsplit(annotation_column, "; "), function(x) {
     # Filter out NA values and select the first three entries
@@ -49,13 +48,13 @@ labels_to_show <- function(annotation_column, n = 3) {
 #' Versioned RaMP, HMDB, LIPID MAPS, ChEBI, and GNPS resources are provided by
 #' SpaMTPdb and can be combined with user-supplied reference tables.
 #'
-#' @param data Seurat Spatial Metabolomic Object containing m/z values for annotation.
+#' @param data Bioconductor experiment containing m/z values for annotation.
 #' @param db Reference metabolite dataset in the form of a data.frame. When
 #'   `NULL`, the versioned SpaMTPdb `chem_props` table is used, unless a
 #'   pre-built `index` is supplied through `...`. Versioned resources are loaded
 #'   from SpaMTPdb and may be staged locally for offline use.
-#' @param assay Character string defining the Seurat assay which contains the mz counts being annotated (default = "Spatial").
-#' @param raw.mz.column Character string naming the feature-metadata column containing raw m/z values without the `mz-` prefix. This is created by `cardinalToSeurat()` (default = "raw_mz").
+#' @param assay Character string defining the primary or alternative experiment which contains the mz counts being annotated (default = "Spatial").
+#' @param raw.mz.column Character string naming the feature-metadata column containing raw m/z values without the `mz-` prefix. This is created by `cardinalToSpatialExperiment()` (default = "raw_mz").
 #' @param ppm_error Mass tolerance in ppm. If `NULL`, a strict 5 ppm maximum
 #'   is used (or a smaller value inferred from `tof_resolution`). Set to zero
 #'   for exact numerical matches.
@@ -68,10 +67,10 @@ labels_to_show <- function(annotation_column, n = 3) {
 #' @param tof_resolution Instrument resolving power retained for compatibility;
 #'   it can only tighten, not widen, the default 5 ppm mass-accuracy threshold.
 #' @param filepath Character string of the directory to store the _annotated_mz_peaks.csv. If set to NULL no dataframe will be saved (default = NULL).
-#' @param return.only.annotated Boolean value indicating if the annotated Seurat Object should only include m/z values that were successfully annotated (default = TRUE).
+#' @param return.only.annotated Boolean value indicating if the annotated Bioconductor experiment should only include m/z values that were successfully annotated (default = TRUE).
 #' @param save.intermediate Boolean indicating whether to store the scored
 #'   annotation result and its pipeline/RaMP provenance in
-#'   `SeuratObject::Misc(data, slot = "mz_annotation")`. A compatibility copy
+#'   `S4Vectors::metadata(data)$mz_annotation`. A compatibility copy
 #'   is retained under the `db_3` key (default = TRUE).
 #' @param min_score Minimum annotation score retained in the stored candidate
 #'   table. The default `0` keeps all ppm-valid candidates so downstream
@@ -91,18 +90,15 @@ labels_to_show <- function(annotation_column, n = 3) {
 #'   `infer_structure`, `structure_backend`, `structure_workers`, or
 #'   `min_structure_score`.
 #'
-#' @returns A Seurat Object with m/z values annotated. These annotations are stored in the relative assay's meta.data (e.g. SeuratObj`[["Spatial"]][[]]`)
+#' @returns A Bioconductor experiment with m/z values annotated. These annotations are stored in the selected experiment's rowData().
 #' @export
 #'
 #' @examples
 #' utils::str(formals(annotateSM))
 #' # HMDB_db <- load("data/HMDB_1_names.rds")
-#' # Annotated_SeuratObj <- annotateSM(SeuratObj, HMDB_db)
-annotateSM <- function(data, db = NULL, assay = "Spatial", raw.mz.column = "raw_mz", ppm_error = NULL, adducts = NULL, polarity = NULL, tof_resolution = 30000, filepath = NULL, return.only.annotated = TRUE, save.intermediate = TRUE, min_score = 0, verbose = TRUE, maldi_matrix = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL, ...){
+annotateSM <- function(data, db = NULL, assay = "main", raw.mz.column = "raw_mz", ppm_error = NULL, adducts = NULL, polarity = NULL, tof_resolution = 30000, filepath = NULL, return.only.annotated = TRUE, save.intermediate = TRUE, min_score = 0, verbose = TRUE, maldi_matrix = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL, ...){
 
-  if (!assay %in% .assayNames(data)) {
-    stop(paste0("No assay '",assay,"'exists in SpaMTP object! Please check assay name input ..."))
-  }
+  experiment <- .experimentForAssay(data, assay)
 
   annotation_args <- list(...)
   supplied_index <- annotation_args$index
@@ -136,6 +132,13 @@ annotateSM <- function(data, db = NULL, assay = "Spatial", raw.mz.column = "raw_
   ## Extract m/z values from assay feature metadata.
   featureMetadata <- .featureMetadata(data, assay)
   mzValues <- featureMetadata[[raw.mz.column]]
+  if (is.null(mzValues)) {
+    mzValues <- .massValues(featureMetadata, rownames(experiment))
+  }
+  if (!is.numeric(mzValues) || length(mzValues) != nrow(experiment) ||
+      any(!is.finite(mzValues))) {
+    stop("Annotation requires one finite numeric m/z value per feature.", call. = FALSE)
+  }
   mz_df <- data.frame(row_id = seq_along(mzValues), mz = mzValues)
 
   db_3 <- annotateTable(mz_df= mz_df, db = db, ppm_error = ppm_error, adducts = adducts, polarity = polarity,tof_resolution = tof_resolution,verbose = verbose, min_score = min_score, maldi_matrix = maldi_matrix, ...)
@@ -188,7 +191,7 @@ annotateSM <- function(data, db = NULL, assay = "Spatial", raw.mz.column = "raw_
     data.table::fwrite(db_3, path)
   }
 
-  verbose_message(message_text = "Adding annotations to Seurat Object .... ", verbose = verbose)
+  verbose_message(message_text = "Adding annotations to rowData .... ", verbose = verbose)
 
   result_df <- db_3 %>%
     dplyr::group_by(observed_mz) %>%
@@ -203,43 +206,16 @@ annotateSM <- function(data, db = NULL, assay = "Spatial", raw.mz.column = "raw_
       all_Ramp_IDs = paste(unique(.data$Ramp_IDs[!is.na(.data$Ramp_IDs)]), collapse = "; ")
     )
   result_df <- data.frame(result_df)
-  annotated_mz_names <- if (nrow(result_df)) {
-    paste0("mz-", result_df$observed_mz)
-  } else {
-    character()
+  matched <- match(mzValues, result_df$observed_mz)
+  featureMetadata$mz_names <- rownames(experiment)
+  for (column in setdiff(colnames(result_df), "observed_mz")) {
+    value <- result_df[[column]][matched]
+    value[is.na(value)] <- "No Annotation"
+    featureMetadata[[column]] <- value
   }
-  rownames(result_df) <- annotated_mz_names
-
-  result_df$mz_names <- annotated_mz_names
-
-  featureMetadata <- .featureMetadata(data, assay)
-  featureMetadata[["mz_names"]] <- rownames(data[[assay]])
-
-
-  result_df$present <- rep(TRUE, nrow(result_df))
-
-
-  # Perform left join and replace NAs with "No Annotation"
-  feature_metadata <- featureMetadata %>%
-    dplyr::left_join(result_df, by = "mz_names") %>%
-    dplyr::mutate(dplyr::across(dplyr::everything(), ~ifelse(is.na(.), "No Annotation", .)))
-
-  feature_metadata <- dplyr::select(feature_metadata, -present)
-
-  data <- .setFeatureMetadata(data, feature_metadata, assay)
-  if (return.only.annotated == TRUE){
-
-    verbose_message(message_text = "Returning Seurat object that include ONLY SUCCESSFULLY ANNOTATED m/z features", verbose = verbose)
-
-    if(length(.assayNames(data)) != 1){
-      features = c()
-      for(non_met_assay in .assayNames(data)[.assayNames(data) != assay]){
-        features =  c(features, rownames(data[[non_met_assay]]))
-      }
-      data <- suppressWarnings({subsetMZFeatures(data, assay = assay, features = c(result_df$mz_names, features))})
-    }else{
-      data <- suppressWarnings({subsetMZFeatures(data, assay = assay, features = result_df$mz_names)})
-    }
+  data <- .setFeatureMetadata(data, featureMetadata, assay)
+  if (isTRUE(return.only.annotated)) {
+    data <- subsetMZFeatures(data, rownames(experiment)[!is.na(matched)], assay)
   }
 
   return(data)
@@ -480,23 +456,21 @@ annotateTable <- function(mz_df, db = NULL, ppm_error = NULL, adducts = NULL,
 #' Refines and reduces m/z annotations
 #'
 #' Used to subset dataset to only include annotations that have n number of entries.
-#' For example some peaks can have multiple annotations. Peaks which have above n number of annotations assigned will be removed from Seurat Object.
+#' For example some peaks can have multiple annotations. Peaks which have above n number of annotations assigned will be removed from Bioconductor experiment.
 #'
-#' @param obj Seurat object needing annotation refinement. The selected assay
+#' @param obj Bioconductor experiment needing annotation refinement. The selected assay
 #'   must contain annotations in its feature metadata.
-#' @param assay Character string defining the Seurat object assay where the annotation data is stored (default = "Spatial").
+#' @param assay Character string defining the Bioconductor experiment assay where the annotation data is stored (default = "Spatial").
 #' @param n Integer defining the number of entries an annotation can have assigned. Any higher counts will be removed (default = 1).
 #'
-#' @return Refined Seurat object that only contains annotated mz values that have n number of annotations assigned (per mz value)
+#' @return Refined Bioconductor experiment that only contains annotated mz values that have n number of annotations assigned (per mz value)
 #' @export
 #'
 #' @examples
 #' utils::str(formals(getRefinedAnnotations))
 #' # HMDB_db <- load("data/HMDB_1_names.rds")
-#' # AnnotatedSeuratObj <- AnnotateSeuratMALDI(SeuratObj, HMDB_db)
 #'
-#' # getRefinedAnnotations(AnnotatedSeuratObj, n = 2)
-getRefinedAnnotations <- function(obj, assay = "Spatial",n = 1){
+getRefinedAnnotations <- function(obj, assay = "main",n = 1){
   n <- n-1
   subset.metadata <- .featureMetadata(obj, assay) %>% dplyr::filter(stringr::str_count(all_IsomerNames, ";") %in% c(0:n))
   subset.obj <- subsetMZFeatures(data = obj, features = subset.metadata$mz_names,assay = assay)
@@ -531,9 +505,9 @@ add_backslashes_to_specialfeatures <- function(input_string) {
 #'
 #' Searches through annotated m/z values to return all which contain the metabolite search term provided
 #'
-#' @param data Seurat Spatial Metabolomic Object containing annotated m/z values.
+#' @param data Bioconductor experiment containing annotated m/z values.
 #' @param metabolite Character string of metabolite search term.
-#' @param assay Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
+#' @param assay Character string defining the primary or alternative experiment that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
 #' @param search.exact Boolean value defining if to only return m/z values which contain the exact match to the metabolite search term (default = FALSE).
 #' @param column.name Character string defining the feature-metadata column where annotations are stored (default = "all_IsomerNames").
 #'
@@ -542,12 +516,13 @@ add_backslashes_to_specialfeatures <- function(input_string) {
 #'
 #' @examples
 #' utils::str(formals(searchAnnotations))
-#' # searchAnnotations(SeuratObj, "Glucose", search.exact = TRUE)
-searchAnnotations <- function (data, metabolite, assay = "Spatial",search.exact = FALSE, column.name = "all_IsomerNames"){
+searchAnnotations <- function (data, metabolite, assay = "main",search.exact = FALSE, column.name = "all_IsomerNames"){
 
   ## Takes into account '( )' in the string name
   search_term <- add_backslashes_to_specialfeatures(metabolite)
   feature_metadata <- .featureMetadata(data, assay)
+  if (!"mz_names" %in% names(feature_metadata))
+    feature_metadata$mz_names <- rownames(feature_metadata)
 
   if (!column.name %in% names(feature_metadata)) {
     compatible_columns <- c(
@@ -565,25 +540,24 @@ searchAnnotations <- function (data, metabolite, assay = "Spatial",search.exact 
       )
       if (!is.null(annotations) &&
           all(c("observed_mz", "IsomerNames") %in% names(annotations))) {
+        if (!"mz_name" %in% names(annotations)) {
+          masses <- .massValues(feature_metadata, feature_metadata$mz_names)
+          annotations$mz_name <- feature_metadata$mz_names[
+            match(annotations$observed_mz, masses)]
+        }
         annotation_labels <- annotations %>%
-          dplyr::group_by(observed_mz) %>%
+          dplyr::group_by(mz_name) %>%
           dplyr::summarise(
             .annotation_search = paste(unique(IsomerNames), collapse = "; "),
             .groups = "drop"
           )
-        annotation_labels$mz_names <- paste0(
-          "mz-", annotation_labels$observed_mz
-        )
-        if (!"mz_names" %in% names(feature_metadata)) {
-          feature_metadata$mz_names <- SeuratObject::Features(
-            data, assay = assay
-          )
-        }
+        annotation_labels$mz_names <- annotation_labels$mz_name
         feature_metadata <- dplyr::left_join(
           feature_metadata,
           annotation_labels[c("mz_names", ".annotation_search")],
           by = "mz_names"
         )
+        rownames(feature_metadata) <- feature_metadata$mz_names
         column.name <- ".annotation_search"
       } else {
         stop(
@@ -612,16 +586,15 @@ searchAnnotations <- function (data, metabolite, assay = "Spatial",search.exact 
 
 #' Finds if any metabolite is duplicated across multiple m/z values.
 #'
-#' @param data Seurat Spatial Metabolomic Object containing annotated m/z values.
-#' @param assay Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
+#' @param data Bioconductor experiment containing annotated m/z values.
+#' @param assay Character string defining the primary or alternative experiment that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
 #'
 #' @return Vector of character strings describing metabolites that are assigned to multiple m/z values
 #' @export
 #'
 #' @examples
 #' utils::str(formals(findDuplicateAnnotations))
-#' # findDuplicateAnnotations(SeuratObj)
-findDuplicateAnnotations <- function (data, assay = "Spatial"){
+findDuplicateAnnotations <- function (data, assay = "main"){
   all_annotations <- .featureMetadata(data, assay)$all_IsomerNames
   all_terms <- unlist(strsplit(all_annotations, ";"))
   all_terms <- trimws(all_terms)
@@ -631,9 +604,9 @@ findDuplicateAnnotations <- function (data, assay = "Spatial"){
 
 #' Gets values from a single metadata column for a respective m/z value.
 #'
-#' @param obj SpaMTP Spatial Metabolomic Seurat Object containing annotated m/z values.
+#' @param obj Bioconductor experiment containing annotated m/z values.
 #' @param mz Character string specifying the m/z value to return the metadata for.
-#' @param assay Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
+#' @param assay Character string defining the primary or alternative experiment that contains the annotated metadata corresponding to the m/z values (default = "Spatial").
 #' @param metadata.column Character string corresponding to the assay feature
 #'   metadata column to extract (default = "all_IsomerNames").
 #' @param separate Boolean indicating whether to separate the metadata string and return a vector. Note, if `TRUE` the metadata column should contain values separate by "; " (default = TRUE).
@@ -648,7 +621,7 @@ findDuplicateAnnotations <- function (data, assay = "Spatial"){
 #'
 #' ##### Example for getting metabolite annotation IDs for a m/z value
 #' # getMZMetadata(SpaMTP, mz = "mz-100", metadata.column = "all_Isomers")
-getMZMetadata <- function(obj, mz, assay = "Spatial", metadata.column = "all_IsomerNames", separate = TRUE){
+getMZMetadata <- function(obj, mz, assay = "main", metadata.column = "all_IsomerNames", separate = TRUE){
   df <- .featureMetadata(obj, assay)
   mz_row <- df[df$mz_names == mz,metadata.column]
   if (separate){
@@ -842,7 +815,6 @@ formula_filter <- function(df, elements = NULL) {
 #' @return A list containing the lower and upper mz range for the provided sample
 #'
 #' @examples
-#' # mz_df <- SeuratObject`[["Spatial"]][["mz"]]`
 #' # mz_df$row_id <- seq(1, length(mz_df$mz))
 #'
 #' # mass_range <- calculate_bounds(mz_df)
@@ -920,7 +892,6 @@ ppm_range_match <- function(observed_mz, reference_mz, ppm) {
 #'
 #' @examples
 #' # HMDB_db <- load("data/HMDB_1_names.rds")
-#' # mz_df <- SeuratObject[["Spatial"]][["mz"]]
 #' # mz_df$row_id <- seq(1, length(mz_df$mz))
 #'
 #' ## 1) Filter DB by adduct.
@@ -1036,81 +1007,60 @@ proc_db <- function(observed_df,
 #'
 #' Adds custom metabolite annotations to respective m/z values (ideal for specific matrices such as FMP10).
 #'
-#' @param data SpaMTP Seurat object containing m/z intensity values.
+#' @param data Bioconductor experiment containing m/z intensity values.
 #' @param annotations data.frame containing two columns named 'annotation' and 'mass'. These columns should contain the custom metabolite annotation and the relative m/z mass respectively.
-#' @param assay Character string defining the Seurat object assay to store the respective annotations in the feature meta.data dataframe (default = "Spatial").
-#' @param return.only.annotated Boolean defining whether to return a SpaMTP Seurat object containing only successfully annotated m/z values (default = FALSE).
+#' @param assay Primary or alternative experiment whose `rowData()` receives
+#'   the annotations (default = "main").
+#' @param return.only.annotated Boolean defining whether to return a Bioconductor experiment containing only successfully annotated m/z values (default = FALSE).
 #' @param mass.threshold Numeric value defining the acceptable threshold (plus-minus) between the custom annotations and the actual m/z values contained within the SpaMTP object (default = 0.05).
-#' @param annotation.column Character string defining the feature meta.data column name that will contain the assigned annotations (default = "all_IsomerNames").
+#' @param annotation.column Name of the `rowData()` column receiving annotations
+#'   (default = "all_IsomerNames").
 #'
-#' @return SpaMTP Seurat object containing the custom annotations stored in the feature metadata dataframe.
+#' @return Bioconductor experiment containing the custom annotations stored in the feature metadata dataframe.
 #' @export
 #'
 #' @examples
 #' utils::str(formals(addCustomMZAnnotations))
 #' # annotated_data <- addCustomMZAnnotations(SpaMTP.obj, annotation.df)
-addCustomMZAnnotations <- function(data, annotations, assay = "Spatial", return.only.annotated = FALSE, mass.threshold = 0.05, annotation.column = "all_IsomerNames"){
-
-  if (!all(c("annotation", "mass") %in% colnames(annotations))) {
-    stop("Error: The annotation columns provided does not match the required format. Must bet 'annotation' and 'mass'")
+addCustomMZAnnotations <- function(data, annotations, assay = "main", return.only.annotated = FALSE, mass.threshold = 0.05, annotation.column = "all_IsomerNames"){
+  experiment <- .experimentForAssay(data, assay)
+  if (!all(c("annotation", "mass") %in% colnames(annotations)) ||
+      !is.numeric(annotations$mass) || any(!is.finite(annotations$mass))) {
+    stop("annotations must contain annotation and finite numeric mass columns.", call. = FALSE)
   }
-
-  true_mzs <- c()
-  for (mass in annotations$mass){
-    true_mz <- findNearestMZ(data, mass, assay = assay)
-    true_mzs <- c(true_mzs,true_mz)
+  if (!is.null(mass.threshold) && (length(mass.threshold) != 1L ||
+      !is.finite(mass.threshold) || mass.threshold < 0)) {
+    stop("mass.threshold must be NULL or a finite non-negative number.", call. = FALSE)
   }
-
-  annotations$mz_names <- true_mzs
-  annotations$true_mzs <- gsub("mz-", "", annotations$mz_names)
-  annotations$ppm_diff <- abs(annotations$mass - as.numeric(annotations$true_mzs))
-
-  if (!is.null(mass.threshold)){
-    annotations <- annotations %>% dplyr::filter(ppm_diff < mass.threshold)
+  if (length(annotation.column) != 1L || is.na(annotation.column) ||
+      !nzchar(annotation.column) || annotation.column %in% c("mz", "raw_mz", "mz_names")) {
+    stop("annotation.column must not replace the feature mass or identifier.", call. = FALSE)
   }
-
-  annotations <- annotations %>% dplyr::rename(!!annotation.column := annotation)
-  annotations <- annotations %>%
-    dplyr::group_by(mz_names) %>%
-    dplyr::summarise(
-      across(
-        everything(),  # Apply to all columns
-        ~ paste(unique(.), collapse = "; ")  # For each column, collapse unique values into a single string
-      )
-    )
-
-  # Re-annotation should replace stale feature-level annotation columns rather
-  # than creating .x/.y suffixes on objects serialized by older releases.
-  feature_metadata <- .featureMetadata(data, assay)
-  replacement_columns <- setdiff(
-    intersect(names(feature_metadata), names(annotations)),
-    "mz_names"
-  )
-  feature_metadata[replacement_columns] <- NULL
-  feature_metadata <- feature_metadata %>%
-    dplyr::left_join(annotations, by = "mz_names") %>%
-    dplyr::mutate(dplyr::across(dplyr::everything(), ~tidyr::replace_na(.x, "No Annotation")))
-  data <- .setFeatureMetadata(data, feature_metadata, assay)
-
-
-  if (return.only.annotated == TRUE){
-
-    feature_metadata <- .featureMetadata(data, assay)
-    annotated_mzs <- feature_metadata$mz_names[feature_metadata[[annotation.column]] != "No Annotation"]
-    #verbose_message(message_text = "Returning Seurat object that include ONLY SUCCESSFULLY ANNOTATED m/z features", verbose = verbose)
-
-    if(length(.assayNames(data)) != 1){
-      features = c()
-      for(non_met_assay in .assayNames(data)[.assayNames(data) != assay]){
-        features =  c(features, rownames(data[[non_met_assay]]))
-      }
-      data <- suppressWarnings({subsetMZFeatures(data, assay = assay, features = c(annotated_mzs, features))})
-    }else{
-      data <- suppressWarnings({subsetMZFeatures(data, assay = assay, features = annotated_mzs)})
+  featureData <- .featureMetadata(data, assay)
+  masses <- .massValues(featureData, rownames(experiment))
+  matched <- vapply(annotations$mass, function(mass) which.min(abs(masses - mass)), integer(1))
+  difference <- abs(annotations$mass - masses[matched])
+  keep <- if (is.null(mass.threshold)) rep(TRUE, length(matched)) else difference < mass.threshold
+  annotations$true_mzs <- masses[matched]
+  annotations$ppm_diff <- difference
+  annotations[[annotation.column]] <- as.character(annotations$annotation)
+  if (annotation.column != "annotation") annotations$annotation <- NULL
+  groups <- split(which(keep), matched[keep])
+  featureData$mz_names <- rownames(experiment)
+  for (column in setdiff(colnames(annotations), c("mz", "raw_mz", "mz_names"))) {
+    featureData[[column]] <- rep("No Annotation", nrow(experiment))
+    for (index in names(groups)) {
+      value <- annotations[[column]][groups[[index]]]
+      featureData[[column]][as.integer(index)] <-
+        paste(unique(value[!is.na(value)]), collapse = "; ")
     }
   }
-
-  return(data)
+  data <- .setFeatureMetadata(data, featureData, assay)
+  if (isTRUE(return.only.annotated)) {
+    selected <- sort(unique(matched[keep]))
+    data <- subsetMZFeatures(data, rownames(experiment)[selected], assay)
+  }
+  data
 }
 
 
@@ -1118,20 +1068,22 @@ addCustomMZAnnotations <- function(data, annotations, assay = "Spatial", return.
 #'
 #' Adds metabolite annotations to respective m/z values generated using an FMP10 matrix. This is done based on a curated FMP10 matrix database.
 #'
-#' @param obj SpaMTP Seurat object containing m/z intensity values for annotation. Data should be generated with a FMP10 matrix.
+#' @param obj Bioconductor experiment containing m/z intensity values for annotation. Data should be generated with a FMP10 matrix.
 #' @param only.fmp.adduct Boolean indicating if only metabolites with FMP10+ adducts (`+FMP10`, +`2FMP10`, etc.) should be assigned to m/z values (default = FALSE).
 #' @param add.custom.annotation data.frame containing addition FMP10 metabolite annotations that are not in the current FMP10 database. Note: this data.frame must contain these column c("mass", "annotation", "Adduct", "Formula", "Isomers", "Isomers_IDs"). If set to NULL, only reference FMP10 database will be used (default = NULL).
-#' @param assay Character string defining the Seurat object assay to store the respective annotations in the feature meta.data dataframe (default = "Spatial").
-#' @param return.only.annotated Boolean defining whether to return a SpaMTP Seurat object containing only successfully annotated m/z values (default = FALSE).
+#' @param assay Primary or alternative experiment whose `rowData()` receives
+#'   the annotations (default = "main").
+#' @param return.only.annotated Boolean defining whether to return a Bioconductor experiment containing only successfully annotated m/z values (default = FALSE).
 #' @param mass.threshold Numeric value defining the acceptable threshold (plus-minus) between the custom annotations and the actual m/z values contained within the SpaMTP object (default = 0.05).
-#' @param annotation.column Character string defining the feature meta.data column name that will contain the assigned annotations (default = "all_IsomerNames").
+#' @param annotation.column Name of the `rowData()` column receiving annotations
+#'   (default = "all_IsomerNames").
 #' @param database Optional named list of database resources, normally created
 #'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for annotation lookup.
 #' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
-#' @return SpaMTP Seurat object containing the relative metabolite annotations stored in the feature metadata dataframe.
+#' @return Bioconductor experiment containing the relative metabolite annotations stored in the feature metadata dataframe.
 #' @export
 #'
 #' @examples
@@ -1139,7 +1091,7 @@ addCustomMZAnnotations <- function(data, annotations, assay = "Spatial", return.
 #' # addFMP10Annotations(spamtp, only.fmp.adduct = FALSE)
 addFMP10Annotations <- function(obj,  only.fmp.adduct = FALSE,
                                 add.custom.annotation = NULL,
-                                assay = "Spatial",
+                                assay = "main",
                                 return.only.annotated = FALSE,
                                 mass.threshold = 0.05,
                                 annotation.column = "all_IsomerNames",
@@ -1197,13 +1149,11 @@ addFMP10Annotations <- function(obj,  only.fmp.adduct = FALSE,
   feature_matches <- data.frame(
     mz_names = as.character(featureMetadata$mz_names),
     mass = as.character(featureMetadata$mass),
+    observed_mz = .massValues(featureMetadata, rownames(featureMetadata)),
     stringsAsFactors = FALSE
   )
   feature_matches <- tidyr::separate_rows(feature_matches, mass, sep = "\\s*;\\s*")
   feature_matches$mass <- suppressWarnings(as.numeric(feature_matches$mass))
-  feature_matches$observed_mz <- suppressWarnings(
-    as.numeric(sub("^mz-", "", feature_matches$mz_names))
-  )
   feature_matches <- unique(feature_matches[
     is.finite(feature_matches$mass) & is.finite(feature_matches$observed_mz),
     c("mass", "observed_mz"),
@@ -1247,17 +1197,14 @@ addFMP10Annotations <- function(obj,  only.fmp.adduct = FALSE,
       all_Scores = paste(round(Score, 4), collapse = "; "),
       .groups = "drop"
     )
-  annotation_summary$mz_names <- paste0("mz-", annotation_summary$observed_mz)
-  annotation_summary$observed_mz <- NULL
-  featureMetadata <- .featureMetadata(obj, assay) %>%
-    dplyr::select(-dplyr::any_of(c("all_Ramp_IDs", "all_Scores"))) %>%
-    dplyr::left_join(annotation_summary, by = "mz_names") %>%
-    dplyr::mutate(
-      dplyr::across(
-        dplyr::all_of(c("all_Ramp_IDs", "all_Scores")),
-        ~ tidyr::replace_na(.x, "No Annotation")
-      )
-    )
+  featureMetadata <- .featureMetadata(obj, assay)
+  matched <- match(.massValues(featureMetadata, rownames(featureMetadata)),
+                   annotation_summary$observed_mz)
+  for (column in c("all_Ramp_IDs", "all_Scores")) {
+    value <- annotation_summary[[column]][matched]
+    value[is.na(value)] <- "No Annotation"
+    featureMetadata[[column]] <- value
+  }
 
   featureMetadata$observed_mz <- featureMetadata$mass
   featureMetadata$all_Isomers <- featureMetadata$Isomers
@@ -1351,7 +1298,7 @@ addFMP10Annotations <- function(obj,  only.fmp.adduct = FALSE,
 #' Annotates vector of m/z values
 #'
 #' This function assigns each valid m/z peak with one/multiple metabolite names based on the mass difference between the observed value and the theoretical value documented in the reference database.
-#' This function is to be used when dealing with large datasets as a preprocessing step. Users can annotate m/z values first and then subset their data accordinly before loading it into a SpaMTP Seurat Object.
+#' This function is to be used when dealing with large datasets as a preprocessing step. Users can annotate m/z values first and then subset their data accordinly before loading it into a Bioconductor experiment.
 #'
 #' @param mzs Vector containing m/z values for annotation.
 #' @param db Reference metabolite dataset in the form of a data.frame. SpaMTP
@@ -1387,7 +1334,6 @@ addFMP10Annotations <- function(obj,  only.fmp.adduct = FALSE,
 #' #mzs <- data.frame(Cardinal::featureData(cardinal))$mz
 #' #results <- annotateBigData(mzs, db = HMDB_db, ppm_error = 3, adducts = c("M-H", "M+Cl"), polarity = "negative")
 #' #cardinal_subset <- Cardinal::subset(cardinal, mz %in% results$observed_mz)
-#' #SpaMTP_data <- cardinalToSeurat(cardinal_subset)
 annotateBigData <- function(mzs, db = NULL, ppm_error = NULL, adducts = NULL,
                             polarity = NULL, tof_resolution = 30000,
                             verbose = TRUE, maldi_matrix = NULL,

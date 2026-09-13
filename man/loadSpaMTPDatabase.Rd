@@ -12,7 +12,8 @@ loadSpaMTPDatabase(
   local_dir = NULL,
   hub = NULL,
   offline = FALSE,
-  refresh = FALSE
+  refresh = FALSE,
+  verify = TRUE
 )
 }
 \arguments{
@@ -34,12 +35,17 @@ supplied, no Hub lookup is performed.}
 \item{offline}{If \code{TRUE}, do not query AnnotationHub.}
 
 \item{refresh}{If \code{TRUE}, bypass SpaMTP's in-session resource cache.}
+
+\item{verify}{Verify local resource files against the SpaMTPdb registry.
+Defaults to \code{TRUE}. Set to \code{FALSE} only for intentional development
+fixtures; use \code{database} for a named custom bundle instead of presenting
+modified resources as an official snapshot.}
 }
 \value{
 A named list containing the requested resources.
 }
 \description{
-Loads a coherent group of annotation resources from \link[SpaMTPdb:SpaMTPdb-package]{SpaMTPdb::SpaMTPdb}. Retrieved
+Loads a coherent group of annotation resources from \link[SpaMTPdb:SpaMTPdb]{SpaMTPdb}. Retrieved
 resources are cached for the current R session. A named custom bundle can be
 supplied for offline, testing, or user-curated workflows.
 }

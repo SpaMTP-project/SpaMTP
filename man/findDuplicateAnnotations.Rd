@@ -4,12 +4,12 @@
 \alias{findDuplicateAnnotations}
 \title{Finds if any metabolite is duplicated across multiple m/z values.}
 \usage{
-findDuplicateAnnotations(data, assay = "Spatial")
+findDuplicateAnnotations(data, assay = "main")
 }
 \arguments{
-\item{data}{Seurat Spatial Metabolomic Object containing annotated m/z values.}
+\item{data}{Bioconductor experiment containing annotated m/z values.}
 
-\item{assay}{Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").}
+\item{assay}{Character string defining the primary or alternative experiment that contains the annotated metadata corresponding to the m/z values (default = "Spatial").}
 }
 \value{
 Vector of character strings describing metabolites that are assigned to multiple m/z values
@@ -19,5 +19,4 @@ Finds if any metabolite is duplicated across multiple m/z values.
 }
 \examples{
 utils::str(formals(findDuplicateAnnotations))
-# findDuplicateAnnotations(SeuratObj)
 }

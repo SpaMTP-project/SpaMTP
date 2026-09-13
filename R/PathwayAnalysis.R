@@ -383,12 +383,12 @@ fishersPathwayAnalysis <- function (Analyte,
 #'
 #' This the function used to compute the gene/metabolites set enrichment for multi-omics spatial data
 #'
-#' @param SpaMTP A SpaMTP Seurat object contains spatial metabolomics(SM)/transcriptomics(ST) data or both, if contains SM data, it should be annotated via SpaMTP::annotateSM function.
+#' @param SpaMTP A Bioconductor experiment contains spatial metabolomics(SM)/transcriptomics(ST) data or both, if contains SM data, it should be annotated via SpaMTP::annotateSM function.
 #' @param ident A character scalar specifying the region column in cell metadata.
 #' @param DE.list A list consisting of differential expression data.frames for each input modality. Within each data.frame column names MUST include 'cluster', 'gene', ('avg_log2FC' or 'logFC') and ('p_val_adj' or 'FDR').
 #' @param analyte_types Vector of character strings defining which analyte types to use. Options can be c("genes"), c("metabolites") or both (default = c("genes", "metabolites")).
-#' @param SM_assay A Character string defining describing slot name for spatial metabolomics data in SpaMTP to extract intensity values from (default = "SPM").
-#' @param ST_assay A Character string defining describing slot name for spatial transcriptomics data in SpaMTP to extract RNA count values from (default = "SPT").
+#' @param SM_assay Primary MSI experiment name (default = "main").
+#' @param ST_assay Paired transcriptome altExp name (default = "transcriptome").
 #' @param SM_slot The slot name containing the SM assay matrix data (default = "counts").
 #' @param ST_slot The slot name containing the ST assay matrix data (default = "counts").
 #' @param min_path_size The min number of metabolites in a specific pathway (default = 5).
@@ -423,8 +423,8 @@ findRegionalPathways = function(SpaMTP,
                                 ident,
                                 DE.list,
                                 analyte_types = c("genes", "metabolites"),
-                                SM_assay = "SPM",
-                                ST_assay = "SPT",
+                                SM_assay = "main",
+                                ST_assay = "transcriptome",
                                 SM_slot = "counts",
                                 ST_slot = "counts",
                                 min_path_size = 5,
@@ -465,7 +465,7 @@ findRegionalPathways = function(SpaMTP,
   cluster = levels(cluster_vector)
   ## Checks for data in SM and/or ST assay
   if ("genes" %in% analyte_types) {
-    st_obj = SpaMTP[[ST_assay]][ST_slot]
+    st_obj <- .assayData(SpaMTP, ST_assay, ST_slot)
     if (is.null(st_obj)) {
       stop(
         paste0(
@@ -486,7 +486,7 @@ findRegionalPathways = function(SpaMTP,
     }
   }
   if ("metabolites" %in% analyte_types) {
-    sm_obj = SpaMTP[[SM_assay]][SM_slot]
+    sm_obj <- .assayData(SpaMTP, SM_assay, SM_slot)
     if (is.null(sm_obj)) {
       stop(
         paste0(
@@ -714,7 +714,6 @@ findRegionalPathways = function(SpaMTP,
 #'
 #' @examples
 #' utils::str(formals(runRAMPGeseca))
-#' # E <- SeuratObject::Loadings(SpaMTP, reduction = "pca.rev")
 #' # sig_pathways <- runRAMPGeseca(E, minSize=15, maxSize=500)
 runRAMPGeseca <- function(E,
                           minSize     = 1,
@@ -757,9 +756,9 @@ runRAMPGeseca <- function(E,
 
 #' Create a Pathway Assay from Gene or Metabolite Data
 #'
-#' This function creates a new assay within the provided SpaMTP Seurat object which contains features (either genes or metabolites) labeled by their respective RAMP ID. This assay can be used for running feature set co-regulation analysis (based on GSCA; \doi{10.1093/bioinformatics/btp502}).
+#' This function creates a new assay within the provided Bioconductor experiment which contains features (either genes or metabolites) labeled by their respective RAMP ID. This assay can be used for running feature set co-regulation analysis (based on GSCA; \doi{10.1093/bioinformatics/btp502}).
 #'
-#' @param SpaMTP A SpaMTP Seurat object containing either spatial metabolic or transcriptomic data
+#' @param SpaMTP A Bioconductor experiment containing either spatial metabolic or transcriptomic data
 #' @param analyte_type Character string specifying the type of analytes to process.Must be either "genes" or "metabolites" (default = "metabolites").
 #' @param assay Character string specifying the name of the assay to use as source data (default = "Spatial").
 #' @param slot Character string specifying which slot in the assay to use as source data (default = "counts").
@@ -782,7 +781,6 @@ runRAMPGeseca <- function(E,
 #' @importFrom dplyr mutate group_by summarise ungroup
 #' @importFrom tidyr separate_rows
 #' @importFrom data.table as.data.table
-#' @importFrom SeuratObject CreateAssay5Object
 #'
 #' @examples
 #' utils::str(formals(createPathwayAssay))
@@ -792,6 +790,8 @@ runRAMPGeseca <- function(E,
 #' ## Create a pathway assay from gene data with verbose output
 #' #spamtp_obj <- createPathwayAssay(spamtp_obj, analyte_type = "genes", assay = "SPT", new_assay = "gene_pathway", verbose = TRUE)
 createPathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Spatial", slot = "counts", new_assay = "pathway", annotation_score_threshold = 0.05, annotation_source = c("current", "auto", "legacy"), verbose = TRUE, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
+  .requireExperiment(SpaMTP, "SingleCellExperiment")
+
 
   annotation_source <- match.arg(annotation_source)
   database_resources <- .spamtp_db_bundle(
@@ -869,7 +869,7 @@ createPathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
       ### Adding DE Results
       db_3 <- db_3[c("mz_name",  "ramp_id")]
       db_3 <- db_3 %>% distinct()
-      matrix$mz_name <- rownames(SpaMTP[[assay]])
+      matrix$mz_name <- rownames(assayMatrix)
       matrix = merge(db_3 , matrix, by = "mz_name")
 
       meta.data <- matrix[c("ramp_id" ,"mz_name")] %>%
@@ -893,44 +893,37 @@ createPathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
   }
 
 
-  matrix <- data.table::as.data.table(matrix)
-
-  if(length(dupe_list) > 0){
-
-    verbose_message(message_text = paste0("Some RAMP_IDs have multiple mapped analytes. There are: ",
-                                         length(names(dupe_list))) , verbose = verbose)
-
-    # Select rows using 'dupe_list' indices
-    merged_data <- matrix[unlist(dupe_list),]
-
-    # Compute mean for numeric columns by 'ramp_id'
-    merged_data <- merged_data[, lapply(.SD, mean, na.rm = TRUE), by = rampId]
-
-
-    matrix <- matrix[!rownames(matrix) %in% unlist(unname(dupe_list)),]
-
-    matrix <- rbind(matrix,  merged_data)
-
+  # Aggregate by explicit RaMP IDs, never by data.table row names. Select
+  # expression columns in their original order after database joins.
+  identifiers <- unique(matrix$rampId)
+  if (!length(identifiers)) {
+    stop("No features map to RaMP IDs in the selected database.", call. = FALSE)
   }
-
-  rownames(matrix) <- matrix$rampId
-  matrix$rampId <- NULL
-
-
-  SpaMTP[[new_assay]] <- SeuratObject::CreateAssay5Object(counts = matrix)
-
-  message("Warning: Restoring feature names to contain '_' ...")
-
-  # Manually restore underscores
-  rownames(SpaMTP[[new_assay]]) <- gsub("-", "_", x = rownames(SpaMTP[[new_assay]]))
-
+  values <- as.matrix(matrix[, colnames(assayMatrix), drop = FALSE])
+  storage.mode(values) <- "numeric"
+  if (any(!is.finite(values))) {
+    stop("RaMP aggregation requires finite expression values.", call. = FALSE)
+  }
+  group <- match(matrix$rampId, identifiers)
+  weights <- Matrix::sparseMatrix(
+    i = group, j = seq_along(group),
+    x = 1 / tabulate(group, length(identifiers))[group],
+    dims = c(length(identifiers), nrow(values)))
+  pathwayMatrix <- weights %*% values
+  dimnames(pathwayMatrix) <- list(identifiers, colnames(assayMatrix))
   pathwayMetadata <- data.frame(
-    rampId = rownames(SpaMTP[[new_assay]]),
-    row.names = rownames(SpaMTP[[new_assay]])
+    rampId = rownames(pathwayMatrix),
+    row.names = rownames(pathwayMatrix)
   )
   pathwayMetadata <- merge(pathwayMetadata, meta.data, by = "rampId", all = TRUE)
   rownames(pathwayMetadata) <- pathwayMetadata$rampId
-  SpaMTP <- .setFeatureMetadata(SpaMTP, pathwayMetadata, new_assay)
+  pathwayMetadata <- pathwayMetadata[rownames(pathwayMatrix), , drop = FALSE]
+
+  pathwayExperiment <- SingleCellExperiment::SingleCellExperiment(
+    assays = list(counts = pathwayMatrix),
+    rowData = S4Vectors::DataFrame(pathwayMetadata)
+  )
+  SingleCellExperiment::altExp(SpaMTP, new_assay) <- pathwayExperiment
 
 
   return(SpaMTP)
@@ -943,35 +936,37 @@ createPathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
 
 
 
-#' Create a SpaMTP Seurat Object containing expression values for all present pathways
+#' Store pathway scores in an alternative experiment
 #'
 #' This function computes pathway-level scores from analyte-level expression data
-#' and stores the results as a new assay in a Seurat object. Each pathway score
-#' is calculated as the scaled mean expression of the analytes associated with
-#' that pathway, adjusted by the square root of the pathway size.
+#' and stores them in altExp for SingleCellExperiment-derived objects.
+#' Each score is the sum of matched expression divided by the square root
+#' of the matched feature count, then centred and scaled across pixels.
+#' Constant scores are zero; unmatched pathways are removed or stored as NA.
 #'
-#' @param object A SpaMTP Seurat object containing the expression data.
-#' @param assay Character. Name of the assay to extract analyte expression from. If no value is assigned, the DefaultAssay of the SpaMTP Seurat Object will be used (default = `DefaultAssay(object)`).
-#' @param slot Character. Which data slot to use (e.g., "scale.data") (default = "scale.data").
+#' @param object A SingleCellExperiment (including SpatialExperiment) with expression
+#'   features indexed by RaMP IDs.
+#' @param assay Primary or alternative experiment to score.
+#' @param slot Expression assay. If omitted for a Bioconductor container,
+#'   prefers logcounts, normcounts, then counts in the selected experiment.
 #' @param new.assay Character. Name of the new assay where pathway scores will be stored (defaults = "pathway").
-#' @param remove.nans Logical. Whether to remove pathways with all NaN values (e.g., no matched analytes) (defaults = TRUE).
+#' @param remove.nans Remove pathways without matched analytes (default TRUE).
 #' @param database Optional named list of database resources, normally created
 #'   by [loadSpaMTPDatabase()].
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
 #' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
-#' @return A SpaMTP Seurat object with a new assay containing pathway-level expression scores.
-#'         Feature names are adjusted to use underscores instead of dashes.
+#' @return The input with pathwayScores in a new alternative experiment.
+#'   Pathway identifiers are preserved.
 #'
 #' @export
 #'
 #' @examples
 #' utils::str(formals(createPathwayObject))
-#' #object <- createPathwayObject(seurat_obj, assay = "RNA", slot = "scale.data")
 createPathwayObject <- function(object,
-                                assay=SeuratObject::DefaultAssay(object),
-                                slot = "scale.data",
+                                assay = NULL,
+                                slot = "logcounts",
                                 new.assay = "pathway",
                                 remove.nans = TRUE,
                                 database = NULL,
@@ -979,6 +974,8 @@ createPathwayObject <- function(object,
                                 database_source = c("auto", "spamtpdb"),
                                 database_local_dir = NULL
 ) {
+  .requireExperiment(object, "SingleCellExperiment")
+
 
   database_resources <- .spamtp_db_bundle(
     c("analytehaspathway", "pathway"),
@@ -994,39 +991,46 @@ createPathwayObject <- function(object,
   pathway_db <- split(chempathway$rampId, chempathway$pathwayRampId)
   pathway_db <- pathway_db[!duplicated(tolower(names(pathway_db)))]
 
+  if (methods::is(object, "SummarizedExperiment") && missing(slot)) {
+    slot <- .integrationAssay(.experimentForAssay(object, assay))
+  }
   E <- .assayData(object, assay, slot)
 
   pathway_sums <- list()
   for (i in seq_along(pathway_db)) {
     pathway <- pathway_db[[i]]
     pathway <- intersect(unique(pathway), rownames(E))
-    score <- colSums(E[pathway, , drop=FALSE])/sqrt(length(pathway))
-    score <- scale(score, center=TRUE, scale=TRUE)
+    if (!length(pathway)) {
+      if (remove.nans) next
+      score <- rep(NA_real_, ncol(object))
+    } else {
+      score <- .pathwayScores(list(pathway), object, assay, slot)[, 1L]
+    }
     pathway_sums[[names(pathway_db)[i]]] <- score
   }
 
+  if (!length(pathway_sums)) {
+    stop("No pathways contain features from the selected assay.", call. = FALSE)
+  }
   pathway_mtx <- do.call(cbind, pathway_sums)
-  colnames(pathway_mtx) <- names(pathway_db)
+  colnames(pathway_mtx) <- names(pathway_sums)
 
   pathway_mtx <- t(pathway_mtx)
 
-  if (remove.nans){
-    nan_rows <- apply(pathway_mtx, 1, function(row) all(is.nan(row)))
-    pathway_mtx <- pathway_mtx[!nan_rows,]
-  }
-
-  object[[new.assay]] <- SeuratObject::CreateAssay5Object(counts = pathway_mtx)
-
-  message("Warning: Restoring feature names to contain '_' ...")
-
-  rownames(object[[new.assay]]) <- gsub(pattern = "-", replacement = "_", x = rownames(object[[new.assay]]))
+  colnames(pathway_mtx) <- colnames(object)
 
   pathwayMetadata <- chempathway %>%
-    filter(pathwayRampId %in% rownames(object[[new.assay]])) %>%
+    filter(pathwayRampId %in% rownames(pathway_mtx)) %>%
     select(pathwayRampId, pathwayName) %>%
     distinct()
   rownames(pathwayMetadata) <- pathwayMetadata$pathwayRampId
-  object <- .setFeatureMetadata(object, pathwayMetadata, new.assay)
+  pathwayMetadata <- pathwayMetadata[rownames(pathway_mtx), , drop = FALSE]
+
+  pathwayExperiment <- SingleCellExperiment::SingleCellExperiment(
+    assays = list(pathwayScores = pathway_mtx),
+    rowData = S4Vectors::DataFrame(pathwayMetadata)
+  )
+  SingleCellExperiment::altExp(object, new.assay) <- pathwayExperiment
 
   return(object)
 }

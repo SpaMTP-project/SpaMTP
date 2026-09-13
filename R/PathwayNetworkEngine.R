@@ -651,19 +651,7 @@
 }
 
 .pn_layer_data <- function(object, assay, layer) {
-  assay_object <- object[[assay]]
-  value <- tryCatch(
-    SeuratObject::LayerData(assay_object, layer = layer),
-    error = function(e) NULL
-  )
-  if (is.null(value)) {
-    value <- tryCatch(
-      SeuratObject::GetAssayData(object, assay = assay, layer = layer),
-      error = function(e) NULL
-    )
-  }
-  if (is.null(value)) stop("Unable to read layer '", layer, "' from assay '", assay, "'.")
-  value
+  .nativeExpression(object, assay, layer)
 }
 
 .pn_coordinate_columns <- function(coordinates) {
@@ -705,7 +693,9 @@
                                 gene_de, metabolite_de,
                                 gene_matrix = NULL, metabolite_matrix = NULL,
                                 max_spatial_points = 50000L) {
-  coordinates <- as.data.frame(Seurat::GetTissueCoordinates(object, image = image))
+  object <- .nativeSingleSample(object)
+  coordinates <- .nativeCoordinates(object)
+  if (!is.null(image)) .nativeImage(object, image, unique(object$sample_id))
   columns <- .pn_coordinate_columns(coordinates)
   x <- suppressWarnings(as.numeric(coordinates[[columns[["x"]]]]))
   y <- suppressWarnings(as.numeric(coordinates[[columns[["y"]]]]))

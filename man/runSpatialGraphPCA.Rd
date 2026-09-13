@@ -7,8 +7,8 @@
 runSpatialGraphPCA(
   data,
   n_components = 50,
-  assay = "Spatial",
-  slot = "scale.data",
+  assay = "main",
+  slot = "scaled",
   image = NULL,
   platform = "Visium",
   lambda = 0.5,
@@ -22,15 +22,15 @@ runSpatialGraphPCA(
 )
 }
 \arguments{
-\item{data}{A SpaMTP Seurat object containing spatial data (feature data and spatial coordinates).}
+\item{data}{A Bioconductor experiment containing spatial data (feature data and spatial coordinates).}
 
 \item{n_components}{Integer specifying the number of principal components to compute (default = 50).}
 
-\item{assay}{Character string defining the name of the assay to use data from (default = "Spatial").}
+\item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Character string defining the name of the slot to extract scaled data from (default = "scale.data").}
+\item{slot}{Character string defining the name of the slot to extract scaled data from (default = "scaled").}
 
-\item{image}{Character string matching the name of the image to use for extracting spatial coordinates (default = NULL).}
+\item{image}{Reserved; must be NULL. Subset pixels before running graph PCA.}
 
 \item{platform}{Character string matching either \code{"Visium"} or \code{"ST"} to determine how the k-NN graph is constructed. If "Visium" k-nns will handle the hexagon spot arrangement, including setting \code{n_neighbors} = 6, else "ST" assignment will set \code{n_neighbors} = 4 unless a value is specifically provided (default = "Visium").}
 
@@ -51,10 +51,10 @@ runSpatialGraphPCA(
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 }
 \value{
-A SpaMTP Seurat object with a new graph and spatially-aware PCA reduction.
+A Bioconductor experiment with a new graph and spatially-aware PCA reduction.
 }
 \description{
-Computes a graph-regularised PCA using spatial coordinates and scaled expression data. A k-nearest neighbour (k-NN) graph is computed using spatial locations and used to regularise the PCA decomposition via a graph Laplacian. The result is available through \code{SeuratObject::Reductions()}.
+Computes a graph-regularised PCA using spatial coordinates and scaled expression data. A k-nearest neighbour (k-NN) graph is computed using spatial locations and used to regularise the PCA decomposition via a graph Laplacian. The result is stored in reducedDim(), with spatial edges in colPairs().
 }
 \details{
 Note: This method has been adapted from the GraphPCA Python package

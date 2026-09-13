@@ -1,117 +1,241 @@
-#' Normalizes m/z intensity data stored in a SpaMTP Seurat Object
+#' Normalize spatial metabolomics intensity data
 #'
-#' This function can be used for normalising data already stored in a SpaMTP Seurat Object.
-#' Normalisation methods include total ion count (TIC), log normalisation and counts per million (RC).
+#' SingleCellExperiment methods store the result in the standard `normcounts` or
+#' `logcounts` assays. Cardinal input delegates TIC normalization to Cardinal
+#' and remains file-backed. Convert Seurat inputs explicitly before analysis.
+#' Cardinal normalization follows Cardinal's deferred-processing model;
+#' queued steps are executed by Cardinal::process(), binSpaMTP(), or conversion
+#' of an aligned experiment to SpatialExperiment.
 #'
-#' @param data Seurat Object to be normalized.
+#' @param data A SingleCellExperiment (including SpatialExperiment), Cardinal
+#'   MSImagingArrays/MSImagingExperiment.
 #' @param normalisation.type Character string defining the normalization method to run. Options are either c("TIC", "LogNormalize", "RC") which represent Total Ion Current (TIC) normalization, Log Normalization or counts per million (RC), respectively (default = "TIC").
 #' @param scale.factor Numeric value that sets the scale factor for pixel/spot level normalization. Following normalization the total intensity value across each pixel will equal this value. If scale.factor = NULL, TIC normalization will use a scale factor = number of m/z and Log Normalisation will use a scale factor = 10000 (default = NULL).
-#' @param assay Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").
-#' @param slot  Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").
+#' @param assay Primary (`main`) or alternative experiment name.
+#' @param slot Expression assay name within the selected experiment.
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
-#' @return A Seurat Object with intensity values normalized. Normalized data is stored in the $data slot of the specified assay
+#' @return An object of the same container family with normalized values.
 #' @export
 #'
 #' @examples
 #' utils::str(formals(normalizeSMData))
-#' # normalised_data <- normalizeSMData(SeuratObject)
-normalizeSMData <- function(data, normalisation.type = 'TIC', scale.factor = NULL, assay = "Spatial", slot = "counts", verbose = TRUE) {
-
-  if (is.null(normalisation.type)) {
-    stop("Error: no normalisation.type is select. Please enter either 'LogNormalize' or 'TIC'")
+methods::setGeneric(
+  "normalizeSMData",
+  function(
+      data,
+      normalisation.type = "TIC",
+      scale.factor = NULL,
+      assay = "main",
+      slot = "counts",
+      verbose = TRUE
+  ) {
+    methods::standardGeneric("normalizeSMData")
   }
+)
 
-  if (!(normalisation.type == "TIC" | normalisation.type == "LogNormalize"| normalisation.type == "RC")) {
-    stop("Error: incorrect normalisation.type is select. Please enter either 'LogNormalize', 'TIC' or 'RC'")
-  }
-
-  if (is.null(scale.factor)) {
-    scale.factor <- 10000
-  }
-
-
-  if (normalisation.type == 'TIC') {
-    scale.factor <- length(rownames(data))
-    normalisation.type <- "RC"
-  }
-
-  normalised.data <- Seurat::NormalizeData(data, normalization.method = normalisation.type, scale.factor = scale.factor, assay = assay, verbose = verbose)
-
-  return(normalised.data)
-
+.normalizationType <- function(normalisation.type) {
+  match.arg(normalisation.type, c("TIC", "LogNormalize", "RC"))
 }
+
+#' @rdname normalizeSMData
+#' @export
+methods::setMethod(
+  "normalizeSMData",
+  "SingleCellExperiment",
+  function(
+      data,
+      normalisation.type = "TIC",
+      scale.factor = NULL,
+      assay = "main",
+      slot = "counts",
+      verbose = TRUE
+  ) {
+    normalisation.type <- .normalizationType(normalisation.type)
+    counts <- .assayData(data, assay = assay, layer = slot)
+    if (!nrow(counts) || !ncol(counts) || any(!is.finite(counts)) || any(counts < 0)) {
+      stop("Normalization requires non-empty, finite, non-negative intensities.",
+           call. = FALSE)
+    }
+    if (is.null(scale.factor)) {
+      scale.factor <- if (identical(normalisation.type, "TIC")) {
+        nrow(counts)
+      } else {
+        10000
+      }
+    }
+    if (!is.numeric(scale.factor) || length(scale.factor) != 1L ||
+        !is.finite(scale.factor) || scale.factor <= 0) {
+      stop("scale.factor must be one positive finite number.", call. = FALSE)
+    }
+    experiment <- .experimentForAssay(data, assay)
+    librarySizes <- Matrix::colSums(counts)
+    sizeFactors <- librarySizes / scale.factor
+    sizeFactors[!is.finite(sizeFactors) | sizeFactors <= 0] <- 1
+    transform <- if (identical(normalisation.type, "LogNormalize")) {
+      "log"
+    } else {
+      "none"
+    }
+    normalized <- counts %*% Matrix::Diagonal(x = 1 / sizeFactors)
+    if (identical(transform, "log")) {
+      normalized <- log1p(normalized)
+    }
+    outputName <- if (identical(transform, "log")) "logcounts" else "normcounts"
+    SummarizedExperiment::assay(experiment, outputName, withDimnames = FALSE) <- normalized
+    if (methods::is(experiment, "SingleCellExperiment")) {
+      SingleCellExperiment::sizeFactors(experiment) <- sizeFactors
+    }
+    S4Vectors::metadata(experiment)$spamtp_normalization <- list(
+      method = normalisation.type,
+      source_assay = slot,
+      output_assay = outputName,
+      scale_factor = scale.factor
+    )
+    verbose_message(
+      paste0("Stored ", normalisation.type, " values in assay `", outputName, "`."),
+      verbose = verbose
+    )
+    .replaceExperiment(data, experiment, assay)
+  }
+)
+
+#' @rdname normalizeSMData
+#' @export
+methods::setMethod(
+  "normalizeSMData",
+  "MSImagingExperiment",
+  function(
+      data,
+      normalisation.type = "TIC",
+      scale.factor = NULL,
+      assay = "main",
+      slot = "counts",
+      verbose = TRUE
+  ) {
+    .normalizeCardinal(data, normalisation.type, scale.factor, verbose)
+  }
+)
+
+.normalizeCardinal <- function(data, normalisation.type, scale.factor, verbose) {
+  normalisation.type <- .normalizationType(normalisation.type)
+  if (!identical(normalisation.type, "TIC") || !is.null(scale.factor)) {
+    stop(
+      "Cardinal input supports TIC with Cardinal's default scaling only. ",
+      "For RC, LogNormalize, or a custom scale.factor, bin the Cardinal ",
+      "object and convert it to SpatialExperiment first.",
+      call. = FALSE)
+  }
+  Cardinal::normalize(data, method = "tic", verbose = verbose)
+}
+
+#' @rdname normalizeSMData
+#' @export
+methods::setMethod(
+  "normalizeSMData", "MSImagingArrays",
+  function(data, normalisation.type = "TIC", scale.factor = NULL,
+           assay = "main", slot = "counts", verbose = TRUE) {
+    .normalizeCardinal(data, normalisation.type, scale.factor, verbose)
+  }
+)
+
+#' @rdname normalizeSMData
+#' @export
+methods::setMethod(
+  "normalizeSMData",
+  "ANY",
+  function(
+      data,
+      normalisation.type = "TIC",
+      scale.factor = NULL,
+      assay = "main",
+      slot = "counts",
+      verbose = TRUE
+  ) {
+    .requireExperiment(data, "SingleCellExperiment")
+  }
+)
 
 #' Performs TMM normalization between categories based on a specified ident
 #'
-#' This function is mainly used for normalising a merged SpaMTP Seurat Object containing multiple samples.
+#' This function is mainly used for normalising a merged Bioconductor experiment containing multiple samples.
 #'
-#' @param combined.obj Seurat object that contains groups being normalized.
+#' @param combined.obj Bioconductor experiment that contains groups being normalized.
 #' @param ident Character string defining the column name or ident group to normalize between.
 #' @param refIdent Character string specifying one class/group type to use as a reference for TMM normalisation.
 #' @param normalisation.type Character string defining the normalization method to run. Options are either c("CPM", "TIC", "LogNormalize") which represent counts per million (CPM), Total Ion Current (TIC) normalization or Log Normalization, respectively (default = "CPM").
 #' @param CPM.scale.factor Numeric value that sets the scale factor for pixel/spot level normalization. Following normalization the total intensity value across each pixel will equal this value (default = 1e6).
-#' @param assay Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").
-#' @param slot  Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").
+#' @param assay Primary (`main`) or alternative experiment name.
+#' @param slot Expression assay name within the selected experiment.
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = FALSE).
 #'
-#' @return Seurat object with count values normalised and corrected for between categories
+#' @return Bioconductor experiment with count values normalised and corrected for between categories
 #' @export
 #'
 #' @examples
 #' utils::str(formals(tmmNormalize))
-#' # norm.data <- tmmNormalize(SeuratObj, ident = "samples", refIdent = "sample1", normalisation.type = "CPM")
-tmmNormalize <- function(combined.obj, ident, refIdent, normalisation.type = "CPM", CPM.scale.factor = 1e6, assay = "Spatial", slot = "counts", verbose = FALSE) {
-
-  data_list <- list()
-  Seurat::Idents(combined.obj) <- ident
-  if (length(unique(Seurat::Idents(combined.obj))) <= 1){
-    stop("Specified ident has 0 or 1 catagory in seurat object. Length of Idents must be > 1 for TMM (between sample) normalisation factors to be calculated")
-
+tmmNormalize <- function(combined.obj, ident, refIdent, normalisation.type = "CPM", CPM.scale.factor = 1e6, assay = "main", slot = "counts", verbose = FALSE) {
+  .requireExperiment(combined.obj, "SummarizedExperiment")
+  normalisation.type <- match.arg(normalisation.type, c("CPM", "TIC", "LogNormalize"))
+  if (length(CPM.scale.factor) != 1L || !is.finite(CPM.scale.factor) ||
+      CPM.scale.factor <= 0) {
+    stop("CPM.scale.factor must be one positive finite number.", call. = FALSE)
   }
-
-
-  if (!(refIdent %in% unique(Seurat::Idents(combined.obj)))){
-    stop("The refIdent supplied is not present in the ident column. Please specify a group that is found within the ident column specififed")
+  metadata <- .cellMetadata(combined.obj)
+  if (!ident %in% colnames(metadata)) {
+    stop("Grouping column `", ident, "` was not found in colData.", call. = FALSE)
   }
-
-
-  if (normalisation.type == "CPM") {
-    normalisation.type <- "RC"
+  groups <- factor(metadata[[ident]])
+  if (anyNA(groups)) stop("The grouping column must not contain missing values.",
+                         call. = FALSE)
+  if (nlevels(groups) <= 1L) {
+    stop("TMM normalization requires at least two groups.", call. = FALSE)
   }
-
-  if (normalisation.type == "TIC") {
-    normalisation.type <- "RC"
-    CPM.scale.factor <- length(rownames(combined.obj))
+  if (!refIdent %in% levels(groups)) {
+    stop("`refIdent` is not present in the grouping column.", call. = FALSE)
   }
-
-
-  for (name in unique(Idents(combined.obj))){
-
-        sub <- subsetSPM(combined.obj, idents = name, verbose = verbose)
-
-    data_list[[name]] <- sub
+  counts <- .assayData(combined.obj, assay, slot)
+  if (!nrow(counts) || any(!is.finite(counts)) || any(counts < 0)) {
+    stop("TMM requires finite, non-negative intensities.", call. = FALSE)
   }
-
-  df <- data.frame(mz = rownames(data_list[[1]]))
-  rownames(df) <- df$mz
-
-  for (dataset in names(data_list)){
-    rowsum <- Matrix::rowSums(data_list[[dataset]][[assay]][slot])
-    df[dataset] <- rowsum
+  groupIndices <- split(seq_len(ncol(counts)), groups)
+  pseudoBulk <- vapply(
+    groupIndices,
+    function(index) Matrix::rowSums(counts[, index, drop = FALSE]),
+    numeric(nrow(counts))
+  )
+  rownames(pseudoBulk) <- rownames(counts)
+  if (any(colSums(pseudoBulk) <= 0)) {
+    stop("Every TMM group must have positive total intensity.", call. = FALSE)
   }
-  mtx <- Matrix::as.matrix(df[names(data_list)])
-
-  factors <- edgeR::calcNormFactors(mtx, method = "TMM", refColumn = refIdent)
-
-  norm_data_list <- list()
-  for (name in names(data_list)){
-    norm.data <- normalizeSMData(data_list[[name]], normalisation.type = normalisation.type, scale.factor = (CPM.scale.factor / factors[[name]]), assay = assay, slot = slot)
-    norm_data_list[[name]] <- norm.data
+  factors <- edgeR::normLibSizes(
+    pseudoBulk,
+    method = "TMM",
+    refColumn = match(refIdent, colnames(pseudoBulk))
+  )
+  librarySizes <- Matrix::colSums(counts)
+  target <- if (identical(normalisation.type, "TIC")) nrow(counts) else CPM.scale.factor
+  multipliers <- target / (librarySizes * factors[as.character(groups)])
+  multipliers[!is.finite(multipliers)] <- 0
+  normalized <- counts %*% Matrix::Diagonal(x = multipliers)
+  outputName <- if (identical(normalisation.type, "LogNormalize")) "logcounts" else "normcounts"
+  if (identical(normalisation.type, "LogNormalize")) {
+    normalized <- log1p(normalized)
   }
-
-  merged.data <- SeuratObject::JoinLayers(merge(norm_data_list[[1]], y = norm_data_list[2: length(names(norm_data_list))]), merge.data = TRUE)
-return(merged.data)
+  dimnames(normalized) <- dimnames(counts)
+  experiment <- .experimentForAssay(combined.obj, assay)
+  SummarizedExperiment::assay(experiment, outputName) <- normalized
+  if (methods::is(experiment, "SingleCellExperiment")) {
+    SingleCellExperiment::sizeFactors(experiment) <- ifelse(
+      multipliers > 0, 1 / multipliers, 1)
+  }
+  S4Vectors::metadata(experiment)$tmm <- list(
+    group = ident,
+    reference = refIdent,
+    factors = factors,
+    target = target
+  )
+  return(.replaceExperiment(combined.obj, experiment, assay))
 }
 
 
@@ -121,10 +245,10 @@ return(merged.data)
 
 #' Helper function for QC plots by generating intensity count data
 #'
-#' @param seurat.obj Seruat object containing the intensity data.
-#' @param group.by Character string specifying the meta.data column to group by (default = NULL).
-#' @param assay Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").
-#' @param slot  Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").
+#' @param data A SingleCellExperiment, including SpatialExperiment.
+#' @param group.by Name of the `colData()` column to group by (default = NULL).
+#' @param assay Primary (`main`) or alternative experiment name.
+#' @param slot Expression assay name within the selected experiment.
 #' @param bottom.cutoff Numeric value defining the percent of data to exclude for the lower end of the distribution. A bottom.cutoff = 0.05 will remove the bottom 5% of data point (default = NULL).
 #' @param top.cutoff Numeric value defining the percent of data to exclude for the upper end of the distribution. A top.cutoff = 0.05 will remove the top 5% of data point (default = NULL).
 #' @param log.data Boolean value indicating whether to log transform the y-axis values (default = FALSE).
@@ -136,27 +260,26 @@ return(merged.data)
 #'
 #' @examples
 #' utils::str(formals(statPlot))
-#' # df <- statPlot(SeuratObj, group.by = "sample", bottom.cutoff = 0.05, top.cutoff = 0.05, log.data = TRUE)
-statPlot <- function (seurat.obj, group.by = NULL, assay = "Spatial", slot = "counts", bottom.cutoff = NULL, top.cutoff = NULL, log.data = FALSE, verbose = FALSE){
-
-  data_list <- list()
-  if (!(is.null(group.by))){
-    Seurat::Idents(seurat.obj) <- group.by
-    for (ident in unique(Seurat::Idents(seurat.obj))){
-          sub <- subsetSPM(seurat.obj, idents = ident, verbose = verbose)
-
-      data_list[[ident]] <- sub
-    }
+statPlot <- function (data, group.by = NULL, assay = "main", slot = "counts", bottom.cutoff = NULL, top.cutoff = NULL, log.data = FALSE, verbose = FALSE){
+  assayMatrix <- .assayData(data, assay = assay, layer = slot)
+  metadata <- .cellMetadata(data)
+  groups <- if (is.null(group.by)) {
+    factor(rep("data", ncol(assayMatrix)))
   } else {
-    data_list[["data"]] <- seurat.obj
+    if (!group.by %in% colnames(metadata)) {
+      stop("Grouping column `", group.by, "` was not found.", call. = FALSE)
+    }
+    factor(metadata[[group.by]])
   }
-
-  df <- data.frame(mz = rownames(data_list[[1]]))
+  data_list <- split(seq_len(ncol(assayMatrix)), groups)
+  df <- data.frame(mz = rownames(assayMatrix))
   rownames(df) <- df$mz
 
-  for (dataset in names(data_list)){
-    rowsum <- Matrix::rowSums(data_list[[dataset]][[assay]][slot])
-    df[dataset] <- rowsum
+  for (dataset in names(data_list)) {
+    indices <- data_list[[dataset]]
+    df[[dataset]] <- Matrix::rowSums(
+      assayMatrix[, indices, drop = FALSE]
+    )
   }
 
   df2 <- tidyr::pivot_longer(df, cols =  names(data_list), names_to = "var", values_to = "x")
@@ -195,11 +318,11 @@ statPlot <- function (seurat.obj, group.by = NULL, assay = "Spatial", slot = "co
 
 #' Generates a ridge plot of spatial metabolic intensity data
 #'
-#' @param seurat.obj Seurat object containing the metabolomic intensity data.
-#' @param group.by Character string specifying the meta.data column to group by (default = NULL).
+#' @param data Bioconductor experiment containing the metabolomic intensity data.
+#' @param group.by Name of the `colData()` column to group by (default = NULL).
 #' @param mzs Vector of characters defining which features (m/z's) to label on the plot. If `NULL` no features will be labeled (default = NULL).
-#' @param assay Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").
-#' @param slot  Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").
+#' @param assay Primary (`main`) or alternative experiment name.
+#' @param slot Expression assay name within the selected experiment.
 #' @param title Character string of the plot title (default = "RidgePlot").
 #' @param x.lab Character string of the x-axis label (default = "var").
 #' @param y.lab Character string of the y-axis label (default = "intensity").
@@ -216,9 +339,8 @@ statPlot <- function (seurat.obj, group.by = NULL, assay = "Spatial", slot = "co
 #'
 #' @examples
 #' utils::str(formals(mzRidgePlot))
-#' # mzRidgePlot(SeuratObj, group.by = "sample")
-mzRidgePlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "RidgePlot", x.lab = "intensity", y.lab = "var", bottom.cutoff = NULL, top.cutoff = NULL, bins = 1000,log.data = FALSE, cols = NULL, verbose = FALSE){
-  data <- statPlot(seurat.obj = seurat.obj,
+mzRidgePlot <- function (data, group.by = NULL, mzs = NULL, assay = "main", slot = "counts", title = "RidgePlot", x.lab = "intensity", y.lab = "var", bottom.cutoff = NULL, top.cutoff = NULL, bins = 1000,log.data = FALSE, cols = NULL, verbose = FALSE){
+  data <- statPlot(data = data,
                    group.by = group.by,
                    assay = assay,
                    slot = slot,
@@ -255,12 +377,12 @@ mzRidgePlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spati
 
 #' Generates a violin plot of spatial metabolic intensity data
 #'
-#' @param seurat.obj Seurat object containing the metabolomic intensity data.
-#' @param group.by Character string specifying the meta.data column to group by (default = NULL).
+#' @param data Bioconductor experiment containing the metabolomic intensity data.
+#' @param group.by Name of the `colData()` column to group by (default = NULL).
 #' @param mzs Vector of characters defining which features (m/z's) to label on the plot. If `NULL` no features will be labeled (default = NULL).
-#' @param assay Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").
-#' @param slot  Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").
-#' @param title Character string of the plot title (default = "VlnPlot").
+#' @param assay Primary (`main`) or alternative experiment name.
+#' @param slot Expression assay name within the selected experiment.
+#' @param title Character string of the plot title (default = "Expression").
 #' @param x.lab Character string of the x-axis label (default = "var").
 #' @param y.lab Character string of the y-axis label (default = "intensity").
 #' @param show.points Boolean value describing whether to show each individual data point (default = TRUE).
@@ -276,10 +398,41 @@ mzRidgePlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spati
 #'
 #' @examples
 #' utils::str(formals(mzViolinPlot))
-#' # mzViolinPlot(SeuratObj, group.by = "sample",  bottom.cutoff = 0.05)
-mzViolinPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "VlnPlot", x.lab = "var", y.lab = "intensity", show.points = TRUE, bottom.cutoff = NULL, top.cutoff = NULL,log.data = FALSE, cols = NULL, verbose = FALSE){
+mzViolinPlot <- function (data, group.by = NULL, mzs = NULL, assay = "main", slot = "counts", title = "Expression", x.lab = "var", y.lab = "intensity", show.points = TRUE, bottom.cutoff = NULL, top.cutoff = NULL,log.data = FALSE, cols = NULL, verbose = FALSE){
 
-  data <- statPlot(seurat.obj = seurat.obj,
+  if (!is.null(mzs)) {
+    .requireExperiment(data, "SingleCellExperiment")
+    experiment <- .experimentForAssay(data, assay)
+    if (!methods::is(experiment, "SingleCellExperiment")) {
+      experiment <- methods::as(experiment, "SingleCellExperiment")
+    }
+    SummarizedExperiment::colData(experiment) <- SummarizedExperiment::colData(data)
+    features <- vapply(
+      mzs,
+      function(feature) {
+        if (feature %in% rownames(experiment)) feature else findNearestMZ(data, feature, assay)
+      },
+      character(1)
+    )
+    if (!slot %in% SummarizedExperiment::assayNames(experiment)) {
+      stop("Assay `", slot, "` was not found.", call. = FALSE)
+    }
+    pointFunction <- if (isTRUE(show.points)) ggplot2::geom_point else NULL
+    plot <- scater::plotExpression(
+      experiment,
+      features = features,
+      x = group.by,
+      exprs_values = slot,
+      point_fun = pointFunction
+    ) +
+      ggplot2::labs(title = title, x = x.lab, y = y.lab)
+    if (!is.null(cols)) {
+      plot <- plot + ggplot2::scale_fill_manual(values = cols)
+    }
+    return(plot)
+  }
+
+  data <- statPlot(data = data,
                    group.by = group.by,
                    assay = assay,
                    slot = slot,
@@ -321,11 +474,11 @@ mzViolinPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spat
 
 #' Generates a Boxplot of spatial metabolic intensity data
 #'
-#' @param seurat.obj Seurat object containing the metabolomic intensity data.
-#' @param group.by Character string specifying the meta.data column to group by (default = NULL).
+#' @param data Bioconductor experiment containing the metabolomic intensity data.
+#' @param group.by Name of the `colData()` column to group by (default = NULL).
 #' @param mzs Vector of characters defining which features (m/z's) to label on the plot. If `NULL` no features will be labeled (default = NULL).
-#' @param assay Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").
-#' @param slot  Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").
+#' @param assay Primary (`main`) or alternative experiment name.
+#' @param slot Expression assay name within the selected experiment.
 #' @param title Character string of the plot title (default = "BoxPlot").
 #' @param x.lab Character string of the x-axis label (default = "var").
 #' @param y.lab Character string of the y-axis label (default = "intensity").
@@ -342,9 +495,8 @@ mzViolinPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spat
 #'
 #' @examples
 #' utils::str(formals(mzBoxPlot))
-#' # mzBoxPlot(SeuratObj, group.by = "sample",  bottom.cutoff = 0.05)
-mzBoxPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial", slot = "counts", title = "BoxPlot", x.lab = "var", y.lab = "intensity", show.points = TRUE, bottom.cutoff = NULL, top.cutoff = NULL,log.data = FALSE, cols = NULL, verbose = FALSE){
-  data <- statPlot(seurat.obj = seurat.obj,
+mzBoxPlot <- function (data, group.by = NULL, mzs = NULL, assay = "main", slot = "counts", title = "BoxPlot", x.lab = "var", y.lab = "intensity", show.points = TRUE, bottom.cutoff = NULL, top.cutoff = NULL,log.data = FALSE, cols = NULL, verbose = FALSE){
+  data <- statPlot(data = data,
                    group.by = group.by,
                    assay = assay,
                    slot = slot,
@@ -381,15 +533,3 @@ mzBoxPlot <- function (seurat.obj, group.by = NULL, mzs = NULL, assay = "Spatial
 
   return(box_plot)
 }
-
-
-
-
-
-
-
-
-
-
-
-

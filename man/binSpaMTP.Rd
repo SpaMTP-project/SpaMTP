@@ -2,40 +2,90 @@
 % Please edit documentation in R/BinSMData.R
 \name{binSpaMTP}
 \alias{binSpaMTP}
-\title{Bin SpaMTP Object}
+\alias{binSpaMTP,SpatialExperiment-method}
+\alias{binSpaMTP,MSImagingExperiment-method}
+\alias{binSpaMTP,MSImagingArrays-method}
+\alias{binSpaMTP,ANY-method}
+\title{Bin aligned spatial metabolomics features}
 \usage{
 binSpaMTP(
   data,
   resolution,
   units = "ppm",
-  assay = "Spatial",
+  assay = "main",
   slot = "counts",
-  method = c("sum"),
+  method = c("sum", "mean", "max", "min"),
+  return.only.mtx = FALSE
+)
+
+\S4method{binSpaMTP}{SpatialExperiment}(
+  data,
+  resolution,
+  units = "ppm",
+  assay = "main",
+  slot = "counts",
+  method = c("sum", "mean", "max", "min"),
+  return.only.mtx = FALSE
+)
+
+\S4method{binSpaMTP}{MSImagingExperiment}(
+  data,
+  resolution,
+  units = "ppm",
+  assay = "main",
+  slot = "counts",
+  method = c("sum", "mean", "max", "min"),
+  return.only.mtx = FALSE
+)
+
+\S4method{binSpaMTP}{MSImagingArrays}(
+  data,
+  resolution,
+  units = "ppm",
+  assay = "main",
+  slot = "counts",
+  method = c("sum", "mean", "max", "min"),
+  return.only.mtx = FALSE
+)
+
+\S4method{binSpaMTP}{ANY}(
+  data,
+  resolution,
+  units = "ppm",
+  assay = "main",
+  slot = "counts",
+  method = c("sum", "mean", "max", "min"),
   return.only.mtx = FALSE
 )
 }
 \arguments{
-\item{data}{SpaMTP Seurat Object containing the intensity data to be binned}
+\item{data}{A \code{SpatialExperiment}, Cardinal \code{MSImagingArrays} or \code{MSImagingExperiment}.}
 
-\item{resolution}{Numeric value indicating the relative bin size to use when binning the intensity data.}
+\item{resolution}{Positive bin resolution.}
 
-\item{units}{Character string defining the relative units of the provided resolution size. Values can be either 'ppm' or 'mz' (default = 'ppm').}
+\item{units}{Resolution units, either \code{"ppm"} or \code{"mz"}.}
 
-\item{assay}{Character string defining the SpaMTP assay to extract intensity values from (default = "Spatial").}
+\item{assay}{Primary MSI experiment name; alternative modalities cannot be binned.}
 
-\item{slot}{Character string defining the assay slot containing the intensity values (default = "counts").}
+\item{slot}{Matrix layer or SpatialExperiment assay to bin.}
 
-\item{method}{A character vector specifying the binning method. Input values must be either \code{"sum"}, \code{"mean"}, \code{"max"} or \code{"min"} (default = "sum").}
+\item{method}{Aggregation method.}
 
-\item{return.only.mtx}{Boolean value indicating whether to return only the binned intensity matrix. If \code{FALSE}, a SpaMTP object will be returned with the binned values stored in an assay called \code{binned} (default = FALSE).}
+\item{return.only.mtx}{Return only the binned matrix.}
 }
 \value{
-Either a binned intensity matrix or a SpaMTP object contatining the binned intensity matrix stored in the \code{binned} assay.
+A binned \code{SpatialExperiment} or matrix.
 }
 \description{
-Bins m/z peaks of a specified SpaMTP object to reduce dimensionality and remove noise.
+\code{MSImagingArrays} or \code{MSImagingExperiment} input delegates binning to Cardinal and is converted
+to SpatialExperiment only after a common feature axis exists.
+SpatialExperiment input returns a new binned SpatialExperiment.
+For aligned matrices, bins start at the minimum observed m/z and use
+linear (\code{mz}) or log-mass (\code{ppm}) spacing. Each feature is assigned once
+to its nearest bin on that axis (midpoints go up); empty bins are omitted.
+Thus sum binning conserves each pixel's total intensity. Cardinal input
+uses Cardinal's reference-window binning convention instead.
 }
 \examples{
-utils::str(formals(binSpaMTP))
-#binSpaMTP(spamtp.obj, resolution = 10, units = "ppm", return.only.mtx = TRUE)
+methods::showMethods("binSpaMTP")
 }

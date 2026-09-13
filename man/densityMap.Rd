@@ -2,28 +2,40 @@
 % Please edit documentation in R/PlottingSpaMTP.R
 \name{densityMap}
 \alias{densityMap}
-\title{Generates interactive 3D spatial density plot for m/z values}
+\title{Export an interactive spatial detection-density viewer}
 \usage{
-densityMap(object, assay = "SPM", slot = "counts", folder = getwd(), ...)
+densityMap(
+  object,
+  assay = "main",
+  slot = "counts",
+  folder = getwd(),
+  sampleId = NULL,
+  ...
+)
 }
 \arguments{
-\item{object}{SpaMTP Seurat object contains spatial metabolomics data}
+\item{object}{A SpatialExperiment or aligned Cardinal experiment.}
 
-\item{assay}{Character string defining the Seurat assay that contains intensity values to plot (default = "SPM").}
+\item{assay}{Primary or alternative experiment.}
 
-\item{slot}{Character string defining the assay slot to extract the intensity values from (default = "counts").}
+\item{slot}{Non-negative intensity assay.}
 
-\item{folder}{Character string defining the directory path to save the density map HTML file to (default = getwd()).}
+\item{folder}{Output directory.}
 
-\item{...}{Arguments passed to SpaMTP::AnnotateSeuratMALDI()}
+\item{sampleId}{Sample ID; required for multiple samples.}
+
+\item{...}{Reserved; unused arguments cause an error.}
 }
 \value{
-Return a html contains the annotation/average intensity of peakbins/density of distribution of each peak
+Invisibly, the path to mzs_density_map.html.
 }
 \description{
-This function generates an interactive HTML file that can be used to generate spatial density kernals based on the intensity of any selected m/z value.
+The spatial kernel uses coordinates of nonzero pixels, not intensity
+weights. The mass-spectrum overlay uses an intensity-weighted density
+without replicating each mass according to its intensity. This exploratory
+viewer is not a spatial significance test. Its HTML requires internet access
+to load the existing Plotly and JavaScript KDE libraries.
 }
 \examples{
 utils::str(formals(densityMap))
-# densityMap(SpaMTP.obj)
 }

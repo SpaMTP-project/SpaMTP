@@ -2,24 +2,23 @@
 % Please edit documentation in R/MZAnnotation.R
 \name{subsetMZFeatures}
 \alias{subsetMZFeatures}
-\title{Subset a SpaMTP Seurat Spatial Metabolomic object by a list of m/z's}
+\title{Subset a Bioconductor experiment by a list of m/z's}
 \usage{
-subsetMZFeatures(data, features, assay = "Spatial")
+subsetMZFeatures(data, features, assay = "main")
 }
 \arguments{
-\item{data}{A Seurat Spatial Metabolomic Object for subsetting.}
+\item{data}{A Bioconductor experiment for subsetting.}
 
 \item{features}{A list of character strings defining the features/mz values to subset against.}
 
-\item{assay}{A character string identifying the Seurat assay which contains the count data being subset.}
+\item{assay}{A character string identifying the primary or alternative experiment which contains the count data being subset.}
 }
 \value{
-A subset Seurat object containing only m/z values that were specified
+A subset Bioconductor experiment containing only m/z values that were specified
 }
 \description{
-Subset a SpaMTP Seurat Spatial Metabolomic object by a list of m/z's
+Subset a Bioconductor experiment by a list of m/z's
 }
 \examples{
 utils::str(formals(subsetMZFeatures))
-# subsetMZFeatures(SeuratObj, c("mz-160","mz-170","mz-180"))
 }

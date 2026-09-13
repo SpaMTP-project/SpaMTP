@@ -7,17 +7,17 @@
 getMZMetadata(
   obj,
   mz,
-  assay = "Spatial",
+  assay = "main",
   metadata.column = "all_IsomerNames",
   separate = TRUE
 )
 }
 \arguments{
-\item{obj}{SpaMTP Spatial Metabolomic Seurat Object containing annotated m/z values.}
+\item{obj}{Bioconductor experiment containing annotated m/z values.}
 
 \item{mz}{Character string specifying the m/z value to return the metadata for.}
 
-\item{assay}{Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").}
+\item{assay}{Character string defining the primary or alternative experiment that contains the annotated metadata corresponding to the m/z values (default = "Spatial").}
 
 \item{metadata.column}{Character string corresponding to the assay feature
 metadata column to extract (default = "all_IsomerNames").}

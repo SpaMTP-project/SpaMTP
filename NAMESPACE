@@ -5,6 +5,8 @@ export(addCustomMZAnnotations)
 export(addFMP10Annotations)
 export(addSMImage)
 export(addSSCAnnotation)
+export(addSpatialImage)
+export(addTranscriptome)
 export(adductRules)
 export(alignSpatialOmics)
 export(annotateBigData)
@@ -13,6 +15,8 @@ export(annotateSM)
 export(annotateSMILESStructure)
 export(annotationInfo)
 export(applySpatialAlignment)
+export(asCardinal)
+export(asSpatialExperiment)
 export(binMetabolites)
 export(binSpaMTP)
 export(binnedCardinalToSeurat)
@@ -20,6 +24,7 @@ export(buildMZAnnotationIndex)
 export(calculateAnnotationStatistics)
 export(calculateSingleAnnotationStatistics)
 export(cardinalToSeurat)
+export(cardinalToSpatialExperiment)
 export(checkAlignment)
 export(combineTransformations)
 export(convertSeuratToCardinal)
@@ -68,6 +73,7 @@ export(plotPathwaysSpatially)
 export(plotRegionalPathways)
 export(plotSinglePathway)
 export(plotSinglePathwaySpatially)
+export(plotSpatialFeature)
 export(predictAdductsFromSMILES)
 export(queryMZAnnotationIndex)
 export(readSMMatrix)
@@ -79,9 +85,14 @@ export(runRAMPGeseca)
 export(runSpatialGraphPCA)
 export(savePheatmapAsPDF)
 export(saveSpaMTPData)
+export(scaleSMData)
 export(searchAnnotations)
 export(selectROIs)
+export(seuratToSingleCellExperiment)
+export(seuratToSpatialExperiment)
 export(spaMTPDatabaseInfo)
+export(spatialExperimentToCardinal)
+export(spatialExperimentToSeurat)
 export(spatialMZAnnotationPlot)
 export(spatialMZPlot)
 export(spectralBinning)
@@ -90,131 +101,130 @@ export(subsetMZFeatures)
 export(subsetSPM)
 export(tmmNormalize)
 export(visualisePathways)
+exportMethods(addSpatialImage)
+exportMethods(addTranscriptome)
+exportMethods(asCardinal)
+exportMethods(asSpatialExperiment)
+exportMethods(binSpaMTP)
+exportMethods(multiOmicIntegration)
+exportMethods(normalizeSMData)
+exportMethods(plotSpatialFeature)
 import(Matrix, except = c(expand, head, pack, unpack))
-import(Seurat)
-import(SeuratObject)
+
 import(dplyr)
 import(ggplot2, except = last_plot)
 import(grid)
-import(limma, except = show)
 import(plotly, except = last_plot)
 import(shiny, except = runExample)
-import(shinyjs, except = c(runExample, show))
 import(stringr)
 import(tidyr, except = c(expand, pack, unpack))
-importFrom(Cardinal,colocalized)
-importFrom(Cardinal,subset)
-importFrom(Seurat,AddMetaData)
-importFrom(Seurat,CreateSeuratObject)
-importFrom(Seurat,GetTissueCoordinates)
-importFrom(SeuratObject,CreateAssay5Object)
-importFrom(SeuratObject,CreateCentroids)
-importFrom(SeuratObject,CreateFOV)
-importFrom(data.table,":=")
-importFrom(data.table,as.data.table)
-importFrom(dplyr,"%>%")
-importFrom(dplyr,group_by)
-importFrom(dplyr,mutate)
-importFrom(dplyr,pull)
-importFrom(dplyr,select)
-importFrom(dplyr,slice_max)
-importFrom(dplyr,summarise)
-importFrom(dplyr,ungroup)
-importFrom(future,multisession)
-importFrom(future,plan)
+importClassesFrom(Cardinal,MSImagingArrays)
+importClassesFrom(Cardinal,MSImagingExperiment)
+importClassesFrom(SingleCellExperiment,SingleCellExperiment)
+importClassesFrom(SpatialExperiment,SpatialExperiment)
+importClassesFrom(SummarizedExperiment,SummarizedExperiment)
+importFrom(data.table,
+  ":=",
+  as.data.table
+)
+importFrom(dplyr,
+  "%>%",
+  group_by,
+  mutate,
+  select,
+  summarise,
+  ungroup
+)
+importFrom(future,
+  multisession,
+  plan
+)
 importFrom(future.apply,future_lapply)
-importFrom(ggplot2,theme_void)
-importFrom(grDevices,as.raster)
-importFrom(grDevices,chull)
-importFrom(grDevices,dev.off)
-importFrom(grDevices,pdf)
-importFrom(graphics,abline)
-importFrom(graphics,arrows)
-importFrom(graphics,par)
-importFrom(graphics,points)
-importFrom(graphics,text)
-importFrom(httr,GET)
-importFrom(httr,HEAD)
-importFrom(httr,POST)
-importFrom(httr,add_headers)
-importFrom(httr,content)
-importFrom(httr,status_code)
+importFrom(grDevices,
+  as.raster,
+  chull,
+  dev.off,
+  pdf
+)
+importFrom(graphics,
+  abline,
+  arrows,
+  par,
+  points,
+  text
+)
+importFrom(httr,
+  GET,
+  HEAD,
+  POST,
+  add_headers,
+  content,
+  status_code
+)
 importFrom(jsonlite,toJSON)
-importFrom(magrittr,"%<>%")
-importFrom(magrittr,"%>%")
-importFrom(matter,as.matrix)
+importFrom(magrittr,
+  "%<>%",
+  "%>%"
+)
 importFrom(methods,new)
-importFrom(plotly,add_bars)
-importFrom(plotly,add_lines)
-importFrom(plotly,add_trace)
-importFrom(plotly,event_data)
-importFrom(plotly,layout)
-importFrom(plotly,plot_ly)
-importFrom(plotly,plotlyOutput)
-importFrom(plotly,renderPlotly)
+importFrom(plotly,
+  add_trace,
+  event_data,
+  layout,
+  plot_ly,
+  plotlyOutput,
+  renderPlotly
+)
 importFrom(png,readPNG)
 importFrom(purrr,map_dfr)
 importFrom(rlang,"%||%")
-importFrom(sf,st_as_sf)
-importFrom(sf,st_make_valid)
-importFrom(sf,st_polygon)
-importFrom(sf,st_sfc)
-importFrom(sf,st_within)
-importFrom(shiny,HTML)
-importFrom(shiny,actionButton)
-importFrom(shiny,checkboxInput)
-importFrom(shiny,column)
-importFrom(shiny,eventReactive)
-importFrom(shiny,fluidPage)
-importFrom(shiny,fluidRow)
-importFrom(shiny,h4)
-importFrom(shiny,mainPanel)
-importFrom(shiny,modalDialog)
-importFrom(shiny,numericInput)
-importFrom(shiny,observe)
-importFrom(shiny,plotOutput)
-importFrom(shiny,radioButtons)
-importFrom(shiny,reactive)
-importFrom(shiny,reactiveVal)
-importFrom(shiny,renderPlot)
-importFrom(shiny,runApp)
-importFrom(shiny,selectInput)
-importFrom(shiny,shinyApp)
-importFrom(shiny,showModal)
-importFrom(shiny,showNotification)
-importFrom(shiny,sidebarLayout)
-importFrom(shiny,sidebarPanel)
-importFrom(shiny,sliderInput)
-importFrom(shiny,stopApp)
-importFrom(shiny,textInput)
-importFrom(shiny,titlePanel)
-importFrom(shiny,verbatimTextOutput)
-importFrom(shinyjs,reset)
-importFrom(shinyjs,useShinyjs)
-importFrom(sp,Polygon)
-importFrom(sp,Polygons)
-importFrom(sp,SpatialPointsDataFrame)
-importFrom(sp,SpatialPolygons)
-importFrom(sp,SpatialPolygonsDataFrame)
-importFrom(sp,over)
-importFrom(stats,as.dendrogram)
-importFrom(stats,as.dist)
-importFrom(stats,cor)
-importFrom(stats,density)
-importFrom(stats,dnorm)
-importFrom(stats,hclust)
-importFrom(stats,median)
-importFrom(stats,model.matrix)
-importFrom(stats,na.omit)
-importFrom(stats,p.adjust)
-importFrom(stats,pnorm)
-importFrom(stats,prcomp)
-importFrom(stats,quantile)
-importFrom(stats,setNames)
-importFrom(tibble,tibble)
-importFrom(tidyr,separate)
-importFrom(tidyr,separate_rows)
-importFrom(utils,head)
-importFrom(utils,setTxtProgressBar)
-importFrom(utils,txtProgressBar)
-importFrom(zeallot,"%<-%")
+importFrom(sf,
+  st_as_sf,
+  st_make_valid,
+  st_polygon,
+  st_sfc,
+  st_within
+)
+importFrom(shiny,
+  actionButton,
+  fluidPage,
+  mainPanel,
+  plotOutput,
+  radioButtons,
+  reactiveVal,
+  renderPlot,
+  runApp,
+  selectInput,
+  shinyApp,
+  showNotification,
+  sidebarLayout,
+  sidebarPanel,
+  sliderInput,
+  stopApp,
+  textInput,
+  titlePanel,
+  verbatimTextOutput
+)
+importFrom(stats,
+  as.dendrogram,
+  as.dist,
+  cor,
+  density,
+  dnorm,
+  hclust,
+  median,
+  model.matrix,
+  na.omit,
+  p.adjust,
+  prcomp,
+  quantile,
+  setNames
+)
+importFrom(tidyr,
+  separate,
+  separate_rows
+)
+importFrom(utils,
+  setTxtProgressBar,
+  txtProgressBar
+)

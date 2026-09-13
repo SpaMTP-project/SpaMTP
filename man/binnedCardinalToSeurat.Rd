@@ -2,7 +2,7 @@
 % Please edit documentation in R/ConvertingBetweenObjects.R
 \name{binnedCardinalToSeurat}
 \alias{binnedCardinalToSeurat}
-\title{Converts a SpaMTP binned Cardinal Object into a SpaMTP Seurat Object}
+\title{Convert a binned Cardinal matrix to an optional Seurat object}
 \usage{
 binnedCardinalToSeurat(
   data,
@@ -13,23 +13,22 @@ binnedCardinalToSeurat(
 )
 }
 \arguments{
-\item{data}{A Cardinal Object that is being converted into a Seurat Object.}
+\item{data}{Cardinal object supplying coordinates and metadata.}
 
-\item{mtx}{Matrix object containing}
+\item{mtx}{Binned feature-by-pixel matrix.}
 
-\item{multi.run}{Boolean indicating if there are multiple runs within the imported data. If \code{TRUE}, an index will be added to the pixel names per run, and an individual FOV will be generated per run in the Seurat Object (default = FALSE).}
+\item{multi.run}{Retained for compatibility.}
 
-\item{assay}{Character string containing the name of the assay (default = "Spatial").}
+\item{assay}{Name of the Seurat assay.}
 
-\item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+\item{verbose}{Show conversion messages.}
 }
 \value{
-A Seurat Object containing the mz count data of the supplied Cardinal Object
+A Seurat object.
 }
 \description{
-This function is used by \code{loadSM()} when \code{bin_package} is set to 'SpaMTP'.
+Convert a binned Cardinal matrix to an optional Seurat object
 }
 \examples{
 utils::str(formals(binnedCardinalToSeurat))
-# cardinalToSeurat(CardinalObj, run_name = "run_1")
 }

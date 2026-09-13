@@ -2,7 +2,7 @@
 % Please edit documentation in R/helperFunctions.R
 \name{subsetSPM}
 \alias{subsetSPM}
-\title{Subsets SpaMTP Seurat Object containing FOVs}
+\title{Subset features and pixels through Bioconductor containers}
 \usage{
 subsetSPM(
   object = NULL,
@@ -10,14 +10,12 @@ subsetSPM(
   cells = NULL,
   idents = NULL,
   features = NULL,
-  Update.slots = TRUE,
-  Update.object = TRUE,
   verbose = FALSE,
   ...
 )
 }
 \arguments{
-\item{object}{An S4 object or A \code{FOV} object}
+\item{object}{A SummarizedExperiment, including SingleCellExperiment or SpatialExperiment.}
 
 \item{subset}{Logical expression indicating features/variables to keep}
 
@@ -27,26 +25,21 @@ subsetSPM(
 
 \item{features}{A vector of feature names or indices to keep}
 
-\item{Update.slots}{If to update slots of an object}
-
-\item{Update.object}{If to update final object, default to TRUE.}
-
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = FALSE).}
 
-\item{...}{Arguments passed to \code{subset()} and other methods}
+\item{...}{Reserved; additional arguments are rejected.}
 }
 \value{
-A subset Seurat object
+A subset of the same Bioconductor container class.
 }
 \description{
-Intermediate solution to \code{subset()}:
-subset FOVs/centroids if selected cells are NOT found in each FOV
-NOTE: some code parts and args are taken from SeuratObject
+Uses the container's standard bracket method so alternative experiments,
+reduced dimensions and spatial edges remain synchronized with pixels.
 }
 \details{
 Function params/args:
 }
 \examples{
 utils::str(formals(subsetSPM))
-# sub <- subset_obt(seurat.obj, idents = "Sample1")
+# subsetSPM(spe, subset = region == "edge")
 }

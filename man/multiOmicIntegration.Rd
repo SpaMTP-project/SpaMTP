@@ -2,35 +2,66 @@
 % Please edit documentation in R/MultiOmicAnalysis.R
 \name{multiOmicIntegration}
 \alias{multiOmicIntegration}
+\alias{multiOmicIntegration,SpatialExperiment-method}
+\alias{multiOmicIntegration,ANY-method}
 \title{Mult-Omic data integration}
 \usage{
 multiOmicIntegration(
   multiomic.data,
-  reduction.list = list("spt.pca", "spm.pca"),
+  reduction.list = list("spm.pca", "spt.pca"),
   dims.list = list(1:30, 1:30),
   return.intermediate = FALSE,
   verbose = FALSE,
+  modalities = c("main", "transcriptome"),
+  ...
+)
+
+\S4method{multiOmicIntegration}{SpatialExperiment}(
+  multiomic.data,
+  reduction.list = list("spm.pca", "spt.pca"),
+  dims.list = list(1:30, 1:30),
+  return.intermediate = FALSE,
+  verbose = FALSE,
+  modalities = c("main", "transcriptome"),
+  ...
+)
+
+\S4method{multiOmicIntegration}{ANY}(
+  multiomic.data,
+  reduction.list = list("spm.pca", "spt.pca"),
+  dims.list = list(1:30, 1:30),
+  return.intermediate = FALSE,
+  verbose = FALSE,
+  modalities = c("main", "transcriptome"),
   ...
 )
 }
 \arguments{
 \item{multiomic.data}{SpaMTP dataset contain Spatial Transcriptomics and Metabolomic datasets in two different assays}
 
-\item{reduction.list}{List containing character strings defining the reduction to use for each modality (default = list("spt.pca", "spm.pca")).}
+\item{reduction.list}{Reduction names for the primary MSI and alternative
+modalities (default = list("spm.pca", "spt.pca")).}
 
 \item{dims.list}{List containing the numeric range of principle component dimension to include for each modality (default = list(1:30,1:30)).}
 
-\item{return.intermediate}{Boolean value indicating whether to store intermediate results in misc slot of SpaMTP Seurat class object (default = FALSE).}
+\item{return.intermediate}{Retain per-modality PCA results in reducedDims().}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 
-\item{...}{Additional arguments that can be parsed through Seurat's FindMultModalNeighbors function. For possible inputs please visit: https://www.rdocumentation.org/packages/Seurat/versions/5.0.3/topics/FindMultiModalNeighbors.}
+\item{modalities}{Primary experiment (\code{"main"}) followed by alternative
+experiments to integrate. Derived pathway and merged assays are not
+included automatically.}
+
+\item{...}{Additional arguments passed to scater::runPCA().}
 }
 \value{
-SpaMTP Seurat class object containing a weighted nearest neighbours graph which integrates Metabolic and Transcriptomic modalities. This graph can be used for clustering.
+The input container with an integrated representation. For
+SpatialExperiment this is \code{reducedDim(x, "integrated")}.
 }
 \description{
-This function performs multi-omic integration of Spatial Metabolomics and Spatial Transcriptomics data using Seurat's Weighted Nearest Neighbours function.
+SpatialExperiment input uses paired alternative experiments and combines
+equal-weight PCA embeddings generated with scater. This is not Seurat WNN;
+the historical WNN workflow remains in the published-workflow branch.
 }
 \examples{
 utils::str(formals(multiOmicIntegration))

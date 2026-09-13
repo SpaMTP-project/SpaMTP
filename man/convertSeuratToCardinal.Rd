@@ -2,7 +2,7 @@
 % Please edit documentation in R/ConvertingBetweenObjects.R
 \name{convertSeuratToCardinal}
 \alias{convertSeuratToCardinal}
-\title{Converts a SpaMTP Seurat object to a Cardinal object, including annotations and metadata}
+\title{Convert an optional Seurat object to Cardinal}
 \usage{
 convertSeuratToCardinal(
   data,
@@ -14,25 +14,25 @@ convertSeuratToCardinal(
 )
 }
 \arguments{
-\item{data}{Seurat object being converted.}
+\item{data}{A Seurat object.}
 
-\item{assay}{Character string defining the Seurat Object assay name to pull intensity count data from (default = "Spatial").}
+\item{assay}{Seurat assay to convert.}
 
-\item{slot}{Character string defining which slot from the Seurat Object assay to gather intensity data from (default = "counts").}
+\item{slot}{Seurat layer to convert.}
 
-\item{run_col}{Character string describing the Seurat meta.data column where the run identities are stored (default = NULL).}
+\item{run_col}{Optional cell-metadata column containing run identifiers.}
 
-\item{feature.metadata}{Boolean value of whether the Seurat Object contains annotations stored in the feature metadata slot of the specified assay (default = FALSE).}
+\item{feature.metadata}{Retained for compatibility. Feature metadata are
+always preserved.}
 
-\item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+\item{verbose}{Show conversion messages.}
 }
 \value{
-A Cardinal object containing intensity values and feature metadata (annotations)
+A Cardinal \code{MSImagingExperiment}.
 }
 \description{
-Converts a SpaMTP Seurat object to a Cardinal object, including annotations and metadata
+Convert an optional Seurat object to Cardinal
 }
 \examples{
 utils::str(formals(convertSeuratToCardinal))
-# cardinal.obj <- convertSeuratToCardinal(SeuratObject, feature.metadata = TRUE)
 }

@@ -7,11 +7,13 @@
 findNearestMZ(data, target_mz, assay = NULL)
 }
 \arguments{
-\item{data}{Seurat Spatial Metabolomic object containing mz values}
+\item{data}{A \code{SpatialExperiment} containing m/z
+values.}
 
 \item{target_mz}{Numeric value defining the target m/z peak}
 
-\item{assay}{Character string indicating which Seurat object assay to pull data form. If set to NULL will use current default assay based on Seurat's \code{DefaultAssay()} function (default = NULL).}
+\item{assay}{Assay or layer name. For a \code{SpatialExperiment}, \code{NULL} uses the
+first assay.}
 }
 \value{
 String of the closest m/z value within the given dataset
@@ -21,5 +23,5 @@ Finds the nearest m/z peak to a given value in a SpaMTP Object
 }
 \examples{
 utils::str(formals(findNearestMZ))
-# findNearestMZ(SeuratObj, target_mz = 400.01)
+# findNearestMZ(spe, target_mz = 400.01)
 }

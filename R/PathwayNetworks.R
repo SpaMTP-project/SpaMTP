@@ -5,8 +5,8 @@
 #' differential-expression matching, and matrix extraction are indexed so they
 #' are not repeated for every cluster-pathway pair.
 #'
-#' @param SpaMTP A `SpaMTP` Seurat object containing spatial metabolomics and/or
-#'   spatial transcriptomics data. Metabolomics data must first be annotated by
+#' @param SpaMTP A SpatialExperiment with paired transcriptomics in altExp.
+#'   Subset to one sample before exporting. Metabolomics must be annotated by
 #'   [annotateSM()].
 #' @param ident Metadata column used to identify spatial clusters or regions.
 #' @param regpathway Data frame returned by [findRegionalPathways()].
@@ -37,7 +37,8 @@
 #'   `"leading_edge"` uses only GSEA leading-edge metabolites;
 #'   `"annotated"` also includes every score-filtered annotation belonging to
 #'   the selected pathway, regardless of DE significance.
-#' @param image Spatial image/FOV passed to `Seurat::GetTissueCoordinates()`.
+#' @param image Optional image ID validated against imgData. Coordinates always
+#'   come from spatialCoords; the optical raster is not embedded in this viewer.
 #' @param verbose Display progress messages.
 #' @param top_n_pathways Number of pathways selected when `selected_pathways` is
 #'   `NULL`.
@@ -77,14 +78,14 @@ pathwayNetworkPlots <- function(SpaMTP,
                                 SM_slot = "counts",
                                 ST_slot = "counts",
                                 colour_palette = NULL,
-                                SM_assay = "SPM",
-                                ST_assay = "SPT",
+                                SM_assay = "main",
+                                ST_assay = "transcriptome",
                                 analyte_types = c("genes", "metabolites"),
                                 annotation_source = c("current", "auto", "legacy"),
                                 annotation_score_threshold = NULL,
                                 annotation_score_floor = 0.01,
                                 metabolite_detection = c("leading_edge", "annotated"),
-                                image = "slice1",
+                                image = NULL,
                                 verbose = TRUE,
                                 top_n_pathways = 10L,
                                 max_nodes = 500L,
@@ -95,6 +96,7 @@ pathwayNetworkPlots <- function(SpaMTP,
                                 database_version = "latest",
                                 database_source = c("auto", "spamtpdb"),
                                 database_local_dir = NULL) {
+  SpaMTP <- .nativeSingleSample(SpaMTP)
   analyte_types <- match.arg(
     analyte_types, c("genes", "metabolites"), several.ok = TRUE
   )
@@ -137,16 +139,11 @@ pathwayNetworkPlots <- function(SpaMTP,
     stop("max_spatial_points must be positive or Inf.")
   }
 
-  assays <- .assayNames(SpaMTP)
-  if ("genes" %in% analyte_types && !ST_assay %in% assays) {
-    stop("Gene visualization requires assay '", ST_assay, "'.")
+  if ("genes" %in% analyte_types) {
+    .assayData(SpaMTP, ST_assay, ST_slot)
   }
-  if ("metabolites" %in% analyte_types && !SM_assay %in% assays) {
-    stop("Metabolite visualization requires assay '", SM_assay, "'.")
-  }
-  if (all(c("genes", "metabolites") %in% analyte_types) &&
-      ncol(SpaMTP[[SM_assay]]) != ncol(SpaMTP[[ST_assay]])) {
-    stop("SM and ST assays must contain the same number of aligned spatial observations.")
+  if ("metabolites" %in% analyte_types) {
+    .assayData(SpaMTP, SM_assay, SM_slot)
   }
   regpathway_annotation <- attr(regpathway, "annotation_metadata", exact = TRUE)
   if (is.null(annotation_score_threshold)) {

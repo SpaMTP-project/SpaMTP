@@ -2,24 +2,20 @@
 % Please edit documentation in R/SpatialAnalysis.R
 \name{getSpatiallyVariableMetabolites}
 \alias{getSpatiallyVariableMetabolites}
-\title{Get top spatially variable metabolites}
+\title{Get the top spatially variable metabolites}
 \usage{
-getSpatiallyVariableMetabolites(object, assay = "SPM", n = 10)
+getSpatiallyVariableMetabolites(object, assay = "main", n = 10)
 }
 \arguments{
-\item{object}{SpaMTP Seurat class object containing the intensity values for each m/z}
+\item{object}{A SpatialExperiment returned by findSpatiallyVariableMetabolites.}
 
-\item{assay}{Character string indicating which Seurat object assay to pull data form (default = "SPM").}
+\item{assay}{Primary or alternative experiment containing results.}
 
-\item{n}{Numeric value defining the top number of metabolites to return (default = 10).}
+\item{n}{Maximum number of feature names.}
 }
 \value{
-Vector containing m/z feature names corresponding to the top n number of spatially variable metabolites
+Feature names in Moran's I rank order, excluding untested features.
 }
 \description{
-This function returns the names of the top n number of spatially variable features.
-}
-\examples{
-utils::str(formals(getSpatiallyVariableMetabolites))
-# features <- getSpatiallyVariableMetabolites(SpaMTP, n = 6)
+Get the top spatially variable metabolites
 }

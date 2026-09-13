@@ -1,7 +1,7 @@
 #' Apply automatic or precomputed spatial alignment
 #'
-#' Aligns a moving Spatial Metabolomics (SM) Seurat object to a fixed Spatial
-#' Transcriptomics (ST) object. The function can apply coordinates exported by
+#' Aligns a moving Spatial Metabolomics (SM) `SpatialExperiment`
+#' to a fixed SpatialExperiment. The function can apply coordinates exported by
 #' the SMINT workflow, apply a homogeneous transformation matrix, estimate an
 #' affine transform from paired landmarks, or run the STalign LDDMM backend used
 #' by SMINT through `reticulate`.
@@ -11,8 +11,9 @@
 #' entirely in R. The backend summary records STalign's affine component as
 #' `affine_yx`; it is not the complete nonlinear LDDMM transformation.
 #'
-#' @param SM.data A Seurat object containing the moving SM coordinates.
-#' @param ST.data An optional Seurat object containing the fixed ST coordinates.
+#' @param SM.data A `SpatialExperiment` containing the
+#'   moving SM coordinates.
+#' @param ST.data An optional matching spatial container with fixed coordinates.
 #'   It is required when computing an affine or LDDMM alignment, but is optional
 #'   when applying final coordinates supplied through `alignment`.
 #' @param alignment Optional precomputed alignment. Accepted inputs are a data
@@ -27,11 +28,11 @@
 #'   estimates a six-degree-of-freedom transformation from paired landmarks in
 #'   R. `"lddmm"` runs STalign's landmark-guided affine plus diffeomorphic
 #'   registration through Python.
-#' @param SM.fov Name of the FOV containing the moving SM centroids. By default,
+#' @param SM.fov Optional imgData image ID for the moving experiment. By default,
 #'   the first image in `SM.data` is used.
-#' @param ST.image Name of the image/FOV containing fixed ST coordinates. By
+#' @param ST.image Optional imgData image ID for the fixed experiment. By
 #'   default, the first image in `ST.data` is used.
-#' @param SM.boundary Name of the centroid boundary inside `SM.fov`.
+#' @param SM.boundary Compatibility label; coordinates are always read from spatialCoords().
 #' @param SM.landmarks,ST.landmarks Matched landmark coordinates as two-column
 #'   matrices or data frames in x-y order. At least three non-collinear pairs are
 #'   required for `method = "affine"`. Landmarks are optional but strongly
@@ -75,7 +76,7 @@
 #' @param python Optional path to a Python executable containing `STalign` and
 #'   `torch`. It must be selected before reticulate initialises Python.
 #' @param alignment.name Name used to store alignment provenance in
-#'   `SeuratObject::Misc(SM.data, slot = "spatial_alignment")`.
+#'   `S4Vectors::metadata(SM.data)$spatial_alignment`.
 #' @param store Logical; store lightweight provenance and diagnostics in the
 #'   returned object.
 #' @param return Either `"object"` (default) or `"result"`. The latter returns a
@@ -85,7 +86,7 @@
 #'   for nearest-neighbour diagnostics.
 #' @param verbose Logical; print progress messages.
 #'
-#' @return A Seurat object when `return = "object"`; otherwise an object of class
+#' @return The updated spatial container when `return = "object"`; otherwise an object of class
 #'   `spamtp_spatial_alignment` containing the aligned object and alignment
 #'   details.
 #'
@@ -166,7 +167,7 @@ applySpatialAlignment <- function(
     }
   }
 
-  .sa_validate_seurat(SM.data, "SM.data")
+  .sa_validate_spatial_container(SM.data, "SM.data")
   SM.fov <- .sa_resolve_image(SM.data, SM.fov, "SM.fov")
   source <- .sa_get_coordinates(SM.data, SM.fov)
 
@@ -183,7 +184,7 @@ applySpatialAlignment <- function(
 
   target <- NULL
   if (!is.null(ST.data)) {
-    .sa_validate_seurat(ST.data, "ST.data")
+    .sa_validate_spatial_container(ST.data, "ST.data")
     ST.image <- .sa_resolve_image(ST.data, ST.image, "ST.image")
     target <- .sa_get_coordinates(ST.data, ST.image)
     target_scale <- .sa_scale_factor(ST.data, ST.image, ST.scale.factor)
@@ -370,33 +371,31 @@ applySpatialAlignment <- function(
 }
 
 
-.sa_validate_seurat <- function(object, argument) {
-  if (!inherits(object, "Seurat")) {
-    stop("`", argument, "` must be a Seurat object.", call. = FALSE)
-  }
-  invisible(TRUE)
+.sa_validate_spatial_container <- function(object, argument) {
+  .requireExperiment(object, "SpatialExperiment")
 }
 
 
 .sa_resolve_image <- function(object, image, argument) {
-  images <- SeuratObject::Images(object)
-  if (!length(images)) {
-    stop("`", argument, "` cannot be resolved because the object has no spatial images/FOVs.", call. = FALSE)
+  .requireExperiment(object, "SpatialExperiment")
+  images <- as.character(SpatialExperiment::imgData(object)$image_id)
+  if (is.null(image)) {
+    return(if (length(images)) images[[1L]] else NULL)
   }
-  if (is.null(image)) image <- images[[1L]]
-  if (length(image) != 1L || is.na(image) || !image %in% images) {
+  if (!length(images) || !image %in% images) {
     stop(
-      "Invalid `", argument, "`. Available values: ",
+      "Invalid `", argument, "`. Available imgData values: ",
       paste(images, collapse = ", "), ".",
       call. = FALSE
     )
   }
-  image
+  return(image)
 }
 
 
 .sa_get_coordinates <- function(object, image) {
-  coordinates <- as.data.frame(SeuratObject::GetTissueCoordinates(object, image = image))
+  coordinates <- as.data.frame(SpatialExperiment::spatialCoords(object))
+  coordinates$cell <- colnames(object)
   if (!all(c("x", "y") %in% names(coordinates))) {
     stop("Spatial coordinates for `", image, "` do not contain x and y columns.", call. = FALSE)
   }
@@ -433,26 +432,23 @@ applySpatialAlignment <- function(
   if (!is.character(scale_factor) || length(scale_factor) != 1L || is.na(scale_factor)) {
     stop("`ST.scale.factor` must be NULL, numeric, or one scale-factor name.", call. = FALSE)
   }
-  spatial_image <- object[[image]]
-  factors <- tryCatch(
-    Seurat::ScaleFactors(spatial_image),
-    error = function(e) NULL
-  )
-  if (is.null(factors)) {
-    stop("Image `", image, "` does not contain named scale factors.", call. = FALSE)
+  imageData <- as.data.frame(SpatialExperiment::imgData(object))
+  selected <- which(imageData$image_id == image)
+  if (length(selected) != 1L) {
+    stop("A unique imgData row is required for the selected image.", call. = FALSE)
   }
-  if (!scale_factor %in% names(factors)) {
+  if (!scale_factor %in% c("scaleFactor", "hires", "lowres")) {
     stop(
-      "Scale factor `", scale_factor, "` was not found. Available values: ",
-      paste(names(factors), collapse = ", "), ".",
+      "SpatialExperiment images provide a single `scaleFactor`; use that name, `hires`, or `lowres`.",
       call. = FALSE
     )
   }
-  value <- as.numeric(factors[[scale_factor]])
-  if (length(value) != 1L || !is.finite(value) || value <= 0) {
-    stop("Selected ST scale factor is not one finite value greater than zero.", call. = FALSE)
+  value <- as.numeric(imageData$scaleFactor[[selected]])
+  if (!is.finite(value) || value <= 0) {
+    stop("Selected image scale factor must be finite and greater than zero.", call. = FALSE)
   }
-  value
+  return(value)
+
 }
 
 
@@ -797,38 +793,16 @@ applySpatialAlignment <- function(
 
 
 .sa_set_fov_coordinates <- function(object, fov, boundary, aligned) {
-  spatial_image <- object[[fov]]
-  if (!inherits(spatial_image, "FOV")) {
-    stop(
-      "`applySpatialAlignment()` currently updates Seurat FOV centroids; `", fov,
-      "` has class ", paste(class(spatial_image), collapse = "/"), ".",
-      call. = FALSE
-    )
-  }
-  boundary_names <- SeuratObject::Boundaries(spatial_image)
-  if (!boundary %in% boundary_names) {
-    stop(
-      "Boundary `", boundary, "` was not found in FOV `", fov,
-      "`. Available values: ", paste(boundary_names, collapse = ", "), ".",
-      call. = FALSE
-    )
-  }
-  centroids <- spatial_image[[boundary]]
-  if (!inherits(centroids, "Centroids")) {
-    stop("Boundary `", boundary, "` is not a Centroids object.", call. = FALSE)
-  }
-  cells <- as.character(SeuratObject::Cells(centroids))
-  index <- match(cells, aligned$cell)
+  .requireExperiment(object, "SpatialExperiment")
+  index <- match(colnames(object), aligned$cell)
   if (anyNA(index)) {
-    stop("Aligned coordinates are missing cells stored in the FOV boundary.", call. = FALSE)
+    stop("Aligned coordinates are missing pixels in the SpatialExperiment.", call. = FALSE)
   }
-  coordinates <- aligned[index, c("x", "y"), drop = FALSE]
-  coordinates$cell <- cells
-  centroids <- .centroidsWithCoordinates(centroids, coordinates)
-  spatial_image <- .fovWithBoundary(spatial_image, boundary, centroids)
-  methods::validObject(spatial_image)
-  object[[fov]] <- spatial_image
-  object
+  coordinates <- SpatialExperiment::spatialCoords(object)
+  coordinates[, c("x", "y")] <-
+    as.matrix(aligned[index, c("x", "y"), drop = FALSE])
+  SpatialExperiment::spatialCoords(object) <- coordinates
+  return(object)
 }
 
 

@@ -38,7 +38,7 @@
   resources
 }
 
-.spamtp_db_cache_key <- function(resource, version, source, local_dir) {
+.spamtp_db_cache_key <- function(resource, version, source, local_dir, verify) {
   local_key <- if (is.null(local_dir)) "<default>" else {
     normalizePath(local_dir, mustWork = FALSE)
   }
@@ -47,6 +47,7 @@
     version %||% "latest",
     source,
     local_key,
+    verify,
     sep = "\r"
   )
 }
@@ -64,13 +65,22 @@
                                 local_dir = NULL,
                                 hub = NULL,
                                 offline = FALSE,
-                                refresh = FALSE) {
+                                refresh = FALSE,
+                                verify = TRUE) {
   resource <- .spamtp_db_normalise_resources(resource)
   if (length(resource) != 1L) {
     stop("resource must identify exactly one database resource.", call. = FALSE)
   }
   source <- match.arg(source)
-  key <- .spamtp_db_cache_key(resource, version, source, local_dir)
+  if (!is.logical(verify) || length(verify) != 1L || is.na(verify)) {
+    stop("verify must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (is.null(local_dir)) {
+    configured <- getOption("SpaMTPdb.resource_dir", "")
+    if (!nzchar(configured)) configured <- Sys.getenv("SPAMTPDB_RESOURCE_DIR", "")
+    if (nzchar(configured)) local_dir <- configured
+  }
+  key <- .spamtp_db_cache_key(resource, version, source, local_dir, verify)
   if (!isTRUE(refresh) && exists(key, envir = .spamtp_db_cache, inherits = FALSE)) {
     return(get(key, envir = .spamtp_db_cache, inherits = FALSE))
   }
@@ -83,14 +93,15 @@
     )
   }
 
-  value <- SpaMTPdb::SpaMTPdbResource(
+  value <- SpaMTPdb::spaMTPdbResource(
     resource = resource,
     version = version,
     local_dir = local_dir,
     hub = hub,
-    offline = offline
+    offline = offline,
+    verify = verify
   )
-  resource_metadata <- SpaMTPdb::SpaMTPdbResource(
+  resource_metadata <- SpaMTPdb::spaMTPdbResource(
     resource = resource,
     version = version,
     metadata = TRUE
@@ -101,7 +112,8 @@
     version = as.character(resource_metadata$version[[1L]]),
     source = "spamtpdb",
     local_dir = local_dir,
-    offline = offline
+    offline = offline,
+    verify_local = verify
   )
   assign(key, value, envir = .spamtp_db_cache)
   value
@@ -114,7 +126,8 @@
                               local_dir = NULL,
                               hub = NULL,
                               offline = FALSE,
-                              refresh = FALSE) {
+                              refresh = FALSE,
+                              verify = TRUE) {
   resources <- .spamtp_db_normalise_resources(resources)
   source <- match.arg(source)
   if (!is.null(database)) {
@@ -140,7 +153,8 @@
       local_dir = local_dir,
       hub = hub,
       offline = offline,
-      refresh = refresh
+      refresh = refresh,
+      verify = verify
     )
   })
   stats::setNames(values, resources)
@@ -163,6 +177,10 @@
 #' @param hub Optional pre-created `AnnotationHub` object passed to SpaMTPdb.
 #' @param offline If `TRUE`, do not query AnnotationHub.
 #' @param refresh If `TRUE`, bypass SpaMTP's in-session resource cache.
+#' @param verify Verify local resource files against the SpaMTPdb registry.
+#'   Defaults to `TRUE`. Set to `FALSE` only for intentional development
+#'   fixtures; use `database` for a named custom bundle instead of presenting
+#'   modified resources as an official snapshot.
 #'
 #' @return A named list containing the requested resources.
 #' @export
@@ -187,7 +205,8 @@ loadSpaMTPDatabase <- function(
     local_dir = NULL,
     hub = NULL,
     offline = FALSE,
-    refresh = FALSE) {
+    refresh = FALSE,
+    verify = TRUE) {
   .spamtp_db_bundle(
     resources = resources,
     database = database,
@@ -196,7 +215,8 @@ loadSpaMTPDatabase <- function(
     local_dir = local_dir,
     hub = hub,
     offline = offline,
-    refresh = refresh
+    refresh = refresh,
+    verify = verify
   )
 }
 
@@ -218,5 +238,5 @@ spaMTPDatabaseInfo <- function(version = NULL) {
       call. = FALSE
     )
   }
-  SpaMTPdb::SpaMTPdbResources(version = version)
+  SpaMTPdb::spaMTPdbResources(version = version)
 }

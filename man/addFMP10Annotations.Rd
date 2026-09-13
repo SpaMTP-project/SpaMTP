@@ -8,7 +8,7 @@ addFMP10Annotations(
   obj,
   only.fmp.adduct = FALSE,
   add.custom.annotation = NULL,
-  assay = "Spatial",
+  assay = "main",
   return.only.annotated = FALSE,
   mass.threshold = 0.05,
   annotation.column = "all_IsomerNames",
@@ -19,19 +19,21 @@ addFMP10Annotations(
 )
 }
 \arguments{
-\item{obj}{SpaMTP Seurat object containing m/z intensity values for annotation. Data should be generated with a FMP10 matrix.}
+\item{obj}{Bioconductor experiment containing m/z intensity values for annotation. Data should be generated with a FMP10 matrix.}
 
 \item{only.fmp.adduct}{Boolean indicating if only metabolites with FMP10+ adducts (\code{+FMP10}, +\verb{2FMP10}, etc.) should be assigned to m/z values (default = FALSE).}
 
 \item{add.custom.annotation}{data.frame containing addition FMP10 metabolite annotations that are not in the current FMP10 database. Note: this data.frame must contain these column c("mass", "annotation", "Adduct", "Formula", "Isomers", "Isomers_IDs"). If set to NULL, only reference FMP10 database will be used (default = NULL).}
 
-\item{assay}{Character string defining the Seurat object assay to store the respective annotations in the feature meta.data dataframe (default = "Spatial").}
+\item{assay}{Primary or alternative experiment whose \code{rowData()} receives
+the annotations (default = "main").}
 
-\item{return.only.annotated}{Boolean defining whether to return a SpaMTP Seurat object containing only successfully annotated m/z values (default = FALSE).}
+\item{return.only.annotated}{Boolean defining whether to return a Bioconductor experiment containing only successfully annotated m/z values (default = FALSE).}
 
 \item{mass.threshold}{Numeric value defining the acceptable threshold (plus-minus) between the custom annotations and the actual m/z values contained within the SpaMTP object (default = 0.05).}
 
-\item{annotation.column}{Character string defining the feature meta.data column name that will contain the assigned annotations (default = "all_IsomerNames").}
+\item{annotation.column}{Name of the \code{rowData()} column receiving annotations
+(default = "all_IsomerNames").}
 
 \item{database}{Optional named list of database resources, normally created
 by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
@@ -43,7 +45,7 @@ by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 \item{database_local_dir}{Optional staged SpaMTPdb resource directory.}
 }
 \value{
-SpaMTP Seurat object containing the relative metabolite annotations stored in the feature metadata dataframe.
+Bioconductor experiment containing the relative metabolite annotations stored in the feature metadata dataframe.
 }
 \description{
 Adds metabolite annotations to respective m/z values generated using an FMP10 matrix. This is done based on a curated FMP10 matrix database.

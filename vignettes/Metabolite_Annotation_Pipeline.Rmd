@@ -1,0 +1,653 @@
+---
+title: "SpaMTP: Indexed Metabolite Annotation with RaMP 3.0"
+output:
+  BiocStyle::html_document:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{SpaMTP: Indexed Metabolite Annotation with RaMP 3.0}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = FALSE,
+  comment = "##",
+  fig.align = "center"
+)
+options(width = 100)
+```
+
+# Overview
+
+SpaMTP's current annotation pipeline separates candidate generation from
+downstream filtering. It generates chemically valid adduct hypotheses once,
+sorts their expected mass-to-charge ratios, queries that index within a strict
+mass tolerance, and ranks the remaining candidates using optional MS1 context.
+
+The workflow is:
+
+1. Decompose database SMILES into functional groups and plausible ionisation
+   or metal-binding sites.
+2. Select ion-mode and matrix rules, then apply molecule-specific structural
+   bounds and priors.
+3. Build a reusable sorted annotation index and query observed m/z values.
+4. Score candidates using structure, mass accuracy, chemical heuristics,
+   isotope evidence, and adduct-family support.
+5. Store the retained candidates and choose a score threshold at analysis time.
+
+This article describes upstream candidate annotation using native Bioconductor
+containers. See the [native workflow](SpaMTP_Bioconductor.html) for downstream
+spatial plotting and pathway-based candidate ranking, and
+[modern data access](Modern_Data_Access.html) for container accessors.
+
+```{r load-package, message=FALSE, warning=FALSE}
+library(SpaMTP)
+```
+
+# RaMP snapshot and identifiers
+
+SpaMTP uses a deliberately pruned, versioned RaMP snapshot. `SpaMTPdb` stores
+the annotation and pathway resources independently of the analysis code: the
+chemical table keeps structures, formulae, monoisotopic masses, names, source
+identifiers, and current `RAMP_C_*` identifiers, while pathway tables retain
+only fields required by SpaMTP's enrichment and network functions. The
+`source = "auto"` setting resolves these versioned resources through
+`SpaMTPdb`; a local staged resource directory can be used offline. The registry
+itself is package metadata, so it can be inspected without downloading the
+large chemical table.
+
+```{r load-ramp-resources}
+ramp_registry <- spaMTPDatabaseInfo()
+chem_props_registry <- ramp_registry[
+  ramp_registry$resource == "chem_props",
+  ,
+  drop = FALSE
+]
+```
+
+```{r ramp-summary}
+ramp_summary <- data.frame(
+  property = c(
+    "RaMP version",
+    "Chemical-property records",
+    "Serialized resource size",
+    "Resource checksum"
+  ),
+  value = c(
+    chem_props_registry$version,
+    format(chem_props_registry$rows, big.mark = ","),
+    format(chem_props_registry$bytes, big.mark = ","),
+    chem_props_registry$md5
+  )
+)
+knitr::kable(ramp_summary, align = c("l", "r"))
+```
+
+The complete table is retrieved only when it is needed. Its versioned schema is
+listed in the companion package registry and documented by `SpaMTPdb`:
+
+```{r chem-props-columns}
+chem_props_registry[, c(
+  "resource", "version", "rows", "columns", "rdata_path"
+)] |>
+  knitr::kable(align = c("l", "r", "r", "r", "l"))
+```
+
+# A small 2-hydroxyglutarate example
+
+The examples below use the RaMP entry for D-2-hydroxyglutaric acid (2HG), with
+neutral monoisotopic mass approximately 148.0372 Da. Rather than manually
+declaring its chemistry, SpaMTP decomposes the RaMP `iso_smiles` graph into
+recognisable functional groups and ionisation sites.
+
+```{r target-database}
+# This one-row subset is embedded in the article so every example is runnable
+# without downloading the 289,754-row resource. The identifiers and structure
+# are copied verbatim from SpaMTPdb 3.0.7.
+target_db <- data.frame(
+  ramp_id = "RAMP_C_000219574",
+  chem_data_source = "hmdb",
+  chem_source_id = "hmdb:HMDB0000606",
+  inchi_key = "HWXBTNAVRSUOJR-GSVOUGTGSA-N",
+  monoisotop_mass = 148.037173366,
+  common_name = "D-2-Hydroxyglutaric acid",
+  mol_formula = "C5H8O5",
+  iso_smiles = "O[C@H](CCC(O)=O)C(O)=O",
+  stringsAsFactors = FALSE
+)
+target_db <- annotateSMILESStructure(target_db)
+
+knitr::kable(
+  target_db[, c(
+    "ramp_id", "chem_source_id", "common_name", "mol_formula",
+    "monoisotop_mass", "iso_smiles", "carboxyl_sites",
+    "alcohol_hydroxyl_sites", "ketone_sites",
+    "max_exchangeable_protons"
+  )],
+  digits = 7
+)
+```
+
+The native parser works on molecular connectivity rather than elemental formula:
+for example, it separates a carboxylic acid from an ester and a ketone from the
+carbonyl in a carboxyl group. Existing curated columns are preserved by default;
+missing values are filled from SMILES.
+
+# From functional groups to ion-mode behaviour
+
+`deconvolveSMILES()` also derives mode-specific, bounded scores. They are
+chemical priors, not calibrated probabilities or substitutes for experimental
+evidence.
+
+```{r structure-priors}
+structure_summary <- target_db[, c(
+  "carboxyl_sites", "hydroxyl_sites", "carbonyl_sites",
+  "acidic_sites", "basic_sites", "proton_acceptor_sites",
+  "alkali_binding_sites", "alkali_chelation_motifs",
+  "positive_mode_score", "negative_mode_score",
+  "alkali_affinity_score", "neutral_mass_score"
+)]
+knitr::kable(structure_summary, digits = 2)
+```
+
+SpaMTP interprets these fields differently for each search mode:
+
+- In **positive mode**, amines and other basic nitrogens support protonation;
+  carbonyl, ether, and related heteroatoms provide weaker proton-acceptor
+  evidence.
+- For **alkali/metal adducts**, oxygen, nitrogen, and sulfur donor atoms are
+  combined with carboxylate, catechol, phosphate, and nearby donor-pair motifs.
+  A molecule with several donors can therefore favour `[M+Na]+` or `[M+K]+`
+  even when it is not strongly basic.
+- In **negative mode**, carboxylic, phosphoric, sulfonic, phenolic, and thiol
+  sites support deprotonation. Ordinary alcohol groups contribute weaker
+  evidence rather than an unconditional exclusion.
+- `neutral` is a neutral-mass matching mode, not a claim that a mass
+  spectrometer directly detected an uncharged molecule. It applies no
+  protonation or metal-binding requirement.
+
+For 2HG, two carboxyl groups support negative-mode deprotonation, while its five
+oxygen donors and multiple local donor motifs give stronger support to an
+alkali adduct than to simple positive-mode protonation. The complete audit text
+is retained in `structure_evidence`:
+
+```{r structure-evidence}
+target_db[, c(
+  "positive_site_atoms", "negative_site_atoms", "alkali_site_atoms",
+  "structure_evidence"
+)]
+```
+
+Atom labels such as `O1` refer to the atom order in the supplied SMILES graph;
+they identify the proposed local sites and are not canonical atom-map numbers.
+
+The structure-only adduct search space can be inspected before any peak is
+queried. No `adducts` argument is required:
+
+```{r predict-adduct-space}
+predicted_spaces <- lapply(
+  c("positive", "negative", "neutral"),
+  function(mode) {
+    x <- predictAdductsFromSMILES(target_db$iso_smiles, polarity = mode)
+    x <- x[x$retained, ]
+    utils::head(x, 4L)
+  }
+)
+predicted_spaces <- do.call(rbind, predicted_spaces)
+knitr::kable(
+  predicted_spaces[, c(
+    "polarity", "adduct", "structure_score", "proton_bound_status",
+    "combined_prior", "retained"
+  )],
+  digits = 3,
+  row.names = FALSE
+)
+```
+
+This prediction selects plausible *families*; observed mass, isotope,
+co-occurring adducts, spatial evidence, and pseudo-MS/MS still decide whether a
+specific peak supports one of them.
+
+# Validated adduct rules
+
+`adductRules()` returns the ion masses, molecular multiplier, charge,
+proton-loss count, chemical class, and prior used by the engine. Bracketed and
+unbracketed forms such as `[M+H]+` and `M+H` are both accepted.
+
+```{r adduct-rules}
+selected_adducts <- c("M+H", "M+Na", "M+2Na-H", "2M+H")
+positive_rules <- adductRules("positive")
+rule_summary <- positive_rules[
+  positive_rules$name %in% selected_adducts,
+  c(
+    "name", "n_molecules", "mass_shift", "charge", "loss_h",
+    "complexity", "base_adduct", "prior"
+  )
+]
+rule_summary <- rule_summary[match(selected_adducts, rule_summary$name), ]
+knitr::kable(rule_summary, digits = 7, row.names = FALSE)
+```
+
+For each rule, SpaMTP calculates
+
+\[
+m/z_{expected} =
+\frac{nM + \Delta m_{adduct} - \Delta m_{loss}}{|z|}.
+\]
+
+The stored `mass_shift` already contains the signed sum of additions and losses.
+Custom rule tables must satisfy charge balance before candidate generation.
+
+# Build the reusable index
+
+`buildMZAnnotationIndex()` performs the expensive expansion once. Before mass
+expansion it applies SMILES-derived, rule-specific priors and chemical bounds;
+expected ions that remain are sorted for binary interval search. Thus the
+engine does not treat every adduct as equally plausible and only rank by m/z
+afterwards.
+
+```{r build-index}
+positive_index <- buildMZAnnotationIndex(
+  target_db,
+  polarity = "positive",
+  adducts = selected_adducts
+)
+positive_index
+
+ion_table <- data.frame(
+  adduct = positive_index$rules$name[positive_index$rule_idx],
+  expected_mz = positive_index$expected_mz
+)
+knitr::kable(ion_table, digits = 9, row.names = FALSE)
+```
+
+The structure contribution for each retained hypothesis is directly
+inspectable:
+
+```{r inspect-structure-prior}
+structure_rank <- queryMZAnnotationIndex(
+  positive_index$expected_mz,
+  positive_index,
+  ppm = 0,
+  check_isotopes = FALSE,
+  check_adduct_network = FALSE
+)
+knitr::kable(
+  structure_rank[, c(
+    "adduct", "expected_mz", "structure_score", "structure_status",
+    "structure_rule_evidence"
+  )],
+  digits = 3,
+  row.names = FALSE
+)
+```
+
+For large datasets, build one index for each database, polarity, and adduct set,
+then reuse it for every spectrum or batch of observed peaks.
+
+## Chemical validity pruning
+
+The 2HG record permits at most two proton losses. Therefore `[M-3H]3-` is not
+included in the indexed search space.
+
+```{r proton-pruning}
+negative_index <- buildMZAnnotationIndex(
+  target_db,
+  polarity = "negative",
+  adducts = c("M-H", "M-2H", "M-3H")
+)
+indexed_negative_rules <- unique(
+  negative_index$rules$name[negative_index$rule_idx]
+)
+data.frame(indexed_rule = indexed_negative_rules) |>
+  knitr::kable(align = "l")
+```
+
+# Query and rank candidates
+
+The following observed peaks have small controlled mass offsets. The contextual
+MS1 spectrum also contains a carbon-13 peak for `[M+H]+` at +1.00335 Da. In
+real data, `ms1_spectrum` should represent the same retention-time window,
+spatial pixel, or biologically coherent region as the queried peaks.
+
+```{r query-index}
+ppm_offsets <- c(1.2, -1.4, 0.6, -0.8)
+observed_mz <- ion_table$expected_mz * (1 + ppm_offsets * 1e-6)
+names(observed_mz) <- ion_table$adduct
+
+carbon13_spacing <- 1.00335483507
+ms1_spectrum <- data.frame(
+  mz = c(
+    observed_mz,
+    ion_table$expected_mz[ion_table$adduct == "M+H"] + carbon13_spacing
+  ),
+  intensity = c(1000, 700, 300, 200, 53.5)
+)
+
+candidates <- queryMZAnnotationIndex(
+  observed_mz,
+  positive_index,
+  ppm = 5,
+  ms1_spectrum = ms1_spectrum,
+  min_score = 0
+)
+
+candidate_view <- candidates[, c(
+  "observed_mz", "expected_mz", "adduct", "ppm_error", "mass_score",
+  "rule_prior", "chemical_score", "structure_score", "structure_status",
+  "isotope_score",
+  "adduct_network_score", "score", "ramp_ids"
+)]
+knitr::kable(candidate_view, digits = 4, row.names = FALSE)
+```
+
+Candidates outside the requested tolerance are removed before scoring:
+
+```{r ppm-boundary}
+outside_five_ppm <-
+  ion_table$expected_mz[ion_table$adduct == "M+H"] * (1 + 5.1e-6)
+
+data.frame(
+  query = "5.1 ppm outside expected m/z",
+  retained_candidates = nrow(queryMZAnnotationIndex(
+    outside_five_ppm,
+    positive_index,
+    ppm = 5
+  ))
+) |>
+  knitr::kable(row.names = FALSE)
+```
+
+The final score is multiplicative:
+
+\[
+S = S_{mass} \times P_{rule} \times S_{chemical} \times S_{structure}
+    \times S_{reaction\ site} \times S_{isotope}
+    \times S_{adduct\ family}.
+\]
+
+Missing optional MS1 context is neutral rather than evidence of absence. When a
+contextual spectrum is supplied, missing expected isotope or base-adduct peaks
+can reduce the score.
+
+## Adduct-family support
+
+A complex ion is more credible when a corresponding base monomer is present in
+the same spectrum. Here isotope scoring is disabled so that only adduct-network
+support changes.
+
+```{r adduct-network}
+dimer_mz <- ion_table$expected_mz[ion_table$adduct == "2M+H"]
+monomer_mz <- ion_table$expected_mz[ion_table$adduct == "M+H"]
+
+isolated_dimer <- queryMZAnnotationIndex(
+  dimer_mz,
+  positive_index,
+  ppm = 5,
+  ms1_spectrum = data.frame(mz = dimer_mz, intensity = 100),
+  check_isotopes = FALSE
+)
+supported_dimer <- queryMZAnnotationIndex(
+  dimer_mz,
+  positive_index,
+  ppm = 5,
+  ms1_spectrum = data.frame(
+    mz = c(dimer_mz, monomer_mz),
+    intensity = c(100, 500)
+  ),
+  check_isotopes = FALSE
+)
+
+data.frame(
+  context = c("isolated dimer", "base monomer present"),
+  adduct_network_score = c(
+    isolated_dimer$adduct_network_score,
+    supported_dimer$adduct_network_score
+  ),
+  final_score = c(isolated_dimer$score, supported_dimer$score)
+) |>
+  knitr::kable(digits = 3, row.names = FALSE)
+```
+
+## Mass-defect heuristic
+
+For a nominally CHO-only candidate, an unusually negative signed mass defect is
+treated as background-like evidence. It receives a penalty rather than being
+deleted, because halogenated, metal-containing, and unusual biological ions
+must not be rejected by a universal fractional-mass rule.
+
+```{r mass-defect}
+background_like_db <- data.frame(
+  formula = "C2H2O2",
+  exactmass = 99.942723533379,
+  id = "synthetic-background-like-candidate",
+  name = "Synthetic background-like candidate"
+)
+background_index <- buildMZAnnotationIndex(
+  background_like_db,
+  polarity = "positive",
+  adducts = "M+H"
+)
+background_mz <- background_index$expected_mz[[1L]]
+
+with_penalty <- queryMZAnnotationIndex(
+  background_mz,
+  background_index,
+  ppm = 0,
+  use_mass_defect = TRUE,
+  check_isotopes = FALSE,
+  check_adduct_network = FALSE
+)
+without_penalty <- queryMZAnnotationIndex(
+  background_mz,
+  background_index,
+  ppm = 0,
+  use_mass_defect = FALSE,
+  check_isotopes = FALSE,
+  check_adduct_network = FALSE
+)
+
+data.frame(
+  setting = c("mass-defect heuristic on", "mass-defect heuristic off"),
+  signed_mass_defect = background_mz - round(background_mz),
+  chemical_score = c(
+    with_penalty$chemical_score,
+    without_penalty$chemical_score
+  ),
+  retained = TRUE
+) |>
+  knitr::kable(digits = 3, row.names = FALSE)
+```
+
+# Annotate individual values or a SpaMTP object
+
+`annotateMZ()` is a convenience wrapper for individual or small batches of
+observed values. Supply a pre-built index to avoid rebuilding it.
+
+```{r annotate-mz}
+single_result <- annotateMZ(
+  observed_mz[["M+H"]],
+  index = positive_index,
+  polarity = "positive",
+  ppm = 5,
+  ms1_spectrum = ms1_spectrum,
+  min_score = 0
+)
+knitr::kable(
+  single_result[, c(
+    "observed_mz", "metabolite_names", "ramp_ids", "adduct",
+    "ppm_error", "score"
+  )],
+  digits = 4,
+  row.names = FALSE
+)
+```
+
+`annotateSM()` applies the same engine to m/z feature metadata and preserves the
+ranked candidate table in `metadata()$mz_annotation`. The small object below is only
+for demonstrating storage and provenance.
+
+```{r annotate-object}
+demo_counts <- Matrix::Matrix(
+  matrix(
+    seq_len(length(observed_mz) * 4L),
+    nrow = length(observed_mz),
+    ncol = 4L
+  ),
+  sparse = TRUE
+)
+rownames(demo_counts) <- paste0("mz-", observed_mz)
+colnames(demo_counts) <- paste0("pixel_", seq_len(ncol(demo_counts)))
+
+demo_object <- SingleCellExperiment::SingleCellExperiment(
+  assays = list(counts = demo_counts),
+  rowData = S4Vectors::DataFrame(
+    raw_mz = unname(observed_mz),
+    row.names = rownames(demo_counts)
+  )
+)
+
+annotated_object <- annotateSM(
+  demo_object,
+  db = NULL,
+  assay = "main",
+  raw.mz.column = "raw_mz",
+  ppm_error = 5,
+  adducts = selected_adducts,
+  polarity = "positive",
+  return.only.annotated = FALSE,
+  save.intermediate = TRUE,
+  min_score = 0,
+  verbose = FALSE,
+  index = positive_index,
+  ms1_spectrum = ms1_spectrum
+)
+
+annotation_columns <- as.data.frame(SummarizedExperiment::rowData(annotated_object))[, c(
+  "raw_mz", "all_IsomerNames", "all_Adducts", "all_Scores",
+  "all_Ramp_IDs"
+)]
+knitr::kable(annotation_columns, digits = 4)
+```
+
+`annotationInfo()` records which engine and database provenance downstream
+functions will consume.
+
+```{r annotation-info}
+annotation_info <- annotationInfo(annotated_object)
+annotation_info_table <- data.frame(
+  field = names(annotation_info),
+  value = vapply(annotation_info, paste, collapse = "; ", character(1)),
+  row.names = NULL
+)
+knitr::kable(annotation_info_table, row.names = FALSE)
+```
+
+# Choose thresholds without re-annotation
+
+The recommended production pattern is to retain all ppm-valid candidates using
+`min_score = 0`, then select a threshold appropriate to the analysis. This makes
+coverage and specificity tunable without repeating index construction.
+
+```{r score-thresholds}
+stored_candidates <- S4Vectors::metadata(annotated_object)$mz_annotation$results
+score_thresholds <- c(0, 0.2, 0.5)
+threshold_summary <- data.frame(
+  score_threshold = score_thresholds,
+  retained_candidates = vapply(
+    score_thresholds,
+    function(threshold) sum(stored_candidates$Score >= threshold),
+    integer(1)
+  )
+)
+knitr::kable(threshold_summary, row.names = FALSE)
+```
+
+For pathway analysis, the annotation threshold and differential-significance
+threshold answer different questions. Setting `pval_cutoff_mets = 1` allows
+non-DE metabolites to contribute, while `annotation_score_threshold` still
+controls which chemical candidates are eligible.
+
+```{r downstream-thresholds, eval=FALSE}
+regional_pathways <- findRegionalPathways(
+  object,
+  analyte_types = c("genes", "metabolites"),
+  ident = "region",
+  DE.list = differential_results,
+  pval_cutoff_mets = 1,
+  annotation_score_threshold = 0.05
+)
+
+pathwayNetworkPlots(
+  object,
+  ident = "region",
+  regpathway = regional_pathways,
+  DE.list = differential_results,
+  annotation_score_threshold = 0.05,
+  metabolite_detection = "annotated"
+)
+```
+
+# Production use with the complete RaMP table
+
+For one call, `annotateSM(db = NULL)` automatically resolves the current RaMP
+chemical-property table through `SpaMTPdb`. For repeated calls, explicitly
+load the table, then build and reuse an index. `adducts` is optional: when it is
+omitted, SpaMTP selects the full rule
+space for the mode or MALDI matrix and applies molecule-specific SMILES priors.
+An explicit list remains useful when the acquisition protocol rules out known
+ion families.
+
+The `smiles_features` resource retrieved with `SpaMTPdb::spaMTPdbResource()` stores these fields separately
+from the pruned `chem_props` table and is joined by `iso_smiles` on demand. For
+a custom database of up to 5,000 unique structures, `infer_structure = "auto"`
+parses missing features at runtime. Larger un-precomputed inputs emit a warning
+instead of silently adding a long preprocessing delay; use
+`infer_structure = "always"`, `structure_workers`, or precompute with
+`annotateSMILESStructure()` when that cost is intentional.
+
+```{r production-pattern, eval=FALSE}
+chem_props <- loadSpaMTPDatabase("chem_props")$chem_props
+ramp_positive_index <- buildMZAnnotationIndex(
+  chem_props,
+  polarity = "positive"
+)
+
+object <- annotateSM(
+  object,
+  db = NULL,
+  index = ramp_positive_index,
+  assay = "main",
+  polarity = "positive",
+  ppm_error = 5,
+  min_score = 0,
+  return.only.annotated = FALSE
+)
+```
+
+# Interpretation and limitations
+
+- An annotation is a ranked chemical hypothesis, not a confirmed identity,
+  probability, or false-discovery rate.
+- Accurate mass alone generally cannot resolve structural isomers.
+- Isotope and adduct-family checks require a spectrum from an appropriate
+  retention-time, pixel, or regional context.
+- The mass-defect rule is a score penalty, not a universal exclusion rule.
+- SMILES priors recognise common explicit functional groups but do not replace
+  pKa, gas-phase proton-affinity, solvent, salt concentration, matrix, or
+  instrument-specific models. Exotic bonding and organometallic SMILES may be
+  returned as unparsed and retain backward-compatible mass-rule scoring.
+- Tautomers and protonation states can change inferred sites. Store a
+  standardised neutral SMILES in a production database and inspect
+  `structure_evidence` for important assignments.
+- Orthogonal evidence such as authentic standards, retention time, ion
+  mobility, or MS/MS remains necessary for high-confidence identification.
+
+The [native workflow](SpaMTP_Bioconductor.html) illustrates spatial plotting
+and pathway-based prioritisation of stored candidates. These ranks remain
+hypotheses, not substitutes for orthogonal identification evidence.
+
+```{r session-info}
+sessionInfo()
+```

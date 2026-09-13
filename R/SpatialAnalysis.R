@@ -1,284 +1,215 @@
-#' Find top features and metabolites that are strongly correlated with a given feature
+#' Find features correlated with a metabolite, gene, or pixel group
 #'
-#' This function returns a list of features ranked by highest Pearson correlation score.
-#' The specified feature to corrleate against can be either a m/z value, gene or an ident (i.e. cluster).
-#' For multi-omic data, both a metabolic and transcriptomic assay can be specified to calculate correlation of both metabolites and genes.
-#'
-#' @param data SpaMTP Seurat class object containing both Spatial Transcriptomic and Metabolic data assays.
-#' @param mz Numeric string specifying the m/z to find correlated features for. One of `mz`, `gene` or `ident` must be provided, alternatives must be `NULL` (default = NULL).
-#' @param gene Character string specifying the gene to find correlated features for. One of `mz`, `gene` or `ident` must be provided, alternatives must be `NULL` (default = NULL).
-#' @param ident Character string defining the column in `colData()` or Seurat
-#'   cell metadata used to find correlated features. One of `mz`, `gene`, or
-#'   `ident` must be provided (default = NULL).
-#' @param SM.assay Character string specifying the name of the assay containing the spatial metabolomics (SM) data (default = "SPM").
-#' @param ST.assay Character string specifying the name of the assay containing the spatial transcriptomics (ST) data. If NULL then only metabolites will be used (Default = NULL).
-#' @param SM.slot Character string specifying the slot of the SM assay to use (default = "counts").
-#' @param ST.slot Character string specifying the slot of the ST assay to use (default = "counts").
-#' @param nfeatures Integer specifying the number of top correlated features to return (default = 10).
-#'
-#' @return A data frame containing the top correlated features with columns for the feature names and their correlation values.
-#'
+#' Computes Pearson correlations across matched pixels. Genes are read from
+#' altExp without assigning artificial m/z values. Constant features return NA.
+#' @param data A SpatialExperiment or aligned MSImagingExperiment.
+#' @param mz Numeric m/z or exact primary feature name.
+#' @param gene Exact feature name in ST.assay.
+#' @param ident A colData column defining groups. Supply exactly one of mz,
+#'   gene and ident. Groups are compared with binary membership vectors.
+#' @param SM.assay Primary assay or modality; `main` selects the primary
+#'   experiment. Legacy `SPM` and `Spatial` also select the primary experiment.
+#' @param ST.assay Alternative experiment name, or NULL for metabolites only.
+#' @param SM.slot Assay containing metabolite values.
+#' @param ST.slot Assay containing transcriptomic values.
+#' @param nfeatures Maximum results per reference; NULL returns all features.
+#' @return A data frame with features, correlation, modality, mz, rank and,
+#'   for multiple reference groups, ident.
 #' @export
-#'
 #' @examples
-#' utils::str(formals(findCorrelatedFeatures))
-#' # result <- findCorrelatedFeatures(data = SpaMTP, gene = "GeneX", nfeatures = 5)
-findCorrelatedFeatures <- function(data, mz = NULL, gene = NULL, ident = NULL, SM.assay = "SPM", ST.assay = NULL, SM.slot = "counts", ST.slot = "counts", nfeatures = 10){
-
-  data_list <- list()
-  met_counts <- data[[SM.assay]][SM.slot]
-
-  if (!is.null(ST.assay)){
-    tran_counts <- data[[ST.assay]][ST.slot]
-
-    gene_mappings <- data.frame(gene = rownames(tran_counts))
-
-    rownames(tran_counts) <- unlist(lapply(1:length(rownames(tran_counts)), function (x) {
-      paste0("mz-",(round(as.numeric(gsub("mz-", "", rownames(met_counts)[length(rownames(met_counts))],))) + 100), x)
-    }))
-
-    gene_mappings$mz <- rownames(tran_counts)
-    gene_mappings$raw_mz <- gsub("mz-", "", gene_mappings$mz)
-
-    data[["tmp"]] <- SeuratObject::CreateAssay5Object(counts = rbind(met_counts, tran_counts))
-    data[["tmp"]][SM.slot] <- data[["tmp"]]["counts"]
-    SM.assay <- "tmp"
-  } else{
-    if (!is.null(ST.slot)){
-      warning("`ST.slot` is not set to NULL, but `ST.assay` is ... Gene's will not be included in the analysis. If genes are to be included, please set `ST.assay` != NULL -> using the appropriate assay")
-    }
+#' x <- SpatialExperiment::SpatialExperiment(
+#'   assays = list(counts = rbind(a = 1:4, b = 4:1)),
+#'   rowData = S4Vectors::DataFrame(mz = c(100, 200)),
+#'   spatialCoords = cbind(x = 1:4, y = 0),
+#'   colData = S4Vectors::DataFrame(row.names = paste0("p", 1:4)))
+#' findCorrelatedFeatures(x, mz = 100)
+findCorrelatedFeatures <- function(
+    data, mz = NULL, gene = NULL, ident = NULL, SM.assay = "main",
+    ST.assay = NULL, SM.slot = "counts", ST.slot = "counts", nfeatures = 10
+) {
+  data <- .nativeSpatialObject(data)
+  if (sum(!vapply(list(mz, gene, ident), is.null, logical(1))) != 1L)
+    stop("Supply exactly one of mz, gene, and ident.", call. = FALSE)
+  .validateFeatureCount(nfeatures, "nfeatures", allowNull = TRUE)
+  metabolites <- .assayData(data, SM.assay, SM.slot)
+  matrices <- list(metabolite = metabolites)
+  if (!is.null(ST.assay)) {
+    if (!ST.assay %in% SingleCellExperiment::altExpNames(data))
+      stop("ST.assay must name an alternative experiment.", call. = FALSE)
+    transcripts <- .assayData(data, ST.assay, ST.slot)
+    if (is.null(colnames(transcripts)) ||
+        !setequal(colnames(transcripts), colnames(metabolites)))
+      stop("Modalities must contain the same named pixels.", call. = FALSE)
+    matrices$gene <- transcripts[, colnames(metabolites), drop = FALSE]
   }
-
-  if (is.null(mz) & ! is.null(gene) & is.null(ident)){  # for gene mapping
-    idx <- which(gene_mappings$gene == gene)
-    mz <- as.numeric(gene_mappings$raw_mz[idx])
-
-  } else if (!is.null(mz) & is.null(gene) & is.null(ident)){ # for mz mapping
-    mz <- mz
-  } else if (!is.null(ident) & is.null(gene) & is.null(mz)){ # for ident mapping
-
-    cellMetadata <- .cellMetadata(data)
-    for (i in unique(cellMetadata[[ident]])){
-      data_list[[i]] <- unlist(lapply(cellMetadata[[ident]], function(x) { ifelse(x == i, TRUE, FALSE)}))
-    }
-
+  if (!is.null(mz)) {
+    feature <- if (is.numeric(mz)) findNearestMZ(data, mz, SM.assay) else mz
+    if (length(feature) != 1L || !feature %in% rownames(metabolites))
+      stop("mz must identify one primary feature.", call. = FALSE)
+    references <- list(reference = as.numeric(metabolites[feature, ]))
+  } else if (!is.null(gene)) {
+    if (is.null(ST.assay) || length(gene) != 1L ||
+        !gene %in% rownames(matrices$gene))
+      stop("gene must identify one feature in ST.assay.", call. = FALSE)
+    references <- list(reference = as.numeric(matrices$gene[gene, ]))
   } else {
-    stop("Invalid input for 'mz = ', 'ident' = and 'gene = '... Only one inupt can be provided. Either mz, ident or gene, alternative must be set to NULL! Please check documentation ...")
+    metadata <- SummarizedExperiment::colData(data)
+    if (length(ident) != 1L || !ident %in% colnames(metadata))
+      stop("ident must name a colData column.", call. = FALSE)
+    groups <- as.character(metadata[[ident]])
+    if (anyNA(groups)) stop("Group labels must not be missing.", call. = FALSE)
+    levels <- unique(groups)
+    references <- stats::setNames(
+      lapply(levels, function(level) as.numeric(groups == level)), levels)
   }
-
-  data_cardinal <- convertSeuratToCardinal(data = data, assay = SM.assay, slot = SM.slot)
-
-  if (!is.null(ident)){
-    for (i in names(data_list)){
-      data_list[[i]] <- Cardinal::colocalized(object = data_cardinal, ref = data_list[[i]], n = length(rownames(data[[SM.assay]][SM.slot])))
-    }
-  } else {
-    data_list[["1"]] <- suppressWarnings(Cardinal::colocalized(data_cardinal, mz=mz, n = length(rownames(data[[SM.assay]][SM.slot]))))
-  }
-
-  if (!is.null(ST.assay)){
-    for (i in names(data_list)){
-
-      result <- data_list[[i]][order(data_list[[i]]$mz), ]
-      result$features <- c(rownames(met_counts),gene_mappings$gene)
-      result$modality <- c(rep("metabolite", length(rownames(met_counts))), c(rep("gene", length(gene_mappings$gene))))
-      result <- result[c("features", colnames(result)[!colnames(result) %in% c("mz", "features")])]
-      data_list[[i]] <- result
-    }
-
-  }
-
-  for (i in names(data_list)){
-
-    result <- data_list[[i]]
-
-    if ("cor" %in% colnames(result)){
-      names(result)[names(result) == "cor"] <- "correlation"
-    }
-
-    result <- result[order(-abs(result$correlation)), ]
-    result$ident <- i
-    result$rank <- c(1:length(result$ident))
-    data_list[[i]] <- result
-
-  }
-
-  results <- data.frame(do.call(rbind, data_list))
-
-  if (!is.null(nfeatures)){
-    results <- data.frame(results %>%
-                            dplyr::group_by(ident) %>%
-                            dplyr::slice_head(n = nfeatures) %>%
-                            dplyr::ungroup())
-
-  }
-
-
-  if ( length(data_list) == 1){
-    results$ident <- NULL
-  }
-
-
-  return(results)
+  masses <- .massValues(.featureMetadata(data, SM.assay), rownames(metabolites))
+  results <- lapply(names(references), function(reference) {
+    tables <- lapply(names(matrices), function(modality) {
+      expression <- matrices[[modality]]
+      correlations <- vapply(seq_len(nrow(expression)), function(index) {
+        values <- as.numeric(expression[index, ])
+        target <- references[[reference]]
+        if (length(values) < 3L || any(!is.finite(c(values, target))) ||
+            stats::sd(values) == 0 || stats::sd(target) == 0) return(NA_real_)
+        stats::cor(values, target, method = "pearson")
+      }, numeric(1))
+      data.frame(features = rownames(expression), correlation = correlations,
+                 modality = modality,
+                 mz = if (modality == "metabolite") masses else NA_real_)
+    })
+    result <- do.call(rbind, tables)
+    result <- result[order(-abs(result$correlation), na.last = TRUE), ]
+    result$rank <- seq_len(nrow(result))
+    if (length(references) > 1L) result$ident <- reference
+    if (!is.null(nfeatures)) result <- utils::head(result, nfeatures)
+    result
+  })
+  result <- do.call(rbind, results)
+  rownames(result) <- NULL
+  result
 }
 
+.validateFeatureCount <- function(value, argument, allowNull = FALSE) {
+  if (is.null(value) && allowNull) return(invisible(NULL))
+  if (!is.numeric(value) || length(value) != 1L || !is.finite(value) ||
+      value < 1 || value > .Machine$integer.max || value != floor(value))
+    stop(argument, " must be a positive integer.", call. = FALSE)
+  invisible(NULL)
+}
 
-#' Find Spatially Variable Metabolites
+#' Find spatially variable metabolites using Moran's I
 #'
-#' Finds metabolites that display strong spatial patterns using MoransI.
-#' Each m/z value is ranked by MoransI score and the results are stored in the SpaMTP Seurat Object feature metadata.
-#'
-#' @param object SpaMTP Seurat class object contating the intensity values for each m/z
-#' @param assay Character string indicating which Seurat object assay to pull data form (default = "SPM").
-#' @param slot Character string indicating the assay slot to use to pull expression values form (default = "counts").
-#' @param image Character string defining the image to extract the tissue coordinates from (defualt = "slice1").
-#' @param nfeatures Numeric values defining the top number of features to mark as the top spatially variable (default = 2000).
-#' @param max_spots Maximum number of spots used to construct Seurat's dense
-#'   Moran's I distance matrix. When the object is larger, spots are sampled
-#'   deterministically using `seed`. Set to `NULL` to use every spot (default =
-#'   5000).
-#' @param seed Integer random seed used only when `max_spots` triggers
-#'   subsampling (default = 1).
-#' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
-#'
-#' @return Returns SpaMTP object containing the MoransI pvalue and rank stored in the assay feature meta.data
+#' Calls ape::Moran.I with inverse squared Euclidean distance weights and zero
+#' diagonal, row-standardized by ape. Samples are analysed separately.
+#' Constant features return NA.
+#' @param object A SpatialExperiment or aligned MSImagingExperiment.
+#' @param assay Assay name or primary/alternative experiment to analyse.
+#' @param slot Assay containing expression values.
+#' @param image Retained for compatibility; coordinates use spatialCoords.
+#' @param nfeatures Maximum variable features selected.
+#' @param max_spots Maximum pixels for the dense distance matrix; NULL uses all.
+#' @param seed Random seed for sampling; caller RNG state is restored.
+#' @param verbose Show progress messages.
+#' @param sampleId A sample_id in colData. Required for multiple samples.
+#' @return A SpatialExperiment with statistics, BH-adjusted p-values, flags and
+#'   ranks in rowData of the selected experiment. Settings and sampled pixel
+#'   IDs are stored in metadata(object)$moransi.
 #' @export
-#'
 #' @examples
-#' utils::str(formals(findSpatiallyVariableMetabolites))
-#' # SpaMTP.obj <- findSpatiallyVariableMetabolites(SpaMTP)
-findSpatiallyVariableMetabolites <- function(object, assay = "SPM", slot = "counts",
-                                             image = "slice1", nfeatures = 2000,
-                                             max_spots = 5000, seed = 1,
-                                             verbose = TRUE){
-
+#' x <- SpatialExperiment::SpatialExperiment(
+#'   assays = list(counts = rbind(a = 1:6, b = c(1, 3, 5, 2, 4, 6))),
+#'   rowData = S4Vectors::DataFrame(mz = c(100, 200)),
+#'   spatialCoords = cbind(x = 1:6, y = 0),
+#'   colData = S4Vectors::DataFrame(row.names = paste0("p", 1:6)))
+#' x <- findSpatiallyVariableMetabolites(x)
+#' getSpatiallyVariableMetabolites(x)
+findSpatiallyVariableMetabolites <- function(
+    object, assay = "main", slot = "counts", image = NULL, nfeatures = 2000,
+    max_spots = 5000, seed = 1, verbose = TRUE, sampleId = NULL
+) {
   if (!is.null(max_spots) &&
       (!is.numeric(max_spots) || length(max_spots) != 1L ||
-       !is.finite(max_spots) || max_spots < 2)) {
-    stop("max_spots must be NULL or one finite number >= 2.")
+       !is.finite(max_spots) || max_spots < 2 || max_spots != floor(max_spots)))
+    stop("max_spots must be NULL or one finite number >= 2.", call. = FALSE)
+  if (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed) ||
+      abs(seed) > .Machine$integer.max)
+    stop("seed must be one finite number.", call. = FALSE)
+  .validateFeatureCount(nfeatures, "nfeatures")
+  object <- .nativeSpatialObject(object)
+  expression <- .assayData(object, assay, slot)
+  coordinates <- SpatialExperiment::spatialCoords(object)
+  samples <- as.character(SummarizedExperiment::colData(object)$sample_id)
+  if (is.null(sampleId)) {
+    if (length(unique(samples)) > 1L)
+      stop("Choose sampleId when analysing multiple tissue samples.", call. = FALSE)
+    sampleId <- unique(samples)
   }
-  if (!is.numeric(seed) || length(seed) != 1L || !is.finite(seed)) {
-    stop("seed must be one finite number.")
-  }
-
-  DefaultAssay(object) <- assay
-  features <- rownames(x = object[[assay]])
-  spatial.location <- GetTissueCoordinates(object = object[[image]])
-  data <- SeuratObject::LayerData(
-    object = object,
-    assay = assay,
-    layer = slot
-  )
-  data <- data[features, , drop = FALSE]
-
-  if (nrow(spatial.location) != ncol(data)) {
-    stop("The selected image coordinates and assay must contain the same number of spots.")
-  }
-  coordinate_names <- rownames(spatial.location)
-  if (!is.null(coordinate_names) && !is.null(colnames(data))) {
-    coordinate_order <- match(colnames(data), coordinate_names)
-    if (!anyNA(coordinate_order)) {
-      spatial.location <- spatial.location[coordinate_order, , drop = FALSE]
-    }
-  }
-
-  if (!is.null(max_spots) && ncol(data) > max_spots) {
-    max_spots <- as.integer(max_spots)
-    retained_spots <- sort(withr::with_seed(
-      as.integer(seed),
-      sample.int(ncol(data), max_spots)
-    ))
-    verbose_message(
-      message_text = paste0(
-        "Sampling ", max_spots, " of ", ncol(data),
-        " spots for the Moran's I distance matrix ... "
-      ),
-      verbose = verbose
-    )
-    data <- data[, retained_spots, drop = FALSE]
-    spatial.location <- spatial.location[retained_spots, , drop = FALSE]
-  }
-
-  data <- as.matrix(x = data)
-  data <- data[RowVar(x = data) > 0, ]
-  svf.info <- RunMoransI(data = data, pos = spatial.location, verbose = verbose)
-  colnames(x = svf.info) <- paste0("MoransI_", colnames(x = svf.info))
-  var.name <- paste0("moransi", ".spatially.variable")
-  var.name.rank <- paste0(var.name, ".rank")
-  svf.info[[var.name]] <- FALSE
-  svf.info <- svf.info[order(svf.info[, 2], -abs(svf.info[, 1])), , drop = FALSE]
-  svf.info[[var.name]][1:(min(nrow(x = svf.info), nfeatures))] <- TRUE
-  svf.info[[var.name.rank]] <- 1:nrow(x = svf.info)
-  object[[assay]][[names(x = svf.info)]] <- svf.info
-
-  return(object)
+  if (length(sampleId) != 1L || !sampleId %in% samples)
+    stop("sampleId must identify one sample in colData.", call. = FALSE)
+  retained <- which(samples == sampleId)
+  if (!is.null(max_spots) && length(retained) > max_spots)
+    retained <- withr::with_seed(as.integer(seed), sort(sample(retained, max_spots)))
+  if (length(retained) < 4L)
+    stop("Moran's I requires at least four selected pixels.", call. = FALSE)
+  coordinates <- coordinates[retained, , drop = FALSE]
+  if (ncol(coordinates) < 2L || any(!is.finite(coordinates)))
+    stop("Spatial coordinates must be finite and have at least two axes.", call. = FALSE)
+  distances <- as.matrix(stats::dist(coordinates))
+  if (any(distances[upper.tri(distances)] == 0))
+    stop("Pixels within a sample must have distinct coordinates.", call. = FALSE)
+  weights <- 1 / distances^2
+  diag(weights) <- 0
+  verbose_message("Computing Moran's I with inverse-square distance weights.",
+                  verbose = verbose)
+  statistics <- vapply(seq_len(nrow(expression)), function(index) {
+    values <- as.numeric(expression[index, retained])
+    if (any(!is.finite(values)) || stats::sd(values) == 0)
+      return(c(observed = NA_real_, p.value = NA_real_))
+    result <- ape::Moran.I(values, weights)
+    c(observed = result$observed, p.value = result$p.value)
+  }, c(observed = 0, p.value = 0))
+  featureData <- .featureMetadata(object, assay)
+  featureData$MoransI_observed <- statistics["observed", ]
+  featureData$MoransI_p.value <- statistics["p.value", ]
+  featureData$MoransI_p.adjust <- stats::p.adjust(statistics["p.value", ], "BH")
+  valid <- which(is.finite(statistics["observed", ]) &
+                   is.finite(statistics["p.value", ]))
+  ordered <- valid[order(statistics["p.value", valid],
+                         -abs(statistics["observed", valid]))]
+  ranks <- rep(NA_integer_, nrow(expression))
+  ranks[ordered] <- seq_along(ordered)
+  featureData$moransi.spatially.variable.rank <- ranks
+  featureData$moransi.spatially.variable <- !is.na(ranks) & ranks <= nfeatures
+  object <- .setFeatureMetadata(object, featureData, assay)
+  S4Vectors::metadata(object)$moransi <- list(
+    backend = "ape::Moran.I", weights = "row-standardized inverse squared Euclidean distance",
+    sample_id = sampleId, assay = assay, layer = slot,
+    pixels = colnames(object)[retained], seed = seed)
+  object
 }
 
-#' Get top spatially variable metabolites
-#'
-#' This function returns the names of the top n number of spatially variable features.
-#'
-#' @param object SpaMTP Seurat class object containing the intensity values for each m/z
-#' @param assay Character string indicating which Seurat object assay to pull data form (default = "SPM").
-#' @param n Numeric value defining the top number of metabolites to return (default = 10).
-#'
-#' @return Vector containing m/z feature names corresponding to the top n number of spatially variable metabolites
+#' Get the top spatially variable metabolites
+#' @param object A SpatialExperiment returned by findSpatiallyVariableMetabolites.
+#' @param assay Primary or alternative experiment containing results.
+#' @param n Maximum number of feature names.
+#' @return Feature names in Moran's I rank order, excluding untested features.
 #' @export
-#'
-#' @examples
-#' utils::str(formals(getSpatiallyVariableMetabolites))
-#' # features <- getSpatiallyVariableMetabolites(SpaMTP, n = 6)
-getSpatiallyVariableMetabolites <- function(object, assay = "SPM", n = 10){
-
-  return(rownames(object[[assay]][["moransi.spatially.variable.rank"]]%>%arrange(moransi.spatially.variable.rank))[1:n])
+getSpatiallyVariableMetabolites <- function(object, assay = "main", n = 10) {
+  .validateFeatureCount(n, "n")
+  metadata <- .featureMetadata(object, assay)
+  ranks <- metadata$moransi.spatially.variable.rank
+  if (is.null(ranks))
+    stop("Run findSpatiallyVariableMetabolites() first.", call. = FALSE)
+  tested <- which(!is.na(ranks))
+  utils::head(rownames(metadata)[tested[order(ranks[tested])]], n)
 }
 
-
-
-#######################################################################################################################
-## Code below are helper functions
-#######################################################################################################################
-
-
-
-#' Creates a pprcomp object based on an input list
-#'
-#' @param lst List containing PCA results
-#'
-#' @return A pprcomp object contating results from PCA analysis
-#'
-#' @examples
-#' #HELPER FUNCTION
 list_to_pprcomp <- function(lst) {
-  # Create an empty object with class pprcomp
-  obj <- structure(list(), class = "prcomp")
-  # Assign components from the list to the object
-  obj$sdev <- lst$sdev
-  obj$rotation <- lst$rotation
-  obj$center <- lst$center
-  obj$scale <- lst$scale
-  obj$x <- lst$x
-  # Add other components as needed
-
-  # Return the constructed pprcomp object
-  return(obj)
+  structure(lst[c("sdev", "rotation", "center", "scale", "x")], class = "prcomp")
 }
 
-
-#### Code is manipulated from Seurat ##################################################################################
-
-#' Compute the row variances for each m/z value
-#'
-#' @param x Matrix containing count values used for correlation
-#'
-#' @return Vector contating the row variances for each m/z value
-#'
-#' @examples
-#' #HELPER FUNCTION
 RowVar <- function(x) {
-  if (ncol(x) < 2L) {
-    return(rep(NA_real_, nrow(x)))
-  }
+  if (ncol(x) < 2L) return(rep(NA_real_, nrow(x)))
   means <- rowMeans(x)
   pmax(0, (rowSums(x * x) - ncol(x) * means * means) / (ncol(x) - 1L))
 }

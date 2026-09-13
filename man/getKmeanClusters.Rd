@@ -17,7 +17,7 @@ getKmeanClusters(
 )
 }
 \arguments{
-\item{data}{A SpaMTP Seurat object containing the results from \code{runSpatialGraphPCA()}.}
+\item{data}{A Bioconductor experiment containing the results from \code{runSpatialGraphPCA()}.}
 
 \item{reduction}{Character string stating the name of the reduction slot to use (default = "SpatialPCA").}
 
@@ -36,13 +36,11 @@ getKmeanClusters(
 \item{seed}{Integer of the random seed to use for reproducibility (default = 888).}
 }
 \value{
-A SpaMTP Seurat object with a new metadata column containing the K-means cluster assignments.
+A Bioconductor experiment with a new metadata column containing the K-means cluster assignments.
 }
 \description{
-This function runs K-means clustering on a specified reduction in a SpaMTP Seurat object and adds the cluster assignments to the object metadata.
+This function runs K-means clustering on a specified reduction in a Bioconductor experiment and adds the cluster assignments to the object metadata.
 }
 \examples{
 utils::str(formals(getKmeanClusters))
-# seurat_object <- getKmeanClusters(spamtp_obj, reduction = "SpatialPCA", centers = 8, cluster.name = "test_clusters")
-# SpatialDimPlot(spamtp_obj, group.by = "test_clusters")
 }

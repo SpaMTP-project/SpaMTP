@@ -1,4 +1,5 @@
 ^LICENSE\.md$
+^BIOCONDUCTOR_MIGRATION\.md$
 ^\.git
 ^data-raw$
 .*\.Rcheck$

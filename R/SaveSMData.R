@@ -3,16 +3,16 @@
 
 #' Saves SpaMTP Object
 #'
-#' This function saves a SpaMTP Seurat Object into a standard single-cell/spatial file format.
+#' This function saves a Bioconductor experiment into a standard single-cell/spatial file format.
 #' This includes a filtered_feature_bc_matrix folder containing files storing the features, barcode/pixels and intensity matrix.
 #' Metadata and sapatial files (such as scale factors and hires/lowres images) are also stored.
 #'
-#' @param data A Spatial Metabolomic SpaMTP Seurat Object being saved.
+#' @param data A Spatial Metabolomic Bioconductor experiment being saved.
 #' @param outdir Character string of the directory to save the mtx.mtx, barcode.tsv, features.tsv, barcode_metadata.csv and feature_metadata.csv in.
-#' @param assay Character string defining the Seurat assay that contains the m/z count data (default = "Spatial").
-#' @param slot Character string defining the Seurat assay slot that contains the m/z values directly (default = "counts").
-#' @param image Character string defining the image stored within the SpaMTP Seurat object to save. If `NULL` no image will be saved (default = NULL).
-#' @param annotations Boolean values defining if the Seurat Object contains annotations to be saved (default = FALSE).
+#' @param assay Character string defining the primary or alternative experiment that contains the m/z count data (default = "Spatial").
+#' @param slot Character string defining the primary or alternative experiment slot that contains the m/z values directly (default = "counts").
+#' @param image Image ID identifying exactly one imgData row; NULL omits image export.
+#' @param annotations Boolean values defining if the Bioconductor experiment contains annotations to be saved (default = FALSE).
 #' @param generate.h5 Boolean value indicating whether to generate a filtered_feature_bc_matrix.h5 file. Often used by data loading functions (e.g. scanpy.load_visium). If `FALSE`, only a filtered_feature_bc_matrix folder will be generated (default = TRUE).
 #' @param verbose Boolean indicating whether to show informative processing messages. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
@@ -26,8 +26,10 @@
 #'
 #' @examples
 #' utils::str(formals(saveSpaMTPData))
-#' # saveSpaMTPData(SeuratObject, "../output", annotations = TRUE)
 saveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", image = NULL, annotations = FALSE, generate.h5 = TRUE, verbose = TRUE){
+  .requireExperiment(data)
+  if (!is.null(image)) .requireExperiment(data, "SpatialExperiment")
+
 
   if (!dir.exists(outdir)) {
     verbose_message(message_text = paste0("Generating new directory to store output here: ", outdir), verbose = verbose)
@@ -38,6 +40,9 @@ saveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", ima
 
   verbose_message(message_text = paste0("Writing ", slot," slot to matrix.mtx, barcode.tsv, genes.tsv"), verbose = verbose)
   assayMatrix <- .assayData(data, assay, slot)
+  if (!inherits(assayMatrix, "sparseMatrix")) {
+    assayMatrix <- Matrix::Matrix(assayMatrix, sparse = TRUE)
+  }
   DropletUtils::write10xCounts(assayMatrix, path = paste0(outdir,"/filtered_feature_bc_matrix/"), overwrite = TRUE)
 
   verbose_message(message_text = "Writing cell metadata to metadata.csv", verbose = verbose)
@@ -53,50 +58,56 @@ saveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", ima
     verbose_message(message_text ="Generating 'spatial' directory ... ", verbose = verbose)
     dir.create(paste0(outdir, "/spatial/"))
 
-    spatialImage <- data[[image]]
-    imageScaleFactors <- tryCatch(
-      Seurat::ScaleFactors(spatialImage),
-      error = function(e) NULL
+    imageData <- as.data.frame(SpatialExperiment::imgData(data))
+    selected <- which(imageData$image_id == image)
+    if (length(selected) != 1L) {
+      stop("`image` must identify exactly one row of imgData(data).", call. = FALSE)
+    }
+    sampleId <- imageData$sample_id[[selected]]
+    scaleFactor <- imageData$scaleFactor[[selected]]
+    scaleFactors <- list(
+      tissue_hires_scalef = scaleFactor,
+      tissue_lowres_scalef = scaleFactor
     )
-    if (!is.null(imageScaleFactors)){
-      scale.factors <- list("tissue_hires_scalef" = imageScaleFactors[["hires"]],
-                          "tissue_lowres_scalef" = imageScaleFactors[["lowres"]],
-                          "fiducial_diameter_fullres" = imageScaleFactors[["fiducial"]],
-                          "spot_diameter_fullres" = imageScaleFactors[["spot"]]* 2)
+    sfJSON <- jsonlite::toJSON(
+      rapply(
+        scaleFactors,
+        function(x) if (length(x) == 1L) jsonlite::unbox(x) else x,
+        how = "replace"
+      )
+    )
+    write(sfJSON, file = paste0(outdir, "/spatial/scalefactors_json.json"))
 
-      sfJSON <- jsonlite::toJSON(
-        rapply(scale.factors, function(x) if (length(x) == 1L) jsonlite::unbox(x) else x,
-               how = "replace"))
-
-      verbose_message(message_text ="Writing scalefactors_json.json file ...", verbose = verbose)
-      write(sfJSON, file = paste0(outdir, "/spatial/scalefactors_json.json"))
+    imagePath <- paste0(outdir, "/spatial/tissue_lowres_image.png")
+    source <- SpatialExperiment::imgSource(
+      data,
+      sample_id = sampleId,
+      image_id = image
+    )
+    copied <- length(source) == 1L && !is.na(source) && file.exists(source) &&
+      file.copy(source, imagePath, overwrite = TRUE)
+    if (!isTRUE(copied)) {
+      raster <- SpatialExperiment::imgRaster(
+        data,
+        sample_id = sampleId,
+        image_id = image
+      )
+      magick::image_write(magick::image_read(raster), imagePath, format = "png")
     }
 
-    imageArray <- tryCatch(
-      SeuratObject::GetImage(spatialImage, mode = "raw"),
-      error = function(e) NULL
-    )
-    if (!is.null(imageArray)){
-      verbose_message(message_text ="Writing image to `spatial/tissue_lowres_image.png` ...", verbose = verbose)
-      png::writePNG(imageArray, paste0(outdir, "/spatial/tissue_lowres_image.png"))
-    }
-
-    coords <- GetTissueCoordinates(data, image = image)
-    coords$in_tissue <- 1
-
-    x_coords <- sort(unique(coords[,"x"]))
-    names(x_coords) <- 1:length(x_coords)
-    coords$arrayrow <- names(x_coords)[match(coords$x, x_coords)]
-
-    y_coords <- sort(unique(coords[,"y"]))
-    names(y_coords) <- 1:length(y_coords)
-    coords$arraycol <- names(y_coords)[match(coords$y, y_coords)]
-
-    coords <- coords[c("cell", "in_tissue", "arrayrow", "arraycol", "x","y")]
+    keep <- as.character(data$sample_id) == sampleId
+    coords <- as.data.frame(SpatialExperiment::spatialCoords(data)[keep, , drop = FALSE])
+    coords$cell <- colnames(data)[keep]
+    coords$in_tissue <- 1L
+    coords$arrayrow <- match(coords$x, sort(unique(coords$x)))
+    coords$arraycol <- match(coords$y, sort(unique(coords$y)))
+    coords <- coords[c("cell", "in_tissue", "arrayrow", "arraycol", "x", "y")]
     colnames(coords) <- NULL
-
-    verbose_message(message_text ="Writing tissue coordinate file` ...", verbose = verbose)
-    data.table::fwrite(coords, paste0(outdir,"/spatial/tissue_positions_list.csv"))
+    data.table::fwrite(
+      coords,
+      paste0(outdir, "/spatial/tissue_positions_list.csv"),
+      col.names = FALSE
+    )
 
   }
   if (annotations){

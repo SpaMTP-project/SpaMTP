@@ -1,26 +1,29 @@
-#' Generates PCA analysis results for a SpaMTP Seurat Object
+#' Compute PCA with scater on a selected experiment
 #'
-#' This function run PCA analaysis on a SpaMTP Seurat Object.
+#' Uses scater::runPCA() and stores embeddings in reducedDim().
 #' The user can provide a bin/resolution size to increase the bin size and reduce the dimensionality/noise of the SM dataset prior to calculating PCAs.
 #'
-#' @param SpaMTP SpaMTP Seurat class object that contains spatial metabolic information.
-#' @param npcs is an integer value to indicated preferred number of PCs to retain (default = 30).
-#' @param variance_explained_threshold Numeric value defining the explained variance threshold (default = 0.9).
-#' @param assay Character string defining the SpaMTP assay to extract intensity values from (default = "SPM").
+#' @param SpaMTP Bioconductor experiment that contains spatial metabolic information.
+#' @param npcs Positive number of PCs, capped by matrix dimensions. NULL uses the variance threshold.
+#' @param variance_explained_threshold Cumulative variance fraction in (0, 1], used only when npcs is NULL.
+#' @param assay Primary (`main`) or alternative experiment name.
 #' @param slot Character string defining the assay slot containing the intensity values (default = "counts").
 #' @param show_variance_plot Boolean indicating weather to display the variance plot output by this analysis (default = FALSE).
 #' @param bin_resolution Numeric value defining the resolution to use for binning m/z peaks. If set to `NULL`, no binning will be performed (default = NULL).
 #' @param resolution_units Character string specifying the units of the `bin_resolution`. Either 'ppm' or 'mz' can be provided. `bin_resolution` must be provided for this parameter to be implemented (default = "ppm").
 #' @param bin_method Character string defining the method to use for binning respective m/z peaks that fall within a bin. Options for this parameter can be one of "sum", "mean", "max" or "min". `bin_resolution` must be provided for this parameter to be implemented (default = "sum").
-#' @param reduction.name Character string indicating the name associated with the PCA results stored in the output SpaMTP Seurat object (default = "pca").
+#' @param reduction.name Character string indicating the name associated with the PCA results stored in the output Bioconductor experiment (default = "pca").
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
 #'
-#' @return SpaMTP object with pca results stored in the
+#' @return The input with PCA embeddings in reducedDim().
 #' @export
 #'
 #' @examples
-#' utils::str(formals(runMetabolicPCA))
+#' counts <- matrix(seq_len(30), nrow = 5)
+#' sce <- SingleCellExperiment::SingleCellExperiment(assays = list(counts = counts))
+#' sce <- runMetabolicPCA(sce, npcs = 2)
+#' SingleCellExperiment::reducedDimNames(sce)
 #' ## For running PCA on un-adjusted peak bin sizes
 #' # spamtp_obj <- runMetabolicPCA(spamtp_obj, npcs = 50)
 #'
@@ -29,7 +32,7 @@
 runMetabolicPCA <- function(SpaMTP,
                             npcs = 30,
                             variance_explained_threshold = 0.9,
-                            assay = "SPM",
+                            assay = "main",
                             slot = "counts",
                             show_variance_plot= FALSE,
                             bin_resolution = NULL,
@@ -38,172 +41,60 @@ runMetabolicPCA <- function(SpaMTP,
                             reduction.name = "pca",
                             verbose = TRUE)
 {
-  verbose_message(message_text = "Running PCA Analysis ... ", verbose = verbose)
-
-  npcs <- as.integer(npcs)
-
-  if(!is.null(bin_resolution)){
-    verbose_message(message_text = paste0("Binned SpaMTP object to a bin size of ", bin_resolution), verbose = verbose)
-    if (!resolution_units %in% c("ppm", "mz")){
-      stop("Incorrect value assigned to 'resolution_units'... value must be either 'ppm' or 'mz', please change accordingly")
+  .requireExperiment(SpaMTP, "SingleCellExperiment")
+  analysisData <- .experimentForAssay(SpaMTP, assay)
+  if (!is.null(bin_resolution)) {
+    if (!identical(analysisData, SpaMTP)) {
+      stop("Bin the primary MSI experiment, not an alternative modality.", call. = FALSE)
     }
-    if ( !bin_method %in% c("sum", "mean", "max", "min")){
-      stop("Incorrect value assigned to 'bin_method'... value must be either 'sum', 'mean', 'max' or 'min', please change accordingly")
-    }
-
-    data <- binSpaMTP(data = SpaMTP,
-                      resolution = bin_resolution,
-                      units = resolution_units,
-                      assay = assay,
-                      slot = slot,
-                      method = bin_method, return.only.mtx = FALSE)
-
-    data_mtx <- data[["binned"]]["counts"]
-    temp_assay <- "binned"
-
-  } else {
-    data_mtx <- SpaMTP[[assay]][slot]
-    data <- SpaMTP
-    temp_assay <- assay
+    analysisData <- binSpaMTP(
+      analysisData, resolution = bin_resolution, units = resolution_units,
+      method = bin_method, assay = assay, slot = slot)
+    slot <- "counts"
   }
-
-  # PCA analysis
-  verbose_message(message_text = "Scaling original matrix", verbose = verbose)
-
-
-  mass_matrix = Matrix::t(data_mtx)
-
-  verbose_message(message_text = "Running the principal component analysis ... " , verbose = verbose)
-
-  # Runing PCA
-
-  resampled_mat_standardised = as.matrix(Matrix::t(
-    Matrix::t(mass_matrix) - Matrix::colSums(mass_matrix) / nrow(mass_matrix)
-  ))
-
-  verbose_message(message_text = "Computing the covariance" , verbose = verbose)
-  cov_mat <- t(resampled_mat_standardised) %*% resampled_mat_standardised / (nrow(resampled_mat_standardised) - 1)
-
-  verbose_message(message_text = "Computing the eigenvalue/eigenvectors", verbose = verbose)
-  eigen_result <- eigen(cov_mat)
-  gc()
-  # Extract eigenvectors and eigenvalues
-  eigenvectors <- eigen_result$vectors
-  eigenvalues <- eigen_result$values
-
-  verbose_message(message_text = "Computing PCA", verbose = verbose)
-
-  pc = pbapply::pblapply(1:npcs, function(i) {
-    temp = resampled_mat_standardised[, 1] * eigenvectors[1, i]
-    for (j in 2:ncol(resampled_mat_standardised)) {
-      temp = temp + resampled_mat_standardised[, j] * eigenvectors[j, i]
-    }
-    return(temp)
-  })
-  pc = do.call(cbind, pc)
-  colnames(pc) = paste0("PC", 1:npcs)
-  # make pca object
-  eigenvectors <- eigenvectors[,1:npcs]
-  colnames(eigenvectors) = paste0("PC", 1:npcs)
-  #rownames(eigenvectors) = colnames(mass_matrix)
-  eigenvalues <- eigenvalues[1:npcs]
-
-  pca = list(
-    sdev = sqrt(eigenvalues),
-    rotation = eigenvectors,
-    center = Matrix::colSums(mass_matrix) / nrow(mass_matrix),
-    scale = FALSE,
-    x = pc
-  )
-  pca = list_to_pprcomp(pca)
-
-  verbose_message(message_text = "PCA finished!", verbose = verbose)
-
-  rm(mass_matrix)
-  gc()
-  eigenvalues = pca$sdev ^ 2
-  # Step 5: Compute Principal Components
-  # Choose number of principal components, k
-  # if not input, use scree test to help find retained components
-
-  if (show_variance_plot) {
-    if (!is.null(variance_explained_threshold)) {
-      tryCatch({
-        cumulative_variance = cumsum(eigenvalues) / sum(eigenvalues)
-        threshold = variance_explained_threshold  # Example threshold
-
-
-
-        par(mfrow = c(1, 1))
-        par(mar = c(2, 2, 1, 1))
-        # Plot cumulative proportion of variance explained
-        plot(
-          cumulative_variance,
-          type = 'b',
-          main = "Cumulative Variance Explained",
-          xlab = "Number of Principal Components",
-          ylab = "Cumulative Proportion of Variance Explained"
-        )
-
-        # Add a horizontal line at the desired threshold
-
-        abline(h = threshold,
-               col = "red",
-               lty = 2)
-
-
-        # Find the number of principal components to retain based on the threshold
-        retained =  which(cumulative_variance >= threshold)[1] - 1
-      },
-      error = function(cond) {
-        stop(
-          "Check if correct variance threshold for principle components are inputted, should be numeric value between 0 and 1"
-        )
-      },
-      warning = function(cond) {
-        stop(
-          "Check if correct variance threshold for principle components are inputted, should be numeric value between 0 and 1"
-        )
-      })
-
-    } else{
-      # if threshold not inputted, use Kaiser's criterion
-      verbose_message(message_text = "Both variance_explained_threshold and npcs not inputted, use Kaiser's criterion for determination", verbose = verbose)
-
-
-      plot(
-        eigenvalues,
-        type = 'b',
-        main = "Scree Plot",
-        xlab = "Principal Component",
-        ylab = "Eigenvalue"
-      )
-
-      # Add a horizontal line at 1 (Kaiser's criterion)
-      abline(h = 1,
-             col = "red",
-             lty = 2)
-
-      # Add a vertical line at the elbow point
-      elbow_point <- which(diff(eigenvalues) < 0)[1]
-      abline(v = elbow_point,
-             col = "blue",
-             lty = 2)
-      retained = length(which(eigenvalues >= 1))
+  if (!methods::is(analysisData, "SingleCellExperiment")) {
+    analysisData <- methods::as(analysisData, "SingleCellExperiment")
+  }
+  values <- .assayData(analysisData, layer = slot)
+  maximum <- min(dim(values)) - 1L
+  if (maximum < 1L || any(!is.finite(values))) {
+    stop("PCA requires finite values and at least two features and pixels.", call. = FALSE)
+  }
+  if (!is.null(npcs)) {
+    .validateFeatureCount(npcs, "npcs")
+  } else if (length(variance_explained_threshold) != 1L ||
+             !is.finite(variance_explained_threshold) ||
+             variance_explained_threshold <= 0 ||
+             variance_explained_threshold > 1) {
+    stop("variance_explained_threshold must be in (0, 1] when npcs is NULL.",
+         call. = FALSE)
+  }
+  analysisData <- scater::runPCA(
+    analysisData, exprs_values = slot,
+    ncomponents = if (is.null(npcs)) maximum else min(npcs, maximum),
+    name = reduction.name)
+  embedding <- SingleCellExperiment::reducedDim(analysisData, reduction.name)
+  percentVar <- attr(embedding, "percentVar")
+  if (is.null(npcs)) {
+    retained <- which(cumsum(percentVar) / 100 >= variance_explained_threshold)[1L]
+    if (is.na(retained)) retained <- ncol(embedding)
+    loadings <- attr(embedding, "rotation")
+    embedding <- embedding[, seq_len(retained), drop = FALSE]
+    attr(embedding, "percentVar") <- percentVar[seq_len(retained)]
+    if (!is.null(loadings)) {
+      attr(embedding, "rotation") <- loadings[, seq_len(retained), drop = FALSE]
     }
   }
-
-
-  SpaMTP_pca <- pca
-
-  rownames(SpaMTP_pca$rotation) <- SeuratObject::Features(data[[temp_assay]])
-  rownames(SpaMTP_pca$x) <- colnames(data)
-
-  SpaMTP_pcas <- SeuratObject::CreateDimReducObject(embeddings = SpaMTP_pca$x, loadings = SpaMTP_pca$rotation, assay = assay, key = "pca_", stdev = SpaMTP_pca$sdev)
-
-  SpaMTP[[reduction.name]] <- SpaMTP_pcas
-
-  return(SpaMTP)
+  if (isTRUE(show_variance_plot)) {
+    varianceData <- data.frame(
+      component = seq_along(percentVar), cumulative = cumsum(percentVar) / 100)
+    print(ggplot2::ggplot(varianceData,
+                         ggplot2::aes(.data$component, .data$cumulative)) +
+      ggplot2::geom_line() + ggplot2::geom_point() +
+      ggplot2::labs(x = "Principal component", y = "Cumulative variance explained"))
+  }
+  SingleCellExperiment::reducedDim(SpaMTP, reduction.name) <- embedding
+  SpaMTP
 }
 
 
@@ -213,16 +104,16 @@ runMetabolicPCA <- function(SpaMTP,
 
 #' Perform Dimensionality Reduction using Graph-Regularised PCA on Spatial Data
 #'
-#' Computes a graph-regularised PCA using spatial coordinates and scaled expression data. A k-nearest neighbour (k-NN) graph is computed using spatial locations and used to regularise the PCA decomposition via a graph Laplacian. The result is available through `SeuratObject::Reductions()`.
+#' Computes a graph-regularised PCA using spatial coordinates and scaled expression data. A k-nearest neighbour (k-NN) graph is computed using spatial locations and used to regularise the PCA decomposition via a graph Laplacian. The result is stored in reducedDim(), with spatial edges in colPairs().
 #'
 #' Note: This method has been adapted from the GraphPCA Python package
 #' (\doi{10.1186/s13059-024-03429-x}).
 #'
-#' @param data A SpaMTP Seurat object containing spatial data (feature data and spatial coordinates).
+#' @param data A Bioconductor experiment containing spatial data (feature data and spatial coordinates).
 #' @param n_components Integer specifying the number of principal components to compute (default = 50).
-#' @param assay Character string defining the name of the assay to use data from (default = "Spatial").
-#' @param slot Character string defining the name of the slot to extract scaled data from (default = "scale.data").
-#' @param image Character string matching the name of the image to use for extracting spatial coordinates (default = NULL).
+#' @param assay Primary (`main`) or alternative experiment name.
+#' @param slot Character string defining the name of the slot to extract scaled data from (default = "scaled").
+#' @param image Reserved; must be NULL. Subset pixels before running graph PCA.
 #' @param platform Character string matching either `"Visium"` or `"ST"` to determine how the k-NN graph is constructed. If "Visium" k-nns will handle the hexagon spot arrangement, including setting `n_neighbors` = 6, else "ST" assignment will set `n_neighbors` = 4 unless a value is specifically provided (default = "Visium").
 #' @param lambda Numeric value defining the regularisation parameter that controls the influence of the graph Laplacian (default = 0.5).
 #' @param n_neighbors Integer value specifying the number of spatial neighbours to use. If `NULL`, will default of 6 for "Visium" data and 4 for "ST" platforms (default = NULL).
@@ -233,7 +124,7 @@ runMetabolicPCA <- function(SpaMTP,
 #' @param reduction_name Character string used to store the dimensionality reduction (default ="SpatialPCA").
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
-#' @return A SpaMTP Seurat object with a new graph and spatially-aware PCA reduction.
+#' @return A Bioconductor experiment with a new graph and spatially-aware PCA reduction.
 #' @export
 #'
 #' @rawNamespace import(Matrix, except = c(expand, head, pack, unpack))
@@ -241,17 +132,26 @@ runMetabolicPCA <- function(SpaMTP,
 #' @examples
 #' utils::str(formals(runSpatialGraphPCA))
 #' # spamtp_obj <- runSpatialGraphPCA(spamtp_obj, platform = "Visium")
-runSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = "scale.data", image = NULL, platform="Visium", lambda=0.5, n_neighbors=NULL, include_self = FALSE, alg = "kd_tree", fast = TRUE, graph_name = "SpatialKNN", reduction_name = "SpatialPCA", verbose = TRUE){
+runSpatialGraphPCA <- function(data, n_components=50, assay = "main", slot = "scaled", image = NULL, platform="Visium", lambda=0.5, n_neighbors=NULL, include_self = FALSE, alg = "kd_tree", fast = TRUE, graph_name = "SpatialKNN", reduction_name = "SpatialPCA", verbose = TRUE){
+  data <- .nativeSpatialObject(data)
+  if (!is.null(image)) stop("Subset pixels first; image must be NULL.", call. = FALSE)
+
 
   if(!platform %in% c("Visium", "ST")){
     stop("Incorrect value for plantform! platform must be assigned either 'Visium' or 'ST'... If data is not Visium 'spot'-based then set platform to 'ST'")
   }
 
-  if (!is.numeric(lambda)){
-    stop("Incorrect value for lamda! Must be numeric value ... ")
+  if (!is.numeric(lambda) || length(lambda) != 1L || !is.finite(lambda) || lambda < 0){
+    stop("lambda must be one finite, non-negative number.", call. = FALSE)
   }
+  .validateFeatureCount(n_components, "n_components")
 
   assayMatrix <- .assayData(data, assay, slot)
+  if (min(dim(assayMatrix)) < 2L || any(!is.finite(assayMatrix))) {
+    stop("Graph PCA needs finite values and at least two features and pixels.",
+         call. = FALSE)
+  }
+  n_components <- min(n_components, nrow(assayMatrix), ncol(assayMatrix))
   Expr = t(assayMatrix)
 
 
@@ -265,44 +165,25 @@ runSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
       n_neighbors <- 4
     }
   } else {
-    n_neighbors <- is.integer(n_neighbors)
+    n_neighbors <- as.integer(n_neighbors)
     verbose_message(message_text = paste0("Using a nearest neighbour value = ",n_neighbors,"! NOTE: the recomended values are -> 'Visium' data: n_neighbors = 6  / 'ST' data: n_neighbors = 4 ...." ), verbose = verbose)
   }
 
-  if(is.null(image)){
-    verbose_message(message_text = "'image' set to `NULL`: All images (different spatial coordinate sets) stored in your SpaMTP Seurat object will be used.", verbose = verbose)
-    image <- SeuratObject::Images(data)
-  }
+  location <- .nativeCoordinates(data)
+  sampleIndices <- split(seq_len(nrow(location)), location$sample_id)
+  graphs <- lapply(sampleIndices, function(index) {
+    kNeighborsGraph(location[index, c("x", "y"), drop = FALSE],
+      n_neighbors = n_neighbors, platform = platform,
+      include_self = include_self, alg = alg)
+  })
+  graph <- Matrix::bdiag(graphs)
+  originalOrder <- order(unlist(sampleIndices, use.names = FALSE))
+  graph <- graph[originalOrder, originalOrder, drop = FALSE]
+  graph <- 0.5 * (graph + t(graph))
 
-
-  if (length(image) == 1){
-
-    location = SeuratObject::GetTissueCoordinates(data, image = image)
-    location = location[c("x", "y")]
-
-    graph <- kNeighborsGraph(location, n_neighbors = n_neighbors, platform = platform, include_self = include_self, alg = alg)
-    graph <- 0.5 * (graph + t(graph))
-
-  } else if (length(image) > 1){
-
-    adj_mtxs <- lapply(image, function(i){
-
-      location = SeuratObject::GetTissueCoordinates(data, image = i)
-      location = location[c("x", "y")]
-
-      graph <- kNeighborsGraph(location, n_neighbors = n_neighbors, platform = platform, include_self = include_self, alg = alg)
-      graph <- 0.5 * (graph + t(graph))
-
-    })
-
-    graph <- Matrix::bdiag(adj_mtxs)
-
-  } else {
-    stop("No value for 'image' entered! Use `SeuratObject::Images(obj)` to list valid image names. To analyse a subset of images, provide a vector of image names.")
-  }
 
   graphL <- igraph::graph_from_adjacency_matrix(graph, mode = "undirected", weighted = TRUE)
-  graphL <- igraph::laplacian_matrix(graphL, normalized = FALSE)
+  graphL <- igraph::laplacian_matrix(graphL, normalization = "unnormalized")
   graphL <- Matrix::as.matrix(graphL)
 
 
@@ -316,14 +197,20 @@ runSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
 
   rownames(graph) <- colnames(graph) <- colnames(assayMatrix)
 
-  data[[graph_name]] <- SeuratObject::as.Graph(graph)
+  spatialGraphs <- S4Vectors::metadata(data)$spatialGraphs %||% list()
+  spatialGraphs[[graph_name]] <- graph
+  S4Vectors::metadata(data)$spatialGraphs <- spatialGraphs
+  edges <- summary(methods::as(graph, "generalMatrix"))
+  SingleCellExperiment::colPair(data, graph_name) <- S4Vectors::SelfHits(
+    edges$i, edges$j, nnode = ncol(data), weight = edges$x)
+
 
   rm(G)
   rm(graph)
   rm(graphL)
 
   # 3. Eigendecomposition of C
-  if (fast){
+  if (fast && n_components < ncol(Expr)){
     eig <- RSpectra::eigs_sym(crossprod(Expr, X), k = n_components)
   } else {
     eig <- eigen(t(Expr) %*% X, symmetric = TRUE)
@@ -333,20 +220,16 @@ runSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
   Z <- X %*% W
 
   rownames(Z) <- colnames(assayMatrix)      # cells
-  rownames(W) <- rownames(data[[assay]][slot])      # genes (or features)
+  rownames(W) <- rownames(assayMatrix)      # genes (or features)
   colnames(Z) <- paste0("PC_", 1:ncol(Z))
   colnames(W) <- paste0("PC_", 1:ncol(W))
 
   # Create the PCA reduction
-  pca_reduction <- SeuratObject::CreateDimReducObject(
-    embeddings = as.matrix(Z),
-    loadings = W,
-    assay = assay,
-    key = "PC_"
-  )
+  SingleCellExperiment::reducedDim(data, reduction_name) <- as.matrix(Z)
+  loadings <- S4Vectors::metadata(data)$reductionLoadings %||% list()
+  loadings[[reduction_name]] <- W
+  S4Vectors::metadata(data)$reductionLoadings <- loadings
 
-  # Store in the Seurat object
-  data[[reduction_name]] <- pca_reduction
 
   return(data)
 
@@ -370,6 +253,14 @@ runSpatialGraphPCA <- function(data, n_components=50, assay = "Spatial", slot = 
 #' utils::str(formals(kNeighborsGraph))
 #' ### HELPER FUNCTION
 kNeighborsGraph <- function(location, n_neighbors, platform, include_self = FALSE, alg = "kd_tree") {
+  .validateFeatureCount(n_neighbors, "n_neighbors")
+  if (any(!is.finite(as.matrix(location)))) {
+    stop("Spatial coordinates must be finite.", call. = FALSE)
+  }
+  if (nrow(location) <= 1L) {
+    return(Matrix::Diagonal(nrow(location), x = as.numeric(include_self)))
+  }
+  n_neighbors <- min(n_neighbors, nrow(location) - 1L)
   # Get the k-nearest neighbors using kd_tree (most similar to scikit-learn's default)
   knn_result <- FNN::get.knn(location, k = n_neighbors, algorithm = alg)
 
@@ -430,9 +321,9 @@ kNeighborsGraph <- function(location, n_neighbors, platform, include_self = FALS
 
 #' Perform K-means clustering on a specified reduction
 #'
-#' This function runs K-means clustering on a specified reduction in a SpaMTP Seurat object and adds the cluster assignments to the object metadata.
+#' This function runs K-means clustering on a specified reduction in a Bioconductor experiment and adds the cluster assignments to the object metadata.
 #'
-#' @param data A SpaMTP Seurat object containing the results from `runSpatialGraphPCA()`.
+#' @param data A Bioconductor experiment containing the results from `runSpatialGraphPCA()`.
 #' @param reduction Character string stating the name of the reduction slot to use (default = "SpatialPCA").
 #' @param cluster.name Character string of the name of the metadata column to store the cluster labels (default = "spatial_clusters").
 #' @param clusters Integer defining the number of clusters to form (default = 8).
@@ -442,22 +333,24 @@ kNeighborsGraph <- function(location, n_neighbors, platform, include_self = FALS
 #' @param trace Logical boolean indicating whether to produce tracing information on the progress of the algorithm (default = FALSE).
 #' @param seed Integer of the random seed to use for reproducibility (default = 888).
 #'
-#' @return A SpaMTP Seurat object with a new metadata column containing the K-means cluster assignments.
+#' @return A Bioconductor experiment with a new metadata column containing the K-means cluster assignments.
 #' @export
 #'
 #' @examples
 #' utils::str(formals(getKmeanClusters))
-#' # seurat_object <- getKmeanClusters(spamtp_obj, reduction = "SpatialPCA", centers = 8, cluster.name = "test_clusters")
-#' # SpatialDimPlot(spamtp_obj, group.by = "test_clusters")
 getKmeanClusters <- function(data, reduction = "SpatialPCA", cluster.name = "spatial_clusters", clusters = 8, iter.max = 10, nstart = 1, algorithm = c("Hartigan-Wong", "Lloyd", "Forgy", "MacQueen"), trace = FALSE, seed = 888){
+  .requireExperiment(data, "SingleCellExperiment")
 
-  if (!reduction %in% SeuratObject::Reductions(data)){
-    stop("Reduction not present in SpaMTP Seurat object: '", reduction, "'. Use `SeuratObject::Reductions(data)` to list available reductions.")
+
+  if (!reduction %in% SingleCellExperiment::reducedDimNames(data)) {
+    stop("Reduction `", reduction, "` is not present in the object.", call. = FALSE)
   }
+  embedding <- SingleCellExperiment::reducedDim(data, reduction)
+
   res <- withr::with_seed(
     seed,
     stats::kmeans(
-      SeuratObject::Embeddings(data, reduction = reduction),
+      embedding,
       centers = clusters,
       iter.max = iter.max,
       nstart = nstart,
@@ -466,6 +359,8 @@ getKmeanClusters <- function(data, reduction = "SpatialPCA", cluster.name = "spa
     )
   )
 
-  data[[cluster.name]] <- res$cluster
+  metadata <- .cellMetadata(data)
+  metadata[[cluster.name]] <- res$cluster
+  data <- .setCellMetadata(data, metadata)
   return(data)
 }

@@ -2,14 +2,14 @@
 % Please edit documentation in R/SpatialAnalysis.R
 \name{findCorrelatedFeatures}
 \alias{findCorrelatedFeatures}
-\title{Find top features and metabolites that are strongly correlated with a given feature}
+\title{Find features correlated with a metabolite, gene, or pixel group}
 \usage{
 findCorrelatedFeatures(
   data,
   mz = NULL,
   gene = NULL,
   ident = NULL,
-  SM.assay = "SPM",
+  SM.assay = "main",
   ST.assay = NULL,
   SM.slot = "counts",
   ST.slot = "counts",
@@ -17,35 +17,39 @@ findCorrelatedFeatures(
 )
 }
 \arguments{
-\item{data}{SpaMTP Seurat class object containing both Spatial Transcriptomic and Metabolic data assays.}
+\item{data}{A SpatialExperiment or aligned MSImagingExperiment.}
 
-\item{mz}{Numeric string specifying the m/z to find correlated features for. One of \code{mz}, \code{gene} or \code{ident} must be provided, alternatives must be \code{NULL} (default = NULL).}
+\item{mz}{Numeric m/z or exact primary feature name.}
 
-\item{gene}{Character string specifying the gene to find correlated features for. One of \code{mz}, \code{gene} or \code{ident} must be provided, alternatives must be \code{NULL} (default = NULL).}
+\item{gene}{Exact feature name in ST.assay.}
 
-\item{ident}{Character string defining the column in \code{colData()} or Seurat
-cell metadata used to find correlated features. One of \code{mz}, \code{gene}, or
-\code{ident} must be provided (default = NULL).}
+\item{ident}{A colData column defining groups. Supply exactly one of mz,
+gene and ident. Groups are compared with binary membership vectors.}
 
-\item{SM.assay}{Character string specifying the name of the assay containing the spatial metabolomics (SM) data (default = "SPM").}
+\item{SM.assay}{Primary assay or modality; \code{main} selects the primary
+experiment. Legacy \code{SPM} and \code{Spatial} also select the primary experiment.}
 
-\item{ST.assay}{Character string specifying the name of the assay containing the spatial transcriptomics (ST) data. If NULL then only metabolites will be used (Default = NULL).}
+\item{ST.assay}{Alternative experiment name, or NULL for metabolites only.}
 
-\item{SM.slot}{Character string specifying the slot of the SM assay to use (default = "counts").}
+\item{SM.slot}{Assay containing metabolite values.}
 
-\item{ST.slot}{Character string specifying the slot of the ST assay to use (default = "counts").}
+\item{ST.slot}{Assay containing transcriptomic values.}
 
-\item{nfeatures}{Integer specifying the number of top correlated features to return (default = 10).}
+\item{nfeatures}{Maximum results per reference; NULL returns all features.}
 }
 \value{
-A data frame containing the top correlated features with columns for the feature names and their correlation values.
+A data frame with features, correlation, modality, mz, rank and,
+for multiple reference groups, ident.
 }
 \description{
-This function returns a list of features ranked by highest Pearson correlation score.
-The specified feature to corrleate against can be either a m/z value, gene or an ident (i.e. cluster).
-For multi-omic data, both a metabolic and transcriptomic assay can be specified to calculate correlation of both metabolites and genes.
+Computes Pearson correlations across matched pixels. Genes are read from
+altExp without assigning artificial m/z values. Constant features return NA.
 }
 \examples{
-utils::str(formals(findCorrelatedFeatures))
-# result <- findCorrelatedFeatures(data = SpaMTP, gene = "GeneX", nfeatures = 5)
+x <- SpatialExperiment::SpatialExperiment(
+  assays = list(counts = rbind(a = 1:4, b = 4:1)),
+  rowData = S4Vectors::DataFrame(mz = c(100, 200)),
+  spatialCoords = cbind(x = 1:4, y = 0),
+  colData = S4Vectors::DataFrame(row.names = paste0("p", 1:4)))
+findCorrelatedFeatures(x, mz = 100)
 }

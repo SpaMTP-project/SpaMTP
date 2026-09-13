@@ -4,15 +4,10 @@ make_alignment_object <- function(x, y, cells = paste0("cell", seq_along(x))) {
     nrow = 2L,
     dimnames = list(c("feature1", "feature2"), cells)
   ), sparse = TRUE)
-  object <- SeuratObject::CreateSeuratObject(counts = counts)
-  centroids <- SeuratObject::CreateCentroids(
-    data.frame(x = x, y = y, cell = cells)
-  )
-  object[["fov"]] <- SeuratObject::CreateFOV(
-    coords = list(centroids = centroids),
-    type = "centroids",
-    assay = SeuratObject::DefaultAssay(object),
-    key = "align_"
+  object <- SpatialExperiment::SpatialExperiment(
+    assays = list(counts = counts),
+    spatialCoords = cbind(x = x, y = y),
+    colData = S4Vectors::DataFrame(row.names = cells)
   )
   object
 }
@@ -33,7 +28,7 @@ test_that("applySpatialAlignment applies SMINT coordinate columns by cell ID", {
     verbose = FALSE
   )
 
-  coordinates <- SeuratObject::GetTissueCoordinates(result$object, image = "fov")
+  coordinates <- as.data.frame(SpatialExperiment::spatialCoords(result$object))
   expect_equal(coordinates$x, c(10, 20, 30))
   expect_equal(coordinates$y, c(40, 50, 60))
   expect_equal(result$coordinates$cell, c("a", "b", "c"))
@@ -48,7 +43,7 @@ test_that("applySpatialAlignment accepts final coordinate conventions", {
   external <- data.frame(x_final = c(3, 4, 5), y_final = c(8, 9, 10))
 
   aligned <- applySpatialAlignment(sm, alignment = external, verbose = FALSE)
-  coordinates <- SeuratObject::GetTissueCoordinates(aligned, image = "fov")
+  coordinates <- as.data.frame(SpatialExperiment::spatialCoords(aligned))
 
   expect_equal(coordinates$x, external$x_final)
   expect_equal(coordinates$y, external$y_final)
@@ -68,7 +63,7 @@ test_that("applySpatialAlignment applies homogeneous matrices", {
     alignment = list(transformation = list(matrix = transformation)),
     verbose = FALSE
   )
-  coordinates <- SeuratObject::GetTissueCoordinates(aligned, image = "fov")
+  coordinates <- as.data.frame(SpatialExperiment::spatialCoords(aligned))
 
   expect_equal(coordinates$x, c(10, 11, 12))
   expect_equal(coordinates$y, c(3, 4, 5))

@@ -2,7 +2,7 @@
 % Please edit documentation in R/PlottingSpaMTP.R
 \name{spatialMZPlot}
 \alias{spatialMZPlot}
-\title{Plot expression of m/z values spatially for a Spatial SpaMTP Seurat Objects.}
+\title{Plot MSI features with optional optical images}
 \usage{
 spatialMZPlot(
   object,
@@ -10,7 +10,7 @@ spatialMZPlot(
   plusminus = NULL,
   images = NULL,
   crop = TRUE,
-  assay = "Spatial",
+  assay = "main",
   slot = "counts",
   keep.scale = "feature",
   min.cutoff = NA,
@@ -27,53 +27,51 @@ spatialMZPlot(
 )
 }
 \arguments{
-\item{object}{Seurat Spatial Metabolomic Object to Visualise.}
+\item{object}{A SpatialExperiment or aligned Cardinal MSImagingExperiment.}
 
-\item{mzs}{Vector of numeric m/z values to plot (e.g. c(400.1578, 300.1)). The function findNearestMZ() is used to automatically find the nearest m/z value to the ones given.}
+\item{mzs}{Numeric m/z values or character feature IDs.}
 
-\item{plusminus}{Numeric value defining the range/threshold either side of the target peak/peaks to be binned together for plotting (default = NULL).}
+\item{plusminus}{Optional non-negative absolute m/z tolerance.}
 
-\item{images}{Character string of the name of the image to plot (default = NULL).}
+\item{images}{Optional image IDs in imgData.}
 
-\item{crop}{Boolean value indicating if to crop the plot to focus on only points being plotted (default = TRUE).}
+\item{crop}{Crop to the selected pixels.}
 
-\item{assay}{Character string indicating which Seurat object assay to pull data form (default = "Spatial").}
+\item{assay}{Primary experiment ("main") or altExp name.}
 
-\item{slot}{Character string indicating the assay slot to use to pull expression values form (default = "counts").}
+\item{slot}{Expression assay name, e.g. "counts" or "logcounts".}
 
-\item{keep.scale}{Character string describing how to handle the color scale across multiple plots. Check Seurat::SpatialFeaturePlot() for all options (default = "feature").}
+\item{keep.scale}{Colour scaling: "feature", "all" or "none"; NULL means "none".}
 
-\item{min.cutoff}{Vector of numeric value describing the minimum cutoff values for each m/z feature (default = NA).}
+\item{min.cutoff, max.cutoff}{One cutoff or one per query; numeric or
+quantile strings such as "q10". NA uses the observed range.}
 
-\item{max.cutoff}{Vector of numeric value describing the maximum cutoff values for each m/z feature (default = NA).}
+\item{ncol}{Number of columns in combined plots.}
 
-\item{ncol}{Integer defining the number of columns if plotting multiple plots (default = NULL).}
+\item{combine}{Combine panels; FALSE returns a list of ggplots.}
 
-\item{combine}{Boolean value stating if to combine plots into a single patchworked ggplot object (default = TRUE).}
+\item{pt.size.factor}{Point size.}
 
-\item{pt.size.factor}{Numeric value defining the point size for spots when plotting (default = 1.6).}
+\item{alpha}{Point opacity, or a two-value range mapped to expression.}
 
-\item{alpha}{Numeric value between 0 and 1 defining the spot alpha (default = 1).}
+\item{image.alpha}{Optical image opacity.}
 
-\item{image.alpha}{Numeric value between 0 and 1 defining the image alpha (default = 1).}
+\item{stroke}{Point border width.}
 
-\item{stroke}{Numeric value describing the width of the border around the spot (default = 0.25).}
+\item{interactive}{Return Plotly widgets rather than static plots.}
 
-\item{interactive}{Boolean value of if to launch an interactive SpatialDimPlot or SpatialFeaturePlot session, see Seurat::ISpatialDimPlot() or Seurat::ISpatialFeaturePlot() for more details (default = FALSE).}
+\item{information}{Deprecated Seurat hover data; non-NULL is unsupported.}
 
-\item{information}{An optional dataframe or matrix of extra information to be displayed on hover (default = NULL).}
-
-\item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+\item{verbose}{Retained for call compatibility.}
 }
 \value{
-A ggplot showing the Spatial representation of expression data of specified m/z values for Spatial data with H&E Image
+A ggplot or Plotly widget; a list when combine=FALSE.
 }
 \description{
-This is for plotting SM m/z data from a SpaMTP Seurat Object that contains an image (i.e. H&E image).
-This function inherits off Seurat::SpatialFeaturePlot(). Look here for more detailed documentation about inputs.
+Images come from imgData and use its scaleFactor to place the raster in
+spatialCoords units. Each sample/image is a separate panel. With images=NULL
+all samples are plotted without an image.
 }
 \examples{
 utils::str(formals(spatialMZPlot))
-# spatialMZPlot(SeuratObj, mzs = c(400.678, 300.1))
-# spatialMZPlot(SeuratObj, mzs = c(400.678, 300.1), plusminus = 0.05)
 }

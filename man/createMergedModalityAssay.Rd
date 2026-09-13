@@ -13,25 +13,27 @@ createMergedModalityAssay(
 )
 }
 \arguments{
-\item{SpaMTP}{A SpaMTP Seurat object that contains atleast two assays to be merged.}
+\item{SpaMTP}{A Bioconductor experiment that contains atleast two assays to be merged.}
 
-\item{assays.to.merge}{A character vector specifying the names of assays whose \code{scale.data} slots should be merged. At least two assay names must be provided and both must contain the \code{scale.data} slot, for example: assays.to.merge = c("SPM", "SPT").}
+\item{assays.to.merge}{At least two distinct modality names: main and/or altExp names.}
 
 \item{new.assay}{A character string specifying the name of the new assay to be created (default = "merged").}
 
-\item{return.original}{Boolean value defining if the returned SpaMTP Seurat object will contain the original individual assays. If the data size is large it is recommended to set to \code{False} (default = TRUE).}
+\item{return.original}{TRUE adds an altExp; FALSE returns only the merged feature space.}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 }
 \value{
-A SpaMTP Seurat object containing a new assay with the merged scaled data values.
+A Bioconductor experiment containing a new assay with the merged scaled data values.
 }
 \description{
-Combines the \code{scale.data} slots from multiple assays in a SpaMTP Seurat object into a single new assay.
+Combines selected modalities as a scaled alternative experiment.
 Useful for integrating multiple modalities (e.g. transcriptomics, proteomics, metabolomics) that have already been scaled.
 }
 \details{
-This function assumes that each specified assay has been processed with \code{Seurat::ScaleData()} (or an alternative scaling method), and that their \code{scale.data} slots contain numeric matrices. The merged assay will use the row-bound \code{scale.data} matrices as the \code{counts}, \code{data}, and \code{scale.data} slots.
+Uses an existing scaled assay when available; otherwise centres and scales
+logcounts, normcounts or counts across pixels. Constant features become zero.
+The merged values are stored as scaled, never relabelled as counts.
 }
 \examples{
 utils::str(formals(createMergedModalityAssay))

@@ -7,27 +7,29 @@
 addCustomMZAnnotations(
   data,
   annotations,
-  assay = "Spatial",
+  assay = "main",
   return.only.annotated = FALSE,
   mass.threshold = 0.05,
   annotation.column = "all_IsomerNames"
 )
 }
 \arguments{
-\item{data}{SpaMTP Seurat object containing m/z intensity values.}
+\item{data}{Bioconductor experiment containing m/z intensity values.}
 
 \item{annotations}{data.frame containing two columns named 'annotation' and 'mass'. These columns should contain the custom metabolite annotation and the relative m/z mass respectively.}
 
-\item{assay}{Character string defining the Seurat object assay to store the respective annotations in the feature meta.data dataframe (default = "Spatial").}
+\item{assay}{Primary or alternative experiment whose \code{rowData()} receives
+the annotations (default = "main").}
 
-\item{return.only.annotated}{Boolean defining whether to return a SpaMTP Seurat object containing only successfully annotated m/z values (default = FALSE).}
+\item{return.only.annotated}{Boolean defining whether to return a Bioconductor experiment containing only successfully annotated m/z values (default = FALSE).}
 
 \item{mass.threshold}{Numeric value defining the acceptable threshold (plus-minus) between the custom annotations and the actual m/z values contained within the SpaMTP object (default = 0.05).}
 
-\item{annotation.column}{Character string defining the feature meta.data column name that will contain the assigned annotations (default = "all_IsomerNames").}
+\item{annotation.column}{Name of the \code{rowData()} column receiving annotations
+(default = "all_IsomerNames").}
 }
 \value{
-SpaMTP Seurat object containing the custom annotations stored in the feature metadata dataframe.
+Bioconductor experiment containing the custom annotations stored in the feature metadata dataframe.
 }
 \description{
 Adds custom metabolite annotations to respective m/z values (ideal for specific matrices such as FMP10).

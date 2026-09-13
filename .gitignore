@@ -10,3 +10,5 @@ vignettes/.knitr-cache/
 .idea
 *.Rcheck/
 *.tar.gz
+/BIOCONDUCTOR_MIGRATION.md
+/data-raw/namespace-validation-*/

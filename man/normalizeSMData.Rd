@@ -2,38 +2,82 @@
 % Please edit documentation in R/SMPreprocessing.R
 \name{normalizeSMData}
 \alias{normalizeSMData}
-\title{Normalizes m/z intensity data stored in a SpaMTP Seurat Object}
+\alias{normalizeSMData,SingleCellExperiment-method}
+\alias{normalizeSMData,MSImagingExperiment-method}
+\alias{normalizeSMData,MSImagingArrays-method}
+\alias{normalizeSMData,ANY-method}
+\title{Normalize spatial metabolomics intensity data}
 \usage{
 normalizeSMData(
   data,
   normalisation.type = "TIC",
   scale.factor = NULL,
-  assay = "Spatial",
+  assay = "main",
+  slot = "counts",
+  verbose = TRUE
+)
+
+\S4method{normalizeSMData}{SingleCellExperiment}(
+  data,
+  normalisation.type = "TIC",
+  scale.factor = NULL,
+  assay = "main",
+  slot = "counts",
+  verbose = TRUE
+)
+
+\S4method{normalizeSMData}{MSImagingExperiment}(
+  data,
+  normalisation.type = "TIC",
+  scale.factor = NULL,
+  assay = "main",
+  slot = "counts",
+  verbose = TRUE
+)
+
+\S4method{normalizeSMData}{MSImagingArrays}(
+  data,
+  normalisation.type = "TIC",
+  scale.factor = NULL,
+  assay = "main",
+  slot = "counts",
+  verbose = TRUE
+)
+
+\S4method{normalizeSMData}{ANY}(
+  data,
+  normalisation.type = "TIC",
+  scale.factor = NULL,
+  assay = "main",
   slot = "counts",
   verbose = TRUE
 )
 }
 \arguments{
-\item{data}{Seurat Object to be normalized.}
+\item{data}{A SingleCellExperiment (including SpatialExperiment), Cardinal
+MSImagingArrays/MSImagingExperiment.}
 
 \item{normalisation.type}{Character string defining the normalization method to run. Options are either c("TIC", "LogNormalize", "RC") which represent Total Ion Current (TIC) normalization, Log Normalization or counts per million (RC), respectively (default = "TIC").}
 
 \item{scale.factor}{Numeric value that sets the scale factor for pixel/spot level normalization. Following normalization the total intensity value across each pixel will equal this value. If scale.factor = NULL, TIC normalization will use a scale factor = number of m/z and Log Normalisation will use a scale factor = 10000 (default = NULL).}
 
-\item{assay}{Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").}
+\item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment.}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 }
 \value{
-A Seurat Object with intensity values normalized. Normalized data is stored in the $data slot of the specified assay
+An object of the same container family with normalized values.
 }
 \description{
-This function can be used for normalising data already stored in a SpaMTP Seurat Object.
-Normalisation methods include total ion count (TIC), log normalisation and counts per million (RC).
+SingleCellExperiment methods store the result in the standard \code{normcounts} or
+\code{logcounts} assays. Cardinal input delegates TIC normalization to Cardinal
+and remains file-backed. Convert Seurat inputs explicitly before analysis.
+Cardinal normalization follows Cardinal's deferred-processing model;
+queued steps are executed by Cardinal::process(), binSpaMTP(), or conversion
+of an aligned experiment to SpatialExperiment.
 }
 \examples{
 utils::str(formals(normalizeSMData))
-# normalised_data <- normalizeSMData(SeuratObject)
 }

@@ -431,9 +431,12 @@ metaspaceToFeatureMatrix <- function(metaspace_data, transform = FALSE, verbose 
 }
 
 
-#' @title Load METASPACE Data and Create Seurat Object
+#' @title Load METASPACE Data as a SpatialExperiment
 #'
-#' @description Downloads METASPACE data, converts it to a feature matrix, and packages it into a Seurat object with spatial metadata.
+#' @description Downloads METASPACE data, converts it to a feature matrix, and
+#' packages it in a Bioconductor `SpatialExperiment`. Use explicit conversion for other containers.
+#' Coordinates are stored in `spatialCoords()` without redundant copies in
+#' `colData()`; dataset and acquisition metadata remain in `colData()`.
 #'
 #' @param dataset_id Character string of the METASPACE dataset ID.
 #' @param fdr Numeric, the FDR level threshold (default = 0.1).
@@ -442,13 +445,11 @@ metaspaceToFeatureMatrix <- function(metaspace_data, transform = FALSE, verbose 
 #' @param relative Logical, if TRUE, normalizes pixel intensities (0-1 range) (default = FALSE).
 #' @param transform Boolean specifiying whether to transform/flip the image (default = FALSE).
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#' @param returnType Output container; only `"SpatialExperiment"` is supported.
 #'
-#' @return A Seurat object initialized with the METASPACE data in the 'Spatial' assay.
+#' @return A `SpatialExperiment`.
 #'
 #' @importFrom tidyr separate
-#' @importFrom SeuratObject CreateCentroids CreateFOV
-#' @importFrom Seurat CreateSeuratObject AddMetaData
-#' @importFrom matter as.matrix
 #' @importFrom png readPNG
 #' @importFrom dplyr %>% select
 #'
@@ -457,7 +458,17 @@ metaspaceToFeatureMatrix <- function(metaspace_data, transform = FALSE, verbose 
 #' @examples
 #' utils::str(formals(loadMetaspace))
 #' # loadMetaspace(dataset_id = "2020-12-07_03h16m14s", fdr = 0.1, database= c("HMDB", "v4"), relative = TRUE)
-loadMetaspace <- function(dataset_id, fdr = 0.1, database = c("HMDB", "v4"), api_key= NULL, relative = FALSE, transform = FALSE, verbose = TRUE){
+loadMetaspace <- function(
+    dataset_id,
+    fdr = 0.1,
+    database = c("HMDB", "v4"),
+    api_key = NULL,
+    relative = FALSE,
+    transform = FALSE,
+    verbose = TRUE,
+    returnType = "SpatialExperiment"
+) {
+  returnType <- match.arg(returnType)
 
   verbose_message(message_text = paste0("Downloading dataset [",dataset_id, "] from METASPACE... "), verbose = verbose)
 
@@ -470,66 +481,36 @@ loadMetaspace <- function(dataset_id, fdr = 0.1, database = c("HMDB", "v4"), api
   pixels <- colnames(sparse_matrix)
 
   pixel_data <- data.frame(pixel = pixels) %>% separate(col = pixel, into = c("x", "y"), sep = "_", convert = TRUE)
-  pixel_data$x_coord <- pixel_data$x
-  pixel_data$y_coord <- pixel_data$y
 
-  verbose_message(message_text = "Generating Seurat Barcode Labels from Pixel Coordinates .... ", verbose = verbose)
-
-  rownames(sparse_matrix)<- paste("mz-", features, sep = "")
-
-  verbose_message(message_text = "Constructing Seurat Object ....", verbose = verbose)
-
-  mat <- matter::as.matrix(sparse_matrix)
-
-  seuratobj <- Seurat::CreateSeuratObject(mat, assay = "Spatial")
-
-  verbose_message(message_text = "Adding Pixel Metadata ....", verbose = verbose)
-
-  pixel_metadata <- pixel_data
-  pixel_metadata$metaspace_dataset  <-  dataset_id
-  pixel_metadata$fdr_threshold <- fdr
-  pixel_metadata$fdr_threshold <- paste(database, collapse = "-")
-
-  seuratobj <- Seurat::AddMetaData(seuratobj, metadata = pixel_metadata)
-
-  verbose_message(message_text = "Creating Centroids for Spatial Seurat Object ....", verbose = verbose)
-
-  ## Add spatial data
-
-  cents <- SeuratObject::CreateCentroids(data.frame(x = pixel_data$x, y = pixel_data$y, cell = c(pixels)))
-
-
-  segmentations.data <- list(
-    "centroids" = cents
-  )
-
-  coords <- SeuratObject::CreateFOV(
-    coords = segmentations.data,
-    type = c("centroids"),
-    molecules = NULL,
-    assay = "Spatial"
-  )
-
-  seuratobj[["fov"]] <- coords
-
-  metadata <- data.frame(
-    raw_mz = sapply(strsplit(rownames(seuratobj), "-"), function(x) as.numeric(x[[2]])),
-    mz_names = rownames(seuratobj)
-  )
-
-  rownames(metadata) <- rownames(seuratobj)
-
-
-  seuratobj[["Spatial"]] <- Seurat::AddMetaData(object = seuratobj[["Spatial"]],
-                                                metadata = metadata,
-                                                col.name = 'raw_mz')
+  featureNames <- make.unique(paste0("mz-", features))
+  rownames(sparse_matrix) <- featureNames
+  pixel_metadata <- S4Vectors::DataFrame(
+    metaspace_dataset = rep(dataset_id, length(pixels)),
+    fdr_threshold = rep(fdr, length(pixels)),
+    database = rep(paste(database, collapse = "-"), length(pixels)),
+    row.names = pixels)
 
   metaspace_metadata_names <-  c("formula","adduct","chemMod","neutralLoss","mz","msm",
                                  "fdr","rhoSpatial","rhoSpectral","moc","offSample","intensity","moleculeNames")
 
-  featureMetadata <- .featureMetadata(seuratobj, "Spatial")
-  featureMetadata[metaspace_metadata_names] <- data$annotations[metaspace_metadata_names]
-  seuratobj <- .setFeatureMetadata(seuratobj, featureMetadata, "Spatial")
-
-  return(seuratobj)
+  availableMetadata <- intersect(metaspace_metadata_names, colnames(data$annotations))
+  featureMetadata <- data$annotations[availableMetadata]
+  featureMetadata$raw_mz <- suppressWarnings(as.numeric(features))
+  featureMetadata$mz <- featureMetadata$raw_mz
+  featureMetadata$mz_names <- featureNames
+  rownames(featureMetadata) <- featureNames
+  object <- SpatialExperiment::SpatialExperiment(
+    assays = list(counts = Matrix::Matrix(sparse_matrix, sparse = TRUE)),
+    rowData = S4Vectors::DataFrame(featureMetadata),
+    colData = S4Vectors::DataFrame(pixel_metadata),
+    spatialCoords = as.matrix(pixel_data[, c("x", "y"), drop = FALSE]),
+    sample_id = dataset_id
+  )
+  S4Vectors::metadata(object)$metaspace <- list(
+    dataset_id = dataset_id,
+    fdr = fdr,
+    database = database,
+    relative = relative
+  )
+  object
 }

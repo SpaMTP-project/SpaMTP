@@ -16,7 +16,7 @@ A data frame with 47 rows and 6 variables:
 }
 }
 \usage{
-adduct_file
+data(adduct_file)
 }
 \value{
 A data frame of legacy adduct definitions.

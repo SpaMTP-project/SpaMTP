@@ -9,8 +9,8 @@ findRegionalPathways(
   ident,
   DE.list,
   analyte_types = c("genes", "metabolites"),
-  SM_assay = "SPM",
-  ST_assay = "SPT",
+  SM_assay = "main",
+  ST_assay = "transcriptome",
   SM_slot = "counts",
   ST_slot = "counts",
   min_path_size = 5,
@@ -27,7 +27,7 @@ findRegionalPathways(
 )
 }
 \arguments{
-\item{SpaMTP}{A SpaMTP Seurat object contains spatial metabolomics(SM)/transcriptomics(ST) data or both, if contains SM data, it should be annotated via SpaMTP::annotateSM function.}
+\item{SpaMTP}{A Bioconductor experiment contains spatial metabolomics(SM)/transcriptomics(ST) data or both, if contains SM data, it should be annotated via SpaMTP::annotateSM function.}
 
 \item{ident}{A character scalar specifying the region column in cell metadata.}
 
@@ -35,9 +35,9 @@ findRegionalPathways(
 
 \item{analyte_types}{Vector of character strings defining which analyte types to use. Options can be c("genes"), c("metabolites") or both (default = c("genes", "metabolites")).}
 
-\item{SM_assay}{A Character string defining describing slot name for spatial metabolomics data in SpaMTP to extract intensity values from (default = "SPM").}
+\item{SM_assay}{Primary MSI experiment name (default = "main").}
 
-\item{ST_assay}{A Character string defining describing slot name for spatial transcriptomics data in SpaMTP to extract RNA count values from (default = "SPT").}
+\item{ST_assay}{Paired transcriptome altExp name (default = "transcriptome").}
 
 \item{SM_slot}{The slot name containing the SM assay matrix data (default = "counts").}
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/LoadData.R
 \name{readSMMatrix}
 \alias{readSMMatrix}
-\title{Read Spatial Metabolomics matrix file (.csv format)}
+\title{Read a binned spatial metabolomics matrix}
 \usage{
 readSMMatrix(
   mtx.file,
@@ -10,13 +10,14 @@ readSMMatrix(
   verbose = TRUE,
   feature.start.column = 1,
   mz.prefix = NULL,
-  project.name = "SpaMTP"
+  project.name = "SpaMTP",
+  returnType = "SpatialExperiment"
 )
 }
 \arguments{
 \item{mtx.file}{Character string defining the path of the spatial metabolomic image matrix .csv file.}
 
-\item{assay}{Character string of the Seurat object assay name to store the relative intensity data (default = "Spatial").}
+\item{assay}{Label stored in mainExpName(); intensities are in the counts assay.}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE, the message will be shown; else, it will be suppressed (default = TRUE).}
 
@@ -25,13 +26,18 @@ readSMMatrix(
 \item{mz.prefix}{Character string matching the prefix string in front of each m/z name (default = NULL).}
 
 \item{project.name}{Character string defining the name of the sample to be assigned as \code{orig.ident} (default = "SpaMTP").}
+
+\item{returnType}{Output container; only \code{"SpatialExperiment"} is supported.}
 }
 \value{
-A SpaMTP Seurat object containing intensity values in the \code{counts} layer of the designated assay.
+A \code{SpatialExperiment}.
 }
 \description{
-This function reads in SM data stored in a table format. This table must contain two rows named 'x' and 'y' storing the respective pixel coordinates.
+This function reads SM data stored in a table format, with one row per
+pixel and two columns named 'x' and 'y' storing its coordinates.
 All other columns should be the relative m/z values containing the intensity values of each pixel.
+Coordinates are stored only in \code{spatialCoords()}, not duplicated in
+pixel metadata where a later alignment could leave them out of date.
 }
 \details{
 \strong{NOTE:} The input file must be in a format similar to the table below:

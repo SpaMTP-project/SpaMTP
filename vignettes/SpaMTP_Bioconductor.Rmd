@@ -21,17 +21,281 @@ knitr::opts_chunk$set(
 # Overview
 
 `SpaMTP` provides analysis and visualisation methods for spatial metabolomics
-and paired spatial multi-omics experiments. It uses standard Seurat, Cardinal,
-and Bioconductor infrastructure while keeping versioned annotation resources in
-the companion `SpaMTPdb` package and experiment objects in `SpaMTPData`.
+and paired spatial multi-omics experiments. Its primary containers are
+Cardinal's `MSImagingArrays`/`MSImagingExperiment` and Bioconductor's `SpatialExperiment`.
+Seurat is not an analysis dependency. Only the optional boundary-conversion
+example uses SeuratObject; all analysis runs on native containers. Explicit
+conversion functions connect existing Seurat workflows. Versioned
+annotation resources are supplied by the companion
+`SpaMTPdb` package and experiment data by `SpaMTPData`.
 
 This vignette demonstrates a small, fully reproducible accurate-mass annotation
 workflow. It deliberately uses an in-memory database so that package checking
 does not require a network connection or a large data download.
 
+See [modern data access](Modern_Data_Access.html) for replacing historical
+container-internal reads and writes, and the
+[indexed annotation pipeline](Metabolite_Annotation_Pipeline.html) for the
+complete native annotation tutorial.
+The [companion workflow](SpaMTP_Companion_Workflow.html) demonstrates how
+SpaMTPData, SpaMTPdb and SpaMTP work together without downloads or Seurat.
+
 ```{r load-package, message=FALSE}
 library(SpaMTP)
 ```
+
+# Bioconductor container model
+
+The container depends on the data's processing stage:
+
+| Processing stage | Container | SpaMTP mapping |
+|---|---|---|
+| Raw or continuous spectra | Cardinal `MSImagingArrays` / `MSImagingExperiment` | File-backed spectra and unequal mass axes remain in Cardinal/matter |
+| Aligned or binned MSI | `SpatialExperiment` | Intensities in `assays()`, m/z and annotations in `rowData()`, pixel metadata in `colData()` |
+| Pixel coordinates | `SpatialExperiment` | `spatialCoords()` |
+| Optical images | `SpatialExperiment` | `imgData()` |
+| Paired transcriptome | `SpatialExperiment` | `altExp()` |
+
+Raw imzML should be read and processed in Cardinal without materialising the
+spectra. Once features share a common axis, conversion is explicit:
+
+```{r cardinal-workflow, eval=FALSE}
+raw <- Cardinal::readImzML("section.imzML", memory = FALSE, as = "MSImagingArrays")
+raw <- normalizeSMData(raw) # Cardinal queues TIC processing.
+spe <- binSpaMTP(raw, resolution = 0.01, units = "mz")
+```
+
+The S4 binning method executes Cardinal's queued processing and obtains a
+common axis before creating an SPE. The raw-array mass range is scanned across
+all spectra, not inferred from the first pixel alone. Calling
+`asSpatialExperiment()` on unaligned `MSImagingArrays` gives an explicit request
+to bin first; no resolution is guessed during conversion.
+
+The reverse coercion is also registered, so either the SpaMTP generic or the
+standard S4 coercion can be used:
+
+```{r cardinal-coercion, eval=FALSE}
+cardinal <- asCardinal(spe)
+cardinal <- methods::as(spe, "MSImagingExperiment")
+```
+
+# A binned MSI workflow
+
+The following small object illustrates the native layout without external
+files.
+
+```{r spatial-experiment}
+intensity <- matrix(
+  seq_len(24),
+  nrow = 4,
+  dimnames = list(
+    paste0("mz-", c(100.01, 100.02, 101.01, 101.02)),
+    paste0("pixel", seq_len(6))
+  )
+)
+coordinates <- cbind(
+  x = rep(seq_len(3), each = 2),
+  y = rep(seq_len(2), times = 3)
+)
+spe <- SpatialExperiment::SpatialExperiment(
+  assays = list(counts = intensity),
+  rowData = S4Vectors::DataFrame(
+    mz = c(100.01, 100.02, 101.01, 101.02)
+  ),
+  colData = S4Vectors::DataFrame(
+    region = rep(c("edge", "core"), 3)
+  ),
+  spatialCoords = coordinates,
+  sample_id = rep("sample01", ncol(intensity))
+)
+
+spe <- normalizeSMData(spe, normalisation.type = "LogNormalize")
+plotSpatialFeature(spe, features = "mz-100.01", assayName = "logcounts")
+```
+
+For paired measurements, transcriptomic data are stored as an alternative
+experiment and matched by pixel name. Integration uses Bioconductor reduced
+dimensions rather than Seurat assay internals.
+
+```{r alternative-experiment}
+transcriptome_sce <- SingleCellExperiment::SingleCellExperiment(
+  assays = list(counts = matrix(
+    c(1, 2, 3, 4, 4, 2, 1, 3, 2, 5, 4, 1,
+      3, 1, 5, 2, 1, 4, 2, 5, 5, 3, 1, 4),
+    nrow = 4,
+    dimnames = list(paste0("gene", seq_len(4)), colnames(spe))
+  ))
+)
+spe <- addTranscriptome(spe, transcriptome_sce, name = "transcriptome")
+spe <- normalizeSMData(spe, "LogNormalize", assay = "transcriptome")
+set.seed(42)
+spe <- multiOmicIntegration(spe, dims.list = list(1, 1))
+SingleCellExperiment::altExpNames(spe)
+SingleCellExperiment::reducedDim(spe, "integrated")
+
+# Reuse scater directly for standard expression visualisation.
+scater::plotExpression(
+  spe,
+  features = "mz-100.01",
+  x = "region",
+  exprs_values = "logcounts"
+)
+```
+
+The joint embedding concatenates standardized PCA scores with equal weight
+per modality. It is **not Seurat WNN**, and does not claim equivalent results.
+Only `main` and `transcriptome` are included by default; supply `modalities`
+explicitly to include another measured modality. Derived pathway scores are
+not included automatically.
+
+## Alignment and pixel mapping
+
+Spatial mapping uses matching `sample_id` values and a common coordinate
+system. Independent slices are never connected simply because their x/y
+coordinates overlap. The example below maps MSI to paired transcriptomic
+pixel centres; lower-resolution spots require an explicit radius or polygon.
+
+```{r native-mapping}
+target <- SpatialExperiment::SpatialExperiment(
+  assays = SummarizedExperiment::assays(transcriptome_sce),
+  colData = SummarizedExperiment::colData(spe),
+  spatialCoords = SpatialExperiment::spatialCoords(spe)
+)
+mapped <- mapSpatialOmics(
+  spe, target, ST.hires = TRUE, SM.pixel.width = 1
+)
+stopifnot(all(mapped$mapped), all(mapped$n_source_pixels == 1))
+SingleCellExperiment::altExpNames(mapped)
+
+affine <- diag(3)
+affine[1:2, 3] <- c(0.2, -0.1)
+aligned <- alignSpatialOmics(spe, target, transformation = affine)
+checkAlignment(aligned, target)
+```
+
+MSI values are averaged over matched source pixels. Unmapped targets are
+retained with `mapped = FALSE` and zero-filled intensities unless
+`dropUnmapped = TRUE`. These missing measurements must not be interpreted as
+observed biological zeros. Optical images are stored with `addSpatialImage()`
+and `imgData()`; their scale factors change display dimensions, not the stored
+spatial coordinates.
+
+## Binning and statistical reuse
+
+```{r native-binning}
+binned <- binSpaMTP(spe, resolution = 0.05, units = "mz")
+stopifnot(isTRUE(all.equal(
+  as.numeric(Matrix::colSums(SummarizedExperiment::assay(binned, "counts"))),
+  as.numeric(Matrix::colSums(SummarizedExperiment::assay(spe, "counts")))
+)))
+```
+
+Aligned-matrix binning assigns each feature once and conserves total intensity
+under sum aggregation. Raw Cardinal input retains Cardinal's reference-window
+binning semantics. Re-annotate the newly binned features before using
+annotation-dependent analyses.
+
+TMM factors are computed by `edgeR::normLibSizes()`. Differential testing uses
+`limma::lmFit()` and `limma::treat()`, while `runPooling()` uses
+`edgeR::sumTechReps()` for technical partitions. Random pixel pools are not
+independent biological replicates and cannot support population-level inference
+as if they were. Use independent biological samples for such inference.
+
+# Native feature plots and annotation ranking
+
+MSI plots read masses and annotations from `rowData()`, including when feature
+IDs are not formatted as `mz-...`. A `plusminus` window includes every peak
+within the tolerance of the nearest measured mass. Annotation plots sum all
+matching peaks; overlapping windows count each peak once.
+
+```{r native-feature-plots}
+SummarizedExperiment::rowData(spe)$all_IsomerNames <-
+  c("Candidate A", "Candidate A", "Candidate B", "Candidate C")
+imageMZAnnotationPlot(spe, "Candidate A", slot = "counts",
+                      dark.background = FALSE)
+massIntensityPlot(spe, group.by = "region", mz.labels = 100.01)
+```
+
+Use `spatialMZPlot(spe, 100.01, images="optical")` after attaching an image with
+`addSpatialImage()`. Its `imgData()` scale factor relates raster pixels to
+`spatialCoords()` units. Samples are displayed separately. Former Seurat
+segmentation/molecule/blending arguments are not supported. Interactive mass
+windows are available without Seurat; creating the app does not launch it:
+
+```{r native-window-app}
+app <- interactiveSpatialPlot(spe)
+class(app)
+# shiny::runApp(app)
+```
+
+The following synthetic example ranks three candidates for one feature using
+precomputed paired pathway expression. Real workflows can create these scores
+with `createPathwayObject()`, or let `calculateAnnotationStatistics()` reuse it
+on an alternative experiment indexed by RaMP analyte IDs.
+
+```{r native-annotation-ranking}
+ranking_demo <- spe
+SummarizedExperiment::rowData(ranking_demo)$all_Ramp_IDs <-
+  rep("RAMP_C_1; RAMP_C_2; RAMP_C_3", nrow(ranking_demo))
+pathway_values <- rbind(pA = 1:6, pB = c(2, 1, 5, 3, 6, 4), pC = 6:1)
+colnames(pathway_values) <- colnames(ranking_demo)
+SingleCellExperiment::altExp(ranking_demo, "pathway") <-
+  SingleCellExperiment::SingleCellExperiment(
+    assays = list(pathwayScores = pathway_values))
+rank_db <- list(
+  source_df = data.frame(rampId = paste0("RAMP_C_", 1:3),
+                         commonName = c("A", "B", "C")),
+  analytehaspathway = data.frame(
+    rampId = c("RAMP_C_1", "RAMP_C_1", "RAMP_C_2", "RAMP_C_3"),
+    pathwayRampId = c("pA", "pB", "pB", "pC")))
+calculateSingleAnnotationStatistics(100.01, ranking_demo, database = rank_db)
+```
+
+This retains the historical weighted z-score formula, now calculated directly
+from paired Pearson correlations. Its standard-normal tail and BH-adjusted
+values are **heuristic ranking measures, not calibrated identification
+p-values**. Correlated pathways and spatially dependent pixels violate the
+simple interpretation of that tail probability. Constant expression has
+undefined correlation; a constant candidate-score component contributes zero.
+
+# Optional Seurat conversion boundary
+
+SpaMTP analysis does not load Seurat or SeuratObject. Only these explicit
+converters need SeuratObject. Convert existing data once, then continue with
+native normalization, scaling, reductions and plotting.
+
+```{r optional-seurat}
+if (requireNamespace("SeuratObject", quietly = TRUE)) {
+    seurat_object <- spatialExperimentToSeurat(spe, includeAltExps = FALSE)
+    spe_again <- seuratToSpatialExperiment(seurat_object)
+    sce_again <- seuratToSingleCellExperiment(seurat_object)
+    stopifnot(identical(colnames(spe_again), colnames(sce_again)))
+}
+```
+
+Use seuratToSingleCellExperiment() for non-spatial transcriptomics; it never
+invents spatial coordinates. For spatial input, coordinates must have x/y
+columns and named pixels, or be supplied by a suitable Seurat image. Multiple
+images require an explicit selection or coordinate table. A single image/FOV
+is read through its public spatial accessor and takes precedence over cached
+metadata coordinates, which may predate alignment. The selected source is
+recorded in `metadata(spe_again)$seurat_interoperability`. Only one exact
+layer is transferred; split layers are not silently partially imported.
+Optical rasters, reductions and graphs are not transferred. Paired alternative
+assays are matched by pixel IDs, and unpaired assays are skipped with a warning.
+
+For an existing Seurat MSI workflow, the native sequence is:
+
+```{r native-scaling}
+scaled_spe <- normalizeSMData(spe, "LogNormalize", verbose = FALSE)
+scaled_spe <- scaleSMData(scaled_spe)
+SummarizedExperiment::assayNames(scaled_spe)
+```
+
+scaleSMData() centres/scales each feature across pixels and stores a separate
+scaled assay. This creates a dense matrix. Unlike the historical WNN workflow,
+multiOmicIntegration() combines equal-weight PCA embeddings; the algorithms
+must not be described as numerically equivalent.
 
 # Inspect available database resources
 

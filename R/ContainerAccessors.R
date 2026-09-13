@@ -1,238 +1,150 @@
-.isSeuratObject <- function(object) {
-  inherits(object, "Seurat")
+.requireExperiment <- function(object, class = "SummarizedExperiment") {
+  if (!methods::is(object, class)) {
+    stop(
+      "Use a ", class, ". Convert Seurat input explicitly with ",
+      "seuratToSpatialExperiment() or seuratToSingleCellExperiment() first.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
 }
 
 .isSummarizedExperiment <- function(object) {
   inherits(object, "SummarizedExperiment")
 }
 
-.cellMetadata <- function(object) {
-  if (.isSeuratObject(object)) {
-    return(object[[]])
+.experimentForAssay <- function(object, assay = NULL) {
+  .requireExperiment(object)
+  alternatives <- if (inherits(object, "SingleCellExperiment")) {
+    SingleCellExperiment::altExpNames(object)
+  } else {
+    character()
   }
-  if (.isSummarizedExperiment(object)) {
-    return(as.data.frame(SummarizedExperiment::colData(object)))
+  if (!is.null(assay) && assay %in% alternatives) {
+    return(SingleCellExperiment::altExp(object, assay))
   }
-  stop("Unsupported container class: ", paste(class(object), collapse = "/"), call. = FALSE)
-}
-
-.setCellMetadata <- function(object, value) {
-  value <- as.data.frame(value)
-  target <- colnames(object)
-  valueRows <- rownames(value)
-  defaultRows <- identical(valueRows, as.character(seq_len(nrow(value))))
-  if (is.null(valueRows) || defaultRows || !all(target %in% valueRows)) {
-    if (nrow(value) != length(target)) {
-      stop(
-        "Cell metadata must contain one row for every cell in the object.",
-        call. = FALSE
-      )
-    }
-    rownames(value) <- target
+  primary <- c("main", "primary", "Spatial", "SPM",
+               SummarizedExperiment::assayNames(object))
+  if (inherits(object, "SingleCellExperiment")) {
+    primary <- c(primary, SingleCellExperiment::mainExpName(object))
   }
-  value <- value[target, , drop = FALSE]
-  if (.isSeuratObject(object)) {
-    return(SeuratObject::AddMetaData(object, metadata = value))
+  if (!is.null(assay) && !assay %in% primary) {
+    stop(
+      "Unknown assay or modality `", assay, "`. Use `main`, an assay name, ",
+      "or an altExp name: ", paste(alternatives, collapse = ", "), ".",
+      call. = FALSE
+    )
   }
-  if (.isSummarizedExperiment(object)) {
-    SummarizedExperiment::colData(object) <- S4Vectors::DataFrame(value)
-    return(object)
-  }
-  stop("Unsupported container class: ", paste(class(object), collapse = "/"), call. = FALSE)
-}
-
-.featureMetadata <- function(object, assay = NULL) {
-  if (.isSeuratObject(object)) {
-    assay <- assay %||% SeuratObject::DefaultAssay(object)
-    return(object[[assay]][[]])
-  }
-  if (.isSummarizedExperiment(object)) {
-    return(as.data.frame(SummarizedExperiment::rowData(object)))
-  }
-  stop("Unsupported container class: ", paste(class(object), collapse = "/"), call. = FALSE)
-}
-
-.setFeatureMetadata <- function(object, value, assay = NULL) {
-  value <- as.data.frame(value)
-  if (.isSeuratObject(object)) {
-    assay <- assay %||% SeuratObject::DefaultAssay(object)
-    assayObject <- object[[assay]]
-    target <- rownames(assayObject)
-    valueRows <- rownames(value)
-    defaultRows <- identical(valueRows, as.character(seq_len(nrow(value))))
-    if (is.null(valueRows) || defaultRows || !all(target %in% valueRows)) {
-      if (nrow(value) != length(target)) {
-        stop(
-          "Feature metadata must contain one row for every feature in the assay.",
-          call. = FALSE
-        )
-      }
-      rownames(value) <- target
-    }
-    value <- value[target, , drop = FALSE]
-    for (column in setdiff(colnames(assayObject[[]]), colnames(value))) {
-      assayObject[[column]] <- NULL
-    }
-    if (ncol(value)) {
-      assayObject[[]] <- value
-    }
-    object[[assay]] <- assayObject
-    return(object)
-  }
-  if (.isSummarizedExperiment(object)) {
-    target <- rownames(object)
-    valueRows <- rownames(value)
-    defaultRows <- identical(valueRows, as.character(seq_len(nrow(value))))
-    if (is.null(valueRows) || defaultRows || !all(target %in% valueRows)) {
-      if (nrow(value) != length(target)) {
-        stop(
-          "Feature metadata must contain one row for every feature in the object.",
-          call. = FALSE
-        )
-      }
-      rownames(value) <- target
-    }
-    value <- value[target, , drop = FALSE]
-    SummarizedExperiment::rowData(object) <- S4Vectors::DataFrame(value)
-    return(object)
-  }
-  stop("Unsupported container class: ", paste(class(object), collapse = "/"), call. = FALSE)
-}
-
-.assayData <- function(object, assay = NULL, layer = "counts") {
-  if (.isSeuratObject(object)) {
-    assay <- assay %||% SeuratObject::DefaultAssay(object)
-    return(SeuratObject::LayerData(object, assay = assay, layer = layer))
-  }
-  if (.isSummarizedExperiment(object)) {
-    available <- SummarizedExperiment::assayNames(object)
-    selected <- if (layer %in% available) layer else assay
-    if (is.null(selected) || !selected %in% available) {
-      stop(
-        "Assay `", layer, "` was not found. Available assays: ",
-        paste(available, collapse = ", "), ".",
-        call. = FALSE
-      )
-    }
-    return(SummarizedExperiment::assay(object, selected))
-  }
-  stop("Unsupported container class: ", paste(class(object), collapse = "/"), call. = FALSE)
-}
-
-.setAssayData <- function(object, value, assay = NULL, layer = "counts") {
-  if (.isSeuratObject(object)) {
-    assay <- assay %||% SeuratObject::DefaultAssay(object)
-    SeuratObject::LayerData(object, assay = assay, layer = layer) <- value
-    return(object)
-  }
-  if (.isSummarizedExperiment(object)) {
-    available <- SummarizedExperiment::assayNames(object)
-    selected <- if (layer %in% available) layer else assay
-    if (is.null(selected) || !selected %in% available) {
-      stop(
-        "Assay `", layer, "` was not found. Available assays: ",
-        paste(available, collapse = ", "), ".",
-        call. = FALSE
-      )
-    }
-    SummarizedExperiment::assay(object, selected) <- value
-    return(object)
-  }
-  stop("Unsupported container class: ", paste(class(object), collapse = "/"), call. = FALSE)
-}
-
-.assayNames <- function(object) {
-  if (.isSeuratObject(object)) {
-    return(SeuratObject::Assays(object))
-  }
-  if (.isSummarizedExperiment(object)) {
-    return(SummarizedExperiment::assayNames(object))
-  }
-  stop("Unsupported container class: ", paste(class(object), collapse = "/"), call. = FALSE)
-}
-
-.storedDataNames <- function(object) {
-  if (!.isSeuratObject(object)) {
-    return(names(S4Vectors::metadata(object)))
-  }
-  unique(c(
-    names(SeuratObject::Misc(object)),
-    SeuratObject::Tool(object)
-  ))
-}
-
-.storedData <- function(object, name) {
-  if (!.isSeuratObject(object)) {
-    return(S4Vectors::metadata(object)[[name]])
-  }
-  misc <- SeuratObject::Misc(object)
-  if (name %in% names(misc)) {
-    value <- misc[[name]]
-    if (is.list(value) && identical(names(value), ".spamtp_data_frame")) {
-      return(value[[1L]])
-    }
-    return(value)
-  }
-  tryCatch(
-    SeuratObject::Tool(object, slot = name),
-    error = function(e) NULL
-  )
-}
-
-.setStoredData <- function(object, name, value) {
-  if (!.isSeuratObject(object)) {
-    metadata <- S4Vectors::metadata(object)
-    metadata[[name]] <- value
-    S4Vectors::metadata(object) <- metadata
-    return(object)
-  }
-  if (is.data.frame(value)) {
-    value <- list(.spamtp_data_frame = value)
-  }
-  SeuratObject::Misc(object, slot = name) <- value
   object
 }
 
-.copyStoredData <- function(from, to) {
-  for (name in .storedDataNames(from)) {
-    to <- .setStoredData(to, name, .storedData(from, name))
+.replaceExperiment <- function(object, experiment, assay = NULL) {
+  if (!is.null(assay) && inherits(object, "SingleCellExperiment") &&
+      assay %in% SingleCellExperiment::altExpNames(object)) {
+    SingleCellExperiment::altExp(object, assay) <- experiment
+    return(object)
   }
-  to
+  experiment
 }
 
-.centroidsWithCoordinates <- function(centroids, coordinates) {
-  cells <- as.character(SeuratObject::Cells(centroids))
-  coordinates <- as.data.frame(coordinates)
-  if (!"cell" %in% names(coordinates)) {
-    coordinates$cell <- cells
+.alignMetadata <- function(value, target, what) {
+  value <- S4Vectors::DataFrame(value)
+  identifiers <- rownames(value)
+  if (is.null(identifiers) ||
+      identical(identifiers, as.character(seq_len(nrow(value))))) {
+    if (nrow(value) != length(target)) {
+      stop(what, " must contain one row for every identifier.", call. = FALSE)
+    }
+    rownames(value) <- target
+  } else if (anyDuplicated(identifiers) ||
+             !setequal(identifiers, target)) {
+    stop(what, " row names must match the object identifiers.", call. = FALSE)
   }
-  coordinates <- coordinates[match(cells, coordinates$cell), c("x", "y", "cell"), drop = FALSE]
-  if (anyNA(coordinates[c("x", "y", "cell")])) {
-    stop("Coordinates must contain one x/y pair for every centroid.", call. = FALSE)
-  }
-  SeuratObject::CreateCentroids(
-    coordinates,
-    nsides = length(centroids),
-    radius = SeuratObject::Radius(centroids),
-    theta = SeuratObject::Theta(centroids)
-  )
+  value[target, , drop = FALSE]
 }
 
-.fovWithBoundary <- function(fov, boundary, value) {
-  boundaryNames <- SeuratObject::Boundaries(fov)
-  boundaries <- stats::setNames(
-    lapply(boundaryNames, function(name) fov[[name]]),
-    boundaryNames
-  )
-  boundaries[[boundary]] <- value
-  updated <- SeuratObject::CreateFOV(
-    coords = boundaries,
-    molecules = NULL,
-    assay = SeuratObject::DefaultAssay(fov),
-    key = SeuratObject::Key(fov)
-  )
-  for (name in SeuratObject::Molecules(fov)) {
-    updated[[name]] <- fov[[name]]
+.nativeSpatialObject <- function(object) {
+  if (methods::is(object, "MSImagingExperiment")) {
+    return(asSpatialExperiment(object))
   }
-  updated
+  if (!methods::is(object, "SpatialExperiment")) {
+    stop(
+      "Use a SpatialExperiment or aligned MSImagingExperiment; convert ",
+      "Seurat input explicitly with seuratToSpatialExperiment().",
+      call. = FALSE
+    )
+  }
+  object
+}
+
+.cellMetadata <- function(object) {
+  .requireExperiment(object)
+  as.data.frame(SummarizedExperiment::colData(object), optional = TRUE)
+}
+
+.setCellMetadata <- function(object, value) {
+  .requireExperiment(object)
+  value <- .alignMetadata(value, colnames(object), "Cell metadata")
+  existing <- SummarizedExperiment::colData(object)
+  for (column in colnames(value)) {
+    existing[[column]] <- value[[column]]
+  }
+  SummarizedExperiment::colData(object) <- existing
+  object
+}
+
+.featureMetadata <- function(object, assay = NULL) {
+  experiment <- .experimentForAssay(object, assay)
+  as.data.frame(SummarizedExperiment::rowData(experiment), optional = TRUE)
+}
+
+.setFeatureMetadata <- function(object, value, assay = NULL) {
+  experiment <- .experimentForAssay(object, assay)
+  SummarizedExperiment::rowData(experiment) <-
+    .alignMetadata(value, rownames(experiment), "Feature metadata")
+  .replaceExperiment(object, experiment, assay)
+}
+
+.assayData <- function(object, assay = NULL, layer = "counts") {
+  experiment <- .experimentForAssay(object, assay)
+  available <- SummarizedExperiment::assayNames(experiment)
+  if (length(layer) != 1L || is.na(layer) || !layer %in% available) {
+    stop(
+      "Assay `", paste(layer, collapse = ", "), "` was not found. Available assays: ",
+      paste(available, collapse = ", "), ".", call. = FALSE
+    )
+  }
+  SummarizedExperiment::assay(experiment, layer)
+}
+
+.setAssayData <- function(object, value, assay = NULL, layer = "counts") {
+  experiment <- .experimentForAssay(object, assay)
+  if (length(layer) != 1L || is.na(layer) || !nzchar(layer)) {
+    stop("layer must be one non-empty assay name.", call. = FALSE)
+  }
+  SummarizedExperiment::assay(experiment, layer) <- value
+  .replaceExperiment(object, experiment, assay)
+}
+
+.assayNames <- function(object) {
+  .requireExperiment(object)
+  SummarizedExperiment::assayNames(object)
+}
+
+.storedDataNames <- function(object) {
+  .requireExperiment(object)
+  names(S4Vectors::metadata(object))
+}
+
+.storedData <- function(object, name) {
+  .requireExperiment(object)
+  S4Vectors::metadata(object)[[name]]
+}
+
+.setStoredData <- function(object, name, value) {
+  .requireExperiment(object)
+  metadata <- S4Vectors::metadata(object)
+  metadata[[name]] <- value
+  S4Vectors::metadata(object) <- metadata
+  object
 }

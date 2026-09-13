@@ -2,13 +2,13 @@
 % Please edit documentation in R/DimensionalityReduction.R
 \name{runMetabolicPCA}
 \alias{runMetabolicPCA}
-\title{Generates PCA analysis results for a SpaMTP Seurat Object}
+\title{Compute PCA with scater on a selected experiment}
 \usage{
 runMetabolicPCA(
   SpaMTP,
   npcs = 30,
   variance_explained_threshold = 0.9,
-  assay = "SPM",
+  assay = "main",
   slot = "counts",
   show_variance_plot = FALSE,
   bin_resolution = NULL,
@@ -19,13 +19,13 @@ runMetabolicPCA(
 )
 }
 \arguments{
-\item{SpaMTP}{SpaMTP Seurat class object that contains spatial metabolic information.}
+\item{SpaMTP}{Bioconductor experiment that contains spatial metabolic information.}
 
-\item{npcs}{is an integer value to indicated preferred number of PCs to retain (default = 30).}
+\item{npcs}{Positive number of PCs, capped by matrix dimensions. NULL uses the variance threshold.}
 
-\item{variance_explained_threshold}{Numeric value defining the explained variance threshold (default = 0.9).}
+\item{variance_explained_threshold}{Cumulative variance fraction in (0, 1], used only when npcs is NULL.}
 
-\item{assay}{Character string defining the SpaMTP assay to extract intensity values from (default = "SPM").}
+\item{assay}{Primary (\code{main}) or alternative experiment name.}
 
 \item{slot}{Character string defining the assay slot containing the intensity values (default = "counts").}
 
@@ -37,19 +37,22 @@ runMetabolicPCA(
 
 \item{bin_method}{Character string defining the method to use for binning respective m/z peaks that fall within a bin. Options for this parameter can be one of "sum", "mean", "max" or "min". \code{bin_resolution} must be provided for this parameter to be implemented (default = "sum").}
 
-\item{reduction.name}{Character string indicating the name associated with the PCA results stored in the output SpaMTP Seurat object (default = "pca").}
+\item{reduction.name}{Character string indicating the name associated with the PCA results stored in the output Bioconductor experiment (default = "pca").}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 }
 \value{
-SpaMTP object with pca results stored in the
+The input with PCA embeddings in reducedDim().
 }
 \description{
-This function run PCA analaysis on a SpaMTP Seurat Object.
+Uses scater::runPCA() and stores embeddings in reducedDim().
 The user can provide a bin/resolution size to increase the bin size and reduce the dimensionality/noise of the SM dataset prior to calculating PCAs.
 }
 \examples{
-utils::str(formals(runMetabolicPCA))
+counts <- matrix(seq_len(30), nrow = 5)
+sce <- SingleCellExperiment::SingleCellExperiment(assays = list(counts = counts))
+sce <- runMetabolicPCA(sce, npcs = 2)
+SingleCellExperiment::reducedDimNames(sce)
 ## For running PCA on un-adjusted peak bin sizes
 # spamtp_obj <- runMetabolicPCA(spamtp_obj, npcs = 50)
 

@@ -61,7 +61,7 @@ A data.frame containing all successfully annotated m/z values, with their corres
 }
 \description{
 This function assigns each valid m/z peak with one/multiple metabolite names based on the mass difference between the observed value and the theoretical value documented in the reference database.
-This function is to be used when dealing with large datasets as a preprocessing step. Users can annotate m/z values first and then subset their data accordinly before loading it into a SpaMTP Seurat Object.
+This function is to be used when dealing with large datasets as a preprocessing step. Users can annotate m/z values first and then subset their data accordinly before loading it into a Bioconductor experiment.
 }
 \examples{
 utils::str(formals(annotateBigData))
@@ -69,5 +69,4 @@ utils::str(formals(annotateBigData))
 #mzs <- data.frame(Cardinal::featureData(cardinal))$mz
 #results <- annotateBigData(mzs, db = HMDB_db, ppm_error = 3, adducts = c("M-H", "M+Cl"), polarity = "negative")
 #cardinal_subset <- Cardinal::subset(cardinal, mz \%in\% results$observed_mz)
-#SpaMTP_data <- cardinalToSeurat(cardinal_subset)
 }

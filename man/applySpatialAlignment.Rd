@@ -39,9 +39,10 @@ applySpatialAlignment(
 )
 }
 \arguments{
-\item{SM.data}{A Seurat object containing the moving SM coordinates.}
+\item{SM.data}{A \code{SpatialExperiment} containing the
+moving SM coordinates.}
 
-\item{ST.data}{An optional Seurat object containing the fixed ST coordinates.
+\item{ST.data}{An optional matching spatial container with fixed coordinates.
 It is required when computing an affine or LDDMM alignment, but is optional
 when applying final coordinates supplied through \code{alignment}.}
 
@@ -59,13 +60,13 @@ estimates a six-degree-of-freedom transformation from paired landmarks in
 R. \code{"lddmm"} runs STalign's landmark-guided affine plus diffeomorphic
 registration through Python.}
 
-\item{SM.fov}{Name of the FOV containing the moving SM centroids. By default,
+\item{SM.fov}{Optional imgData image ID for the moving experiment. By default,
 the first image in \code{SM.data} is used.}
 
-\item{ST.image}{Name of the image/FOV containing fixed ST coordinates. By
+\item{ST.image}{Optional imgData image ID for the fixed experiment. By
 default, the first image in \code{ST.data} is used.}
 
-\item{SM.boundary}{Name of the centroid boundary inside \code{SM.fov}.}
+\item{SM.boundary}{Compatibility label; coordinates are always read from spatialCoords().}
 
 \item{SM.landmarks, ST.landmarks}{Matched landmark coordinates as two-column
 matrices or data frames in x-y order. At least three non-collinear pairs are
@@ -128,7 +129,7 @@ when Torch reports that it is available.}
 \code{torch}. It must be selected before reticulate initialises Python.}
 
 \item{alignment.name}{Name used to store alignment provenance in
-\code{SeuratObject::Misc(SM.data, slot = "spatial_alignment")}.}
+\code{S4Vectors::metadata(SM.data)$spatial_alignment}.}
 
 \item{store}{Logical; store lightweight provenance and diagnostics in the
 returned object.}
@@ -143,13 +144,13 @@ for nearest-neighbour diagnostics.}
 \item{verbose}{Logical; print progress messages.}
 }
 \value{
-A Seurat object when \code{return = "object"}; otherwise an object of class
+The updated spatial container when \code{return = "object"}; otherwise an object of class
 \code{spamtp_spatial_alignment} containing the aligned object and alignment
 details.
 }
 \description{
-Aligns a moving Spatial Metabolomics (SM) Seurat object to a fixed Spatial
-Transcriptomics (ST) object. The function can apply coordinates exported by
+Aligns a moving Spatial Metabolomics (SM) \code{SpatialExperiment}
+to a fixed SpatialExperiment. The function can apply coordinates exported by
 the SMINT workflow, apply a homogeneous transformation matrix, estimate an
 affine transform from paired landmarks, or run the STalign LDDMM backend used
 by SMINT through \code{reticulate}.

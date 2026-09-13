@@ -223,8 +223,10 @@
   }
   order_columns <- intersect(c("Score", "Error"), names(value))
   if (length(order_columns)) {
-    score <- if ("Score" %in% names(value)) -suppressWarnings(as.numeric(value$Score)) else 0
-    error <- if ("Error" %in% names(value)) suppressWarnings(as.numeric(value$Error)) else 0
+    score <- if ("Score" %in% names(value))
+      -suppressWarnings(as.numeric(value$Score)) else rep(0, nrow(value))
+    error <- if ("Error" %in% names(value))
+      suppressWarnings(as.numeric(value$Error)) else rep(0, nrow(value))
     value <- value[order(value$mz_name, value$ramp_id, score, error, na.last = TRUE), , drop = FALSE]
   }
   # The same neutral metabolite can match one observed feature through several
@@ -245,7 +247,7 @@
 #' Reports whether downstream pathway functions will use the current indexed,
 #' scored RaMP annotation pipeline or a legacy mass-match result.
 #'
-#' @param SpaMTP A SpaMTP Seurat object.
+#' @param SpaMTP A SingleCellExperiment, including SpatialExperiment.
 #'
 #' @return A named list containing annotation schema, engine, RaMP version,
 #'   provenance, and candidate count where available.

@@ -1,3 +1,101 @@
+# SpaMTP 0.99.4
+
+* Updated the companion workflow for SpaMTPData >= 0.99.4 and its published
+  native resource release 1.1.0. Historical archive examples explicitly select
+  1.0.0; native downloads require no Seurat conversion.
+* Preserve non-syntactic feature and pixel metadata names during Seurat
+  conversion, including labelled metabolite intensities in the human brain
+  archive. Added forward/reverse conversion regression tests.
+* Support the companion data package's one-time native resource preparation:
+  resulting SpatialExperiment RDS files are used directly without Seurat.
+
+# SpaMTP 0.99.3
+
+* Synchronized companion-package calls with the camelCase SpaMTPdb >= 0.99.2
+  and SpaMTPData >= 0.99.1 APIs. Added an evaluated three-package workflow
+  using a native SpatialExperiment example without downloads or Seurat.
+* Passed local-file checksum verification through loadSpaMTPDatabase(), and
+  isolated in-session cache entries by configured resource directory and
+  verification setting. Explicit custom database bundles remain supported.
+* Updated the full annotation vignette to use the current registry's bytes
+  field rather than the obsolete serialized_bytes field.
+
+# SpaMTP 0.99.2
+
+* Migrated the complete indexed annotation tutorial to native containers and
+  added a runnable public-accessor guide for expression, metadata, coordinates,
+  images and paired modalities. Static regression checks cover actual R code
+  in both functions and vignettes, including unevaluated examples, without
+  mistaking SMILES chirality or `slot=` argument names for slot operations.
+* Seurat spatial conversion now prioritizes a single image/FOV accessor over
+  historical metadata coordinates and records the selected coordinate source.
+  Multiple images require explicit selection; finite-radius centroids are read
+  as pixel centres rather than expanded polygon vertices. Explicitly supplied
+  coordinates remain supported, and metadata is the fallback for image-free
+  objects only. Input objects and their archival metadata are preserved.
+* Native CSV and METASPACE imports store coordinates only in `spatialCoords()`,
+  removing redundant metadata copies that could become stale after alignment.
+* Made `SpatialExperiment` the default container for aligned/binned MSI and
+  retained Cardinal `MSImagingArrays` / `MSImagingExperiment` for raw, continuous, or file-backed
+  spectra. Added S4 conversion generics, registered Cardinal/SPE coercions,
+  and explicit optional Seurat conversion functions.
+* Added raw-array S4 preprocessing methods, execute deferred Cardinal
+  processing before binning/conversion, and cover the mass range of all raw
+  spectra rather than inferring it only from the first pixel.
+* Mapped MSI feature annotations, pixel metadata, coordinates, optical images,
+  and paired transcriptomes to `rowData()`, `colData()`, `spatialCoords()`,
+  `imgData()`, and `altExp()`, respectively. Seurat was removed from dependency
+  declarations; SeuratObject is optional and used only by explicit converters.
+* Added S4 methods for binning, normalization, multi-omic integration, spatial
+  plotting, images, and paired transcriptomes. Native workflows reuse
+  Cardinal, SpatialExperiment, SingleCellExperiment, scater, edgeR, limma,
+  DropletUtils and fgsea functionality.
+* Removed unused direct Imports of EBImage, sp, shinyjs, RColorBrewer, zeallot
+  and matter after migrating the image/alignment workflows. Raw MSI continues
+  to use matter through Cardinal; optical images use SpatialExperiment.
+* Pathway and merged-modality matrices are stored as alternative experiments,
+  allowing their feature dimensions to differ from the primary MSI assay.
+* Migrated affine alignment, image attachment, pixel/spot mapping, ROI selection,
+  spatial correlations, Moran's I and pathway-score plots to native containers.
+  Mapping and spatial graphs separate sample identities; graphs also use
+  `colPairs()` so standard subsetting updates their indices.
+* Added regression coverage for reordered pixels, multi-sample coordinates,
+  altExp normalization, intensity-conserving matrix bins, image scale factors,
+  constant features and RaMP feature IDs. Fixed limma treatment-table extraction
+  and preserved explicit sample labels during technical pooling with edgeR.
+* Native integration defaults to main MSI plus the paired transcriptome; derived
+  pathway and merged assays are not integrated automatically. Equal-weight
+  concatenated PCA is explicitly distinguished from historical Seurat WNN.
+* Migrated MSI feature/annotation plots, optical overlays, 3D views, mass
+  spectra, interactive mass windows, density export and pathway-network
+  container extraction to SpatialExperiment/altExp and imgData.
+  Plotting rejects unsupported Seurat-only arguments instead of ignoring them.
+  Mass windows now sum all in-range features and overlapping windows count
+  each peak once; m/z axes no longer require specially formatted feature IDs.
+  Fixed row-major raster colour ordering for transparent optical overlays and
+  3D image points; S4 container classes are now imported explicitly for coercion.
+* Replaced pathway-based annotation ranking's temporary Seurat/Cardinal
+  conversion with direct paired Pearson correlations. Reused existing pathway
+  scoring and current RaMP candidate resolution; respected requested assays,
+  removed duplicate candidate IDs, and defined constant/missing-data handling.
+  The retained weighted z-score tail probabilities are explicitly documented
+  as heuristic ranks, not calibrated identification p-values.
+* Fixed annotation candidate sorting when optional Score/Error columns are
+  absent. Retired four unused internal plotting helpers and their help pages.
+* Removed non-conversion Seurat branches and implicit Seurat importer output.
+  Added `seuratToSingleCellExperiment()` for non-spatial input, explicit named
+  coordinate conversion, strict Seurat layer matching and identity transfer.
+* Added `scaleSMData()` for feature-wise centring/scaling, and corrected PCA
+  and expression plotting to use the requested alternative experiment.
+  QC plot inputs and `runDE()` now use `data`, not Seurat-named parameters;
+  `subsetSPM()` no longer accepts retired object/slot-upgrade arguments.
+* Native annotation, curated FMP10 annotation and feature subsetting preserve
+  arbitrary feature IDs and paired modalities. Pathway entry points use
+  native assays instead of Seurat-style double-bracket indexing.
+* Added a fresh-process native workflow test that requires neither Seurat
+  namespace, plus adapter-boundary and conversion regression tests.
+  See `BIOCONDUCTOR_MIGRATION.md` for scientific limits and remaining validation.
+
 # SpaMTP 0.99.1
 
 * Standardised all exported function names to lower camel case for the

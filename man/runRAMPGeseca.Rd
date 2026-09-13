@@ -59,6 +59,5 @@ This function is adapted from the \href{https://github.com/alserglab/fgsea/blob/
 }
 \examples{
 utils::str(formals(runRAMPGeseca))
-# E <- SeuratObject::Loadings(SpaMTP, reduction = "pca.rev")
 # sig_pathways <- runRAMPGeseca(E, minSize=15, maxSize=500)
 }

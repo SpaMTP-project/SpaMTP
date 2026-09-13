@@ -2,119 +2,98 @@
 % Please edit documentation in R/PlottingSpaMTP.R
 \name{imageMZPlot}
 \alias{imageMZPlot}
-\title{Plot expression of m/z values spatially}
+\title{Plot MSI features from a Bioconductor spatial container}
 \usage{
 imageMZPlot(
   object,
   mzs,
   plusminus = NULL,
   fov = NULL,
-  boundaries = NULL,
-  cols = if (isTRUE(x = blend)) {
-     c("lightgrey", "#ff0000", "#00ff00")
- } else {
-   
-     c("lightgrey", "firebrick1")
- },
+  cols = c("lightgrey", "firebrick1"),
   size = 0.5,
   min.cutoff = NA,
   max.cutoff = NA,
   split.by = NULL,
-  molecules = NULL,
-  mols.size = 0.1,
-  mols.cols = NULL,
-  nmols = 1000,
   alpha = 1,
   border.color = "white",
-  border.size = NULL,
+  border.size = 0,
   dark.background = TRUE,
-  blend = FALSE,
-  blend.threshold = 0.5,
   crop = FALSE,
   cells = NULL,
   scale = c("feature", "all", "none"),
-  overlap = FALSE,
   axes = FALSE,
   combine = TRUE,
   coord.fixed = TRUE,
-  assay = "Spatial",
-  slot = "data",
+  assay = "main",
+  slot = "counts",
   plot.pixel = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  ...
 )
 }
 \arguments{
-\item{object}{Seurat Spatial Metabolomic Object to Visualise.}
+\item{object}{A SpatialExperiment or aligned Cardinal MSImagingExperiment.}
 
-\item{mzs}{Vector of numeric m/z values to plot (e.g. c(400.1578, 300.1)). The function findNearestMZ() is used to automatically find the nearest m/z value to the ones given.}
+\item{mzs}{Numeric m/z values or character feature IDs.}
 
-\item{plusminus}{Numeric value defining the range/threshold either side of the target peak/peaks to be binned together for plotting (default = NULL).}
+\item{plusminus}{Optional non-negative absolute m/z tolerance.}
 
-\item{fov}{Character string of name of FOV to plot (default = NULL).}
+\item{fov}{Optional sample IDs from colData(object)$sample_id.}
 
-\item{boundaries}{A vector of segmentation boundaries per image to plot (default = NULL).}
+\item{cols}{Gradient colours.}
 
-\item{cols}{Vector of character strings defining colours used for plotting (default = c("lightgrey", "firebrick1")).}
+\item{size}{Point size.}
 
-\item{size}{Numeric value defining the point size for cells/spots when plotting (default = 0.5).}
+\item{min.cutoff, max.cutoff}{One cutoff or one per query; numeric or
+quantile strings such as "q10". NA uses the observed range.}
 
-\item{min.cutoff}{Vector of numeric value describing the minimum cutoff values for each m/z feature (default = NA).}
+\item{split.by}{Optional colData column for separate panels within samples.}
 
-\item{max.cutoff}{Vector of numeric value describing the maximum cutoff values for each m/z feature (default = NA).}
+\item{alpha}{Point opacity, or a two-value range mapped to expression.}
 
-\item{split.by}{Character string defining a factor in the Seurat Object metadata to split the feature plot by (default = NULL).}
+\item{border.color, border.size}{Point border colour and width.}
 
-\item{molecules}{Vector of character strings describing molecules to plot (default = NULL).}
+\item{dark.background}{Use a black plot background.}
 
-\item{mols.size}{Numeric value for the point size of molecules to plot (default = 0.1).}
+\item{crop}{Crop to the selected pixels.}
 
-\item{mols.cols}{A vector of colours for the molecules to plot (default = NULL).}
+\item{cells}{Optional pixel IDs to display.}
 
-\item{nmols}{Integer of the max number of each molecule specified in 'molecules' to be plot (default = 1000).}
+\item{scale}{Colour limits: "feature" across samples, "all" across all
+queries, or "none" separately for each panel.}
 
-\item{alpha}{Numeric value between 0 and 1 defining the image alpha (default = 1).}
+\item{axes}{Show axes.}
 
-\item{border.color}{Character string specifying the colour of each spot/cell border (default = white).}
+\item{combine}{Combine panels; FALSE returns a list of ggplots.}
 
-\item{border.size}{Numeric value for the thickness of the cell segmentation border (default = NULL).}
+\item{coord.fixed}{Use a fixed coordinate aspect ratio.}
 
-\item{dark.background}{Boolean value indicating if the plot background is coloured black (default = FALSE).}
+\item{assay}{Primary experiment ("main") or altExp name.}
 
-\item{blend}{Boolean value indicating whether to scale and blend expression values to visualize coexpression of two features (default = FALSE).}
+\item{slot}{Expression assay name, e.g. "counts" or "logcounts".}
 
-\item{blend.threshold}{Numeric value defining the color cutoff from weak signal to strong signal; ranges from 0 to 1 (default = 0.5).}
+\item{plot.pixel}{Draw square rather than circular point symbols.}
 
-\item{crop}{Boolean value of whether to crop the plots to area with cells only (default = FALSE).}
+\item{verbose}{Retained for call compatibility.}
 
-\item{cells}{Vector of character strings defining a group of cells to plot (default = NUll; plots all cells).}
-
-\item{scale}{Set color scaling across multiple plots; c("features", "all", "none").}
-
-\item{overlap}{Overlay boundaries from a single image to create a single plot (default = FALSE).}
-
-\item{axes}{Boolean defining if to keep axes and panel background (default = FALSE).}
-
-\item{combine}{Boolean value stating if to combine plots into a single patchworked ggplot object (default = TRUE).}
-
-\item{coord.fixed}{Boolean value of it to plot cartesian coordinates with fixed aspect ratio (default = TURE).}
-
-\item{assay}{Character string indicating which Seurat object assay to pull data form (default = "Spatial").}
-
-\item{slot}{Character string indicating the assay slot to use to pull expression values form (default = "counts").}
-
-\item{plot.pixel}{Boolean indicating if the plot should display pixel square shapes, if false will plot with spots (deafult = FALSE).}
-
-\item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+\item{...}{Former Seurat segmentation, molecule and blending arguments
+are unsupported and cause an error; convert and plot these separately.}
 }
 \value{
-A ggplot showing the Spatial representation of expression data of specified m/z values
+A ggplot, or a list of panels when combine is FALSE.
 }
 \description{
-This is for plotting SM data from a SpaMTP Seurat Object that does not contain an image(i.e. H&E image).
-This function inherits from Seurat::ImageFeaturePlot().
+These functions read the primary experiment or a named altExp without
+modifying the object. Numeric m/z queries select the nearest measured mass;
+character feature IDs select exact rows. A mass tolerance sums all peaks
+within that distance of the selected measured mass. Overlapping annotation
+windows count each peak once. Multiple samples are plotted separately.
 }
 \examples{
-utils::str(formals(imageMZPlot))
-# imageMZPlot(SeuratObj, mzs = c(400.678, 300.1))
-# imageMZPlot(SeuratObj, mzs = c(400.678, 300.1), plusminus = 0.05)
+x <- SpatialExperiment::SpatialExperiment(
+  assays = list(counts = rbind(a = 1:4, b = 4:1)),
+  rowData = S4Vectors::DataFrame(mz = c(100, 200)),
+  colData = S4Vectors::DataFrame(row.names = paste0("p", 1:4)),
+  spatialCoords = cbind(x = 1:4, y = c(0, 1, 0, 1)))
+imageMZPlot(x, mzs = 100)
 }

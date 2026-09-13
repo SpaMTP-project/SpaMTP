@@ -1,472 +1,256 @@
-
-#' Calculate annotation statistics for a single m/z value suggesting the most likely metabolite based on correlated pathway expression.
-#'
-#' This function evaluates the potential biological relevance of an annotation for a given m/z value by:
-#' - Identifying pathways associated with each possible annotated metabolite
-#' - Calculating colocalisation score between the m/z intensity and the expression of each corresponding pathway
-#' - Ranking annotations by a combined z-score based on correlation strength and number of supporting significant pathways
-#' - NOTE: this function requires `createPathwayAssay` and `createPathwayObject` to be run first
-#'
-#' @param mz Character or numeric. The target m/z feature. If numeric, the closest matching m/z in the dataset will be selected.
-#' @param data A SpaMTP Seurat object containing both metabolite and pathway assays generated from `createPathwayObject`.
-#' @param mz.assay Character string defining the name of the assay containing m/z features.
-#' @param pathway.assay Character string matching the name of the assay containing pathway features (default = "pathway").
-#' @param mz.slot Character string stating the slot to extract m/z values from (default = "scale.data").
-#' @param pathway.slot Character string defining the slot to extract pathway features from (default = "scale.data").
-#' @param corr_theshold Numeric value stating the correlation threshold to consider a pathway as significantly colocalized. If set to `0`, all pathways will be counted (default = 0).
-#' @param corr_weight Numeric weight applied to correlation score in z-score calculation. If significance should be based more on the correlation, increase this value (default = 1).
-#' @param n_weight Numeric weight applied to number of correlated pathways in z-score calculation (default = 1).
-#' @param database Optional named list of database resources, normally created
-#'   by [loadSpaMTPDatabase()].
-#' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [loadSpaMTPDatabase()].
-#' @param database_local_dir Optional staged SpaMTPdb resource directory.
-#'
-#' @return A tibble with the ranked annotations for the m/z value, containing:
-#' \describe{
-#'   \item{metabolite}{Most common name of the metabolite associated with the RAMP ID}
-#'   \item{ramp_id}{The RAMP ID corresponding to the annotation}
-#'   \item{n_sig_path}{Number of correlated pathways above the threshold}
-#'   \item{max_cor}{Maximum correlation value among significant pathways}
-#'   \item{z_score}{Combined z-score used to rank annotations}
-#'   \item{pval}{Unadjusted p-value}
-#'   \item{pval_adj}{Adjusted p-value (BH method)}
-#' }
-#'
-#' @importFrom Cardinal subset colocalized
-#' @importFrom dplyr group_by summarise mutate slice_max pull
-#' @importFrom tibble tibble
-#' @importFrom SeuratObject CreateAssay5Object
-#' @importFrom stats pnorm p.adjust
-#' @importFrom utils head
-#'
-#' @examples
-#' utils::str(formals(calculateSingleAnnotationStatistics))
-#' #data <- createPathwayObject(data,assay="SPT_pathway",slot = "scale.data")
-#' #calculateSingleAnnotationStatistics(mz = "mz-674.2805",data = data,mz.assay = "SPM",pathway.assay = "pathway",mz.slot = "scale.data")
-#'
-#' @export
-calculateSingleAnnotationStatistics <- function(mz, data, mz.assay, pathway.assay = "pathway", mz.slot= "scale.data", pathway.slot = "scale.data", corr_theshold = 0, corr_weight = 1, n_weight = 1, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
-
-  database_resources <- .spamtp_db_bundle(
-    c("source_df", "analytehaspathway"),
-    database = database,
-    version = database_version,
-    source = match.arg(database_source),
-    local_dir = database_local_dir
-  )
-  source_df <- database_resources$source_df
-  analytehaspathway <- database_resources$analytehaspathway
-
-  if(is.numeric(mz)){
-    mz <- findNearestMZ(data = data, target_mz = mz, assay = mz.assay)
-  }
-
-  DefaultAssay(data) <- pathway.assay
-  pathway_list <- analytehaspathway %>%
-    group_by(rampId) %>%
-    summarise(pathways = list(unique(pathwayRampId)), .groups = "drop")
-
-  named_list <- setNames(pathway_list$pathways, pathway_list$rampId)
-
-  ## 2. Use source_df to match annotation sourceID to rampID
-
-  featureMetadata <- .featureMetadata(data, mz.assay)
-  row <- featureMetadata[featureMetadata$mz_names == mz,]
-  source_df_copy <- source_df
-  named_list_copy <- named_list
-
-  message("Calculating top metabolites for provided m/z value. ")
-
-
-  met_counts <- data[[mz.assay]][mz.slot][mz,,drop =FALSE]
-  tran_counts <- data[["pathway"]]["counts"]
-
-  gene_mappings <- data.frame(gene = rownames(tran_counts))
-
-  rownames(tran_counts) <- unlist(lapply(1:length(rownames(tran_counts)), function (x) {
-    paste0("mz-",(round(as.numeric(gsub("mz-", "", rownames(met_counts)[length(rownames(met_counts))],))) + 100), x)
-  }))
-
-  gene_mappings$mz <- rownames(tran_counts)
-  gene_mappings$raw_mz <- gsub("mz-", "", gene_mappings$mz)
-
-  data[["tmp"]] <- SeuratObject::CreateAssay5Object(counts = rbind(met_counts, tran_counts))
-  data[["tmp"]][mz.slot] <- data[["tmp"]]["counts"]
-  SM.assay <- "tmp"
-
-  gc()
-
-  main_cardinal <- convertSeuratToCardinal(data = data, assay = SM.assay, slot = mz.slot, verbose = FALSE)
-
-
-
-  annotation_ids <- unlist(strsplit(row$all_Isomers_IDs, split = "; "))
-  ramp_ids <- unlist(lapply(annotation_ids, function(analyte){
-    source_df_copy[source_df_copy$sourceId == analyte, "rampId"]
-  }))
-
-  if (length(ramp_ids) > 1){
-    key_pathways <- unique(unlist(named_list_copy[ramp_ids]))
-
-    if (length(key_pathways) > 0){
-
-      present_gene_mappings <- gene_mappings[gene_mappings$gene %in% key_pathways,]
-      features <- c(row$raw_mz,present_gene_mappings$raw_mz)
-      cardinal_subset <- Cardinal::subset(main_cardinal, mz %in% features)
-
-      d_list <- list()
-      d_list[["1"]] <- suppressWarnings(Cardinal::colocalized(cardinal_subset, mz=row$raw_mz, n = length(features)))
-      for (i in names(d_list)){
-        correlated_features <- d_list[[i]][order(d_list[[i]]$mz), ]
-        correlated_features$features <- c(row$mz_names,present_gene_mappings$gene)
-        correlated_features$modality <- c("metabolite", c(rep("gene", length(present_gene_mappings$gene))))
-        correlated_features <- correlated_features[c("features", colnames(correlated_features)[!colnames(correlated_features) %in% c("mz", "features")])]
-        d_list[[i]] <- correlated_features
-      }
-
-      for (i in names(d_list)){
-        correlated_features <- d_list[[i]]
-        correlated_features <- correlated_features[order(-abs(correlated_features$cor)), ]
-        correlated_features$ident <- i
-        correlated_features$rank <- c(1:length(correlated_features$ident))
-        d_list[[i]] <- correlated_features
-
-      }
-
-      correlated_features <- data.frame(do.call(rbind, d_list))
-
-
-      correlation_results <- list()
-      for (annotation in ramp_ids){
-        matched_pathways <- named_list_copy[[annotation]]
-        if (!is.null(matched_pathways)){
-          df <- correlated_features[correlated_features$features %in% matched_pathways, ]
-          if (nrow(df) > 0){
-            max_row <- df %>% slice_max(order_by = abs(cor), n = 1)
-            df <- df[df$cor > corr_theshold,]
-            correlation_results[[annotation]] <- list(
-              "max_cor" = unique(pull(max_row, cor)),
-              "max_path" = pull(max_row, features),
-              "n_sig_path" = nrow(df)
-            )
-          }
-        } else{
-          correlation_results[[annotation]] <- list(
-            "max_cor" = 0,
-            "max_path" = "NA",
-            "n_sig_path" = 0
-          )
-        }
-      }
-      metabolite_scores <- tibble::tibble(
-        ramp_id = names(correlation_results),
-        max_cor = sapply(correlation_results, function(x) x$max_cor),
-        n_sig_path = sapply(correlation_results, function(x) x$n_sig_path))
-
-      metabolite_scores <- metabolite_scores %>%
-        mutate(
-          abs_cor = abs(max_cor),
-          z_cor = scale(abs_cor)[,1],
-          z_path = scale(n_sig_path)[,1],
-          z_score = (corr_weight *z_cor) + (n_weight* z_path)  # or use mean instead of sum
-        )
-
-      metabolite_scores <- metabolite_scores %>%
-        mutate(
-          pval = 1 - pnorm(z_score)
-        )
-      metabolite_scores <- metabolite_scores %>%
-        mutate(
-          pval_adj = p.adjust(pval, method = "BH")
-        )
-
-      metabolite_scores <- metabolite_scores[c("ramp_id","max_cor","n_sig_path", "z_score", "pval", "pval_adj")]
-      metabolite_scores
-
-    } else {
-      stop("Provided m/z value contained annotations with no corresponding pathways ....")
-    }
-  } else {
-    stop("Provided m/z value contained only 1 or less annotations ....")
-  }
-  message("Calculating Statistics")
-  column_names <- c("ramp_id","max_cor","n_sig_path", "z_score", "pval", "pval_adj")
-
-  if (is.null(metabolite_scores) || nrow(metabolite_scores) == 0) {
-    return(tibble(ramp_id = NA, max_cor = NA, n_sig_path = NA, z_score = NA, pval = NA, pval_adj = NA, metabolite = NA))
-  } else {
-    get_most_common_name <- function(ramp_id) {
-      if (is.na(ramp_id)) return(NA)
-
-      matches <- source_df_copy[source_df_copy$rampId == ramp_id, ]
-      if (nrow(matches) == 0) return(NA)
-
-      name_counts <- sort(table(matches$commonName), decreasing = TRUE)
-      return(names(name_counts)[1])
-    }
-
-    # Apply to df
-    metabolite_scores$metabolite <- sapply(metabolite_scores$ramp_id, get_most_common_name)
-    return(metabolite_scores[c("metabolite","ramp_id", "n_sig_path", "max_cor", "z_score", "pval", "pval_adj")])
-  }
-
-  return(metabolite_scores)
-
+.annotationStatisticsInput <- function(data, mz.assay, mz.slot, pathway.assay,
+                                        pathway.slot, database, threshold,
+                                        corrWeight, nWeight) {
+  if (!methods::is(data, "SingleCellExperiment"))
+    stop("Use SingleCellExperiment/SpatialExperiment; convert Seurat input explicitly.",
+         call. = FALSE)
+  if (length(threshold) != 1L || !is.finite(threshold) || abs(threshold) > 1)
+    stop("corr_theshold must be between -1 and 1.", call. = FALSE)
+  if (length(corrWeight) != 1L || length(nWeight) != 1L ||
+      any(!is.finite(c(corrWeight, nWeight))) || min(corrWeight, nWeight) < 0 ||
+      corrWeight + nWeight == 0)
+    stop("Weights must be finite, non-negative and not both zero.", call. = FALSE)
+  expression <- .nativeExpression(data, mz.assay, mz.slot)
+  pathways <- .nativeExpression(data, pathway.assay, pathway.slot)
+  if (ncol(expression) < 3L)
+    stop("At least three paired pixels are required.", call. = FALSE)
+  if (!all(c("rampId", "pathwayRampId") %in% names(database$analytehaspathway)) ||
+      !all(c("rampId", "commonName") %in% names(database$source_df)))
+    stop("Database requires pathway membership and RaMP/common-name columns.", call. = FALSE)
+  members <- unique(as.data.frame(database$analytehaspathway)[,
+    c("rampId", "pathwayRampId")])
+  members <- members[!is.na(members$rampId) & !is.na(members$pathwayRampId), ]
+  sets <- lapply(split(as.character(members$pathwayRampId), members$rampId), unique)
+  candidates <- .annotationStatisticsCandidates(data, mz.assay, database$source_df)
+  list(expression = expression, pathways = pathways, sets = sets,
+       candidates = candidates, source = database$source_df)
 }
 
+.annotationStatisticsCandidates <- function(object, assay, source) {
+  features <- .featureMetadata(object, assay)
+  current <- .storedData(object, "mz_annotation")
+  compatible <- .storedData(object, "db_3")
+  if (.annotation_has_current_schema(current$results) ||
+      .annotation_has_current_schema(compatible)) {
+    value <- .resolve_pathway_metabolite_annotations(object,
+      annotation_source = "current", score_threshold = 0)
+    # Current annotation stores may predate arbitrary feature IDs.
+    if (!all(value$mz_name %in% rownames(features))) {
+      masses <- .massValues(features, rownames(features))
+      missing <- !value$mz_name %in% rownames(features)
+      value$mz_name[missing] <- rownames(features)[
+        match(value$observed_mz[missing], masses)]
+    }
+    value <- unique(value[, c("mz_name", "ramp_id")])
+    return(split(value$ramp_id, value$mz_name))
+  }
+  column <- intersect(c("all_Ramp_IDs", "Ramp_IDs", "all_Isomers_IDs"), names(features))
+  if (!length(column))
+    stop("No RaMP candidates in current annotations or rowData.", call. = FALSE)
+  column <- column[1L]
+  values <- lapply(as.character(features[[column]]), function(value) {
+    ids <- trimws(unlist(strsplit(value, ";", fixed = TRUE)))
+    ids <- ids[!is.na(ids) & nzchar(ids)]
+    if (column == "all_Isomers_IDs") {
+      if (!"sourceId" %in% names(source))
+        stop("Legacy annotation mapping requires source_df$sourceId.", call. = FALSE)
+      ids <- source$rampId[source$sourceId %in% ids]
+    }
+    sort(unique(as.character(ids[!is.na(ids)])))
+  })
+  stats::setNames(values, rownames(features))
+}
 
-#' Calculate annotation statistics for all m/z value suggesting the most likely metabolite based on correlated pathway expression.
+.annotationStatisticsName <- function(id, source) {
+  matched <- as.character(source$commonName[source$rampId %in% id])
+  matched <- matched[!is.na(matched) & nzchar(matched)]
+  if (!length(matched)) return(NA_character_)
+  names(sort(table(matched), decreasing = TRUE))[1L]
+}
+
+.annotationZ <- function(values) {
+  deviation <- stats::sd(values)
+  if (!is.finite(deviation) || deviation == 0) return(rep(0, length(values)))
+  (values - mean(values)) / deviation
+}
+
+.scoreAnnotationFeature <- function(feature, input, threshold, corrWeight, nWeight) {
+  ids <- sort(unique(input$candidates[[feature]]))
+  if (length(ids) < 2L) return(NULL)
+  selected <- sort(intersect(unique(unlist(input$sets[ids])),
+                              rownames(input$pathways)))
+  if (!length(selected)) return(NULL)
+  target <- as.numeric(input$expression[feature, ])
+  if (any(!is.finite(target))) stop("m/z expression must be finite.", call. = FALSE)
+  # One target and only its candidate pathways are materialized, not a
+  # feature-by-pathway all-pairs matrix or a synthetic MSI object.
+  correlations <- vapply(selected, function(pathway) {
+    values <- as.numeric(input$pathways[pathway, ])
+    if (any(!is.finite(values)))
+      stop("Pathway expression must be finite.", call. = FALSE)
+    if (stats::sd(target) == 0 || stats::sd(values) == 0) return(NA_real_)
+    stats::cor(target, values, method = "pearson")
+  }, numeric(1))
+  maximum <- vapply(ids, function(id) {
+    values <- correlations[intersect(input$sets[[id]], selected)]
+    values <- values[is.finite(values)]
+    if (!length(values)) return(NA_real_)
+    values[which.max(abs(values))]
+  }, numeric(1))
+  number <- vapply(ids, function(id) {
+    values <- correlations[intersect(input$sets[[id]], selected)]
+    as.integer(sum(values > threshold, na.rm = TRUE))
+  }, integer(1))
+  valid <- is.finite(maximum)
+  scores <- pvalue <- adjusted <- rep(NA_real_, length(ids))
+  if (sum(valid) > 1L) {
+    scores[valid] <- corrWeight * .annotationZ(abs(maximum[valid])) +
+      nWeight * .annotationZ(number[valid])
+    pvalue[valid] <- stats::pnorm(scores[valid], lower.tail = FALSE)
+    adjusted[valid] <- stats::p.adjust(pvalue[valid], method = "BH")
+  }
+  result <- tibble::tibble(
+    metabolite = unname(vapply(ids, .annotationStatisticsName, character(1),
+                        source = input$source)),
+    ramp_id = ids, n_sig_path = unname(number), max_cor = unname(maximum),
+    z_score = scores, pval = pvalue, pval_adj = adjusted)
+  result[order(-result$z_score, result$ramp_id, na.last = TRUE), ]
+}
+
+#' Rank candidate metabolite annotations using paired pathway expression
 #'
-#' This function evaluates the potential biological relevance of an annotation for a given m/z value by:
-#' - Identifying pathways associated with each possible annotated metabolite
-#' - Calculating colocalisation score between the m/z intensity and the expression of each corresponding pathway
-#' - Ranking annotations by a combined z-score based on correlation strength and number of supporting significant pathways
-#' - NOTE: this function requires `createPathwayAssay` to be run first
+#' Pearson correlations are calculated directly between a selected m/z assay
+#' and pathway expression in altExp, aligned by pixel IDs. This replaces the
+#' former temporary Seurat assay and synthetic-mass Cardinal conversion.
 #'
-#' @param mz Character or numeric. The target m/z feature. If numeric, the closest matching m/z in the dataset will be selected.
-#' @param data A SpaMTP Seurat object containing both metabolite and RAMP_ID assays generated from `createPathwayAssay`.
-#' @param mz.assay Character string defining the name of the assay containing m/z features.
-#' @param pathway.assay Character string matching the name of the assay containing RAMP_ID features (default = "pathway").
-#' @param mz.slot Character string stating the slot to extract m/z values from (default = "scale.data").
-#' @param pathway.slot Character string defining the slot to extract pathway features from (default = "scale.data").
-#' @param return.top Boolean indicating whether to return only the most likely metabolite with it's corresponding pval and score. If set to `FALSE`, a list will be returned with statistics for all possible metabolites per m/z (default = TRUE).
-#' @param corr_theshold Numeric value stating the correlation threshold to consider a pathway as significantly colocalized. If set to `0`, all pathways will be counted (default = 0).
-#' @param corr_weight Numeric weight applied to correlation score in z-score calculation. If significance should be based more on the correlation, increase this value (default = 1).
-#' @param n_weight Numeric weight applied to number of correlated pathways in z-score calculation (default = 1).
-#' @param database Optional named list of database resources, normally created
-#'   by [loadSpaMTPDatabase()].
-#' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
-#' @param database_source Database source; see [loadSpaMTPDatabase()].
-#' @param database_local_dir Optional staged SpaMTPdb resource directory.
+#' @details For each candidate, max_cor is the signed correlation of the
+#' pathway with largest absolute correlation; ties use pathway ID order.
+#' n_sig_path counts finite correlations strictly greater than corr_theshold
+#' (zero therefore counts positive correlations, not every pathway).
+#' The score is corr_weight * scale(abs(max_cor)) +
+#' n_weight * scale(n_sig_path), across candidates for one feature.
+#' A constant component contributes zero. Constant expression and unmeasured
+#' pathways have undefined correlations. Scores require two evaluable
+#' candidates; otherwise scores and probabilities are NA.
 #'
-#' @return Either a data.frame containing the original annotations for all m/z values and their corresponding most likely metabolite, or a list contating statistics for each m/z value.
+#' pval is the standard-normal upper tail of this weighted score; pval_adj
+#' applies BH within each feature. These are legacy heuristic ranking measures,
+#' not calibrated identification p-values: the weighted components are not
+#' independent, the combined score need not be standard normal, and pixels are
+#' not biological replicates. Correlation is across all supplied pixels;
+#' subset samples/conditions beforehand when appropriate.
 #'
-#' @importFrom Cardinal subset colocalized
-#' @importFrom dplyr group_by summarise mutate slice_max pull
-#' @importFrom tibble tibble
-#' @importFrom SeuratObject CreateAssay5Object
-#' @importFrom stats pnorm p.adjust
-#' @importFrom utils head
+#' Current scored RaMP annotations take precedence over rowData RaMP IDs.
+#' Older all_Isomers_IDs columns can be mapped via source_df$sourceId.
+#' Duplicate candidate IDs are counted once.
 #'
+#' @param mz One numeric m/z query or exact character feature ID.
+#' @param data A SingleCellExperiment or SpatialExperiment with paired altExp.
+#' @param mz.assay Primary experiment ("main") or alternative MSI experiment.
+#' @param pathway.assay Alternative experiment containing pathway-level scores.
+#' @param mz.slot Expression assay in the MSI experiment.
+#' @param pathway.slot Expression assay in the pathway experiment.
+#' @param corr_theshold Minimum signed pathway correlation (legacy spelling).
+#' @param corr_weight,n_weight Non-negative weights, not both zero.
+#' @param database Optional named list from loadSpaMTPDatabase.
+#' @param database_version,database_source,database_local_dir Database selection;
+#'   see loadSpaMTPDatabase.
+#' @return A tibble ordered by decreasing score, containing metabolite,
+#'   ramp_id, n_sig_path, max_cor, z_score, pval and pval_adj.
+#' @export
+#' @examples
+#' utils::str(formals(calculateSingleAnnotationStatistics))
+calculateSingleAnnotationStatistics <- function(
+    mz, data, mz.assay = "main", pathway.assay = "pathway",
+    mz.slot = "counts", pathway.slot = "pathwayScores", corr_theshold = 0,
+    corr_weight = 1, n_weight = 1, database = NULL,
+    database_version = "latest", database_source = c("auto", "spamtpdb"),
+    database_local_dir = NULL
+) {
+  resources <- .spamtp_db_bundle(c("source_df", "analytehaspathway"),
+    database = database, version = database_version,
+    source = match.arg(database_source), local_dir = database_local_dir)
+  input <- .annotationStatisticsInput(data, mz.assay, mz.slot, pathway.assay,
+    pathway.slot, resources, corr_theshold, corr_weight, n_weight)
+  if (length(mz) != 1L || is.na(mz)) stop("Supply one m/z query.", call. = FALSE)
+  if (is.numeric(mz)) {
+    if (!is.finite(mz)) stop("m/z must be finite.", call. = FALSE)
+    masses <- .massValues(.featureMetadata(data, mz.assay), rownames(input$expression))
+    mz <- rownames(input$expression)[which.min(abs(masses - mz))]
+  }
+  if (!mz %in% rownames(input$expression)) stop("Unknown m/z feature.", call. = FALSE)
+  result <- .scoreAnnotationFeature(mz, input, corr_theshold, corr_weight, n_weight)
+  if (is.null(result))
+    stop("The feature needs at least two candidate IDs and measured pathways.", call. = FALSE)
+  result
+}
+
+#' Rank annotations for all MSI features
+#'
+#' When pathway.assay contains RaMP analytes rather than pathway scores,
+#' createPathwayObject is reused to calculate scores in a temporary altExp.
+#' Set pathway.scores=TRUE to use an existing pathway-level assay directly.
+#' Input containers are never modified.
+#' @details Uses the score definition and missing-data rules documented in
+#' [calculateSingleAnnotationStatistics()]. The reported pval and pval_adj
+#' columns are heuristic ranking measures, not calibrated identification
+#' p-values or biological-replicate inference.
+#' @inheritParams calculateSingleAnnotationStatistics
+#' @param pathway.assay Alternative experiment of RaMP analytes, or pathway
+#'   scores when pathway.scores=TRUE.
+#' @param pathway.slot Input expression assay in pathway.assay.
+#' @param return.top Return one best evaluable candidate per feature; FALSE
+#'   returns a named list of all candidate tables. Features without a score
+#'   remain as NA rows in top results and NULL entries when no table is possible.
+#' @param pathway.scores Whether pathway.assay already contains pathway scores.
+#' @return A data.frame preserving feature order and rowData, with ranked
+#'   annotation columns; or a named list when return.top=FALSE.
+#' @export
 #' @examples
 #' utils::str(formals(calculateAnnotationStatistics))
-#' #calculateAnnotationStatistics(data = data,mz.assay = "SPM",pathway.assay = "merged",mz.slot = "scale.data")
-#'
-#' @export
-calculateAnnotationStatistics <- function(data, mz.assay, pathway.assay, mz.slot= "scale.data", pathway.slot = "scale.data", return.top = TRUE, corr_theshold = 0, corr_weight = 1, n_weight = 1, database = NULL, database_version = "latest", database_source = c("auto", "spamtpdb"), database_local_dir = NULL){
-
-  database_source <- match.arg(database_source)
-  database_resources <- .spamtp_db_bundle(
-    c("source_df", "analytehaspathway", "pathway"),
-    database = database,
-    version = database_version,
-    source = database_source,
-    local_dir = database_local_dir
-  )
-  source_df <- database_resources$source_df
-  analytehaspathway <- database_resources$analytehaspathway
-
-  message("creating pathway expression object")
-  y <- createPathwayObject(data,
-                           assay=pathway.assay,
-                           slot = pathway.slot,
-                           database = database_resources,
-                           database_version = database_version,
-                           database_source = database_source,
-                           database_local_dir = database_local_dir)
-
-
-  ## 1. get pathways for each ramp_id
-  DefaultAssay(y) <- "pathway"
-  pathway_list <- analytehaspathway %>%
-    group_by(rampId) %>%
-    summarise(pathways = list(unique(pathwayRampId)), .groups = "drop")
-
-  named_list <- setNames(pathway_list$pathways, pathway_list$rampId)
-
-  ## 2. Use source_df to match annotation sourceID to rampID
-
-  meta_rows <- .featureMetadata(y, mz.assay)
-  meta_data <- meta_rows$raw_mz
-  source_df_copy <- source_df
-  named_list_copy <- named_list
-
-  message("Calculating top metabolites for each m/z value. ")
-
-
-  met_counts <- y[[mz.assay]][mz.slot] #[findNearestMZ(data = y, target_mz = mz, assay = SM.assay),,drop =FALSE]
-  tran_counts <- y[["pathway"]]["counts"]
-
-  gene_mappings <- data.frame(gene = rownames(tran_counts))
-
-  rownames(tran_counts) <- unlist(lapply(1:length(rownames(tran_counts)), function (x) {
-    paste0("mz-",(round(as.numeric(gsub("mz-", "", rownames(met_counts)[length(rownames(met_counts))],))) + 100), x)
-  }))
-
-  gene_mappings$mz <- rownames(tran_counts)
-  gene_mappings$raw_mz <- gsub("mz-", "", gene_mappings$mz)
-
-  y[["tmp"]] <- SeuratObject::CreateAssay5Object(counts = rbind(met_counts, tran_counts))
-  y[["tmp"]][mz.slot] <- y[["tmp"]]["counts"]
-  SM.assay <- "tmp"
-
-  gc()
-
-  main_cardinal <- convertSeuratToCardinal(data = y, assay = SM.assay, slot = mz.slot, verbose = FALSE)
-
-
-  mz_pathway_annotations <- lapply(1:length(meta_data), function(idx){
-    row <- meta_rows[idx, ]
-    annotation_ids <- unlist(strsplit(row$all_Isomers_IDs, split = "; "))
-    ramp_ids <- unlist(lapply(annotation_ids, function(analyte){
-      source_df_copy[source_df_copy$sourceId == analyte, "rampId"]
-    }))
-
-    if (length(ramp_ids) > 1){
-      key_pathways <- unique(unlist(named_list_copy[ramp_ids]))
-
-      if (length(key_pathways) > 0){
-
-        present_gene_mappings <- gene_mappings[gene_mappings$gene %in% key_pathways,]
-        features <- c(row$raw_mz,present_gene_mappings$raw_mz)
-        cardinal_subset <- Cardinal::subset(main_cardinal, mz %in% features)
-
-        d_list <- list()
-        d_list[["1"]] <- suppressWarnings(Cardinal::colocalized(cardinal_subset, mz=row$raw_mz, n = length(features)))
-        for (i in names(d_list)){
-          correlated_features <- d_list[[i]][order(d_list[[i]]$mz), ]
-          correlated_features$features <- c(row$mz_names,present_gene_mappings$gene)
-          correlated_features$modality <- c("metabolite", c(rep("gene", length(present_gene_mappings$gene))))
-          correlated_features <- correlated_features[c("features", colnames(correlated_features)[!colnames(correlated_features) %in% c("mz", "features")])]
-          d_list[[i]] <- correlated_features
-        }
-
-        for (i in names(d_list)){
-          correlated_features <- d_list[[i]]
-          correlated_features <- correlated_features[order(-abs(correlated_features$cor)), ]
-          correlated_features$ident <- i
-          correlated_features$rank <- c(1:length(correlated_features$ident))
-          d_list[[i]] <- correlated_features
-
-        }
-
-        correlated_features <- data.frame(do.call(rbind, d_list))
-
-
-        correlation_results <- list()
-        for (annotation in ramp_ids){
-          matched_pathways <- named_list_copy[[annotation]]
-          if (!is.null(matched_pathways)){
-            df <- correlated_features[correlated_features$features %in% matched_pathways, ]
-            if (nrow(df) > 0){
-              max_row <- df %>% slice_max(order_by = abs(cor), n = 1)
-              df <- df[df$cor > corr_theshold,]
-              correlation_results[[annotation]] <- list(
-                "max_cor" = unique(pull(max_row, cor)),
-                "max_path" = pull(max_row, features),
-                "n_sig_path" = nrow(df)
-              )
-            }
-          } else{
-            correlation_results[[annotation]] <- list(
-              "max_cor" = 0,
-              "max_path" = "NA",
-              "n_sig_path" = 0
-            )
-          }
-        }
-        metabolite_scores <- tibble::tibble(
-          ramp_id = names(correlation_results),
-          max_cor = sapply(correlation_results, function(x) x$max_cor),
-          n_sig_path = sapply(correlation_results, function(x) x$n_sig_path))
-
-        metabolite_scores <- metabolite_scores %>%
-          mutate(
-            abs_cor = abs(max_cor),
-            z_cor = scale(abs_cor)[,1],
-            z_path = scale(n_sig_path)[,1],
-            z_score = (corr_weight *z_cor) + (n_weight* z_path)  # or use mean instead of sum
-          )
-
-        metabolite_scores <- metabolite_scores %>%
-          mutate(
-            pval = 1 - pnorm(z_score)
-          )
-        metabolite_scores <- metabolite_scores %>%
-          mutate(
-            pval_adj = p.adjust(pval, method = "BH")
-          )
-
-        metabolite_scores <- metabolite_scores[c("ramp_id","max_cor","n_sig_path", "z_score", "pval", "pval_adj")]
-        return(metabolite_scores)
-
-      }
-      return(NULL)
-    }
-    return(NULL)
-  })
-
-  message("Calculating Statistics")
-  column_names <- c("ramp_id","max_cor","n_sig_path", "z_score", "pval", "pval_adj")
-
-  if (return.top){
-
-    df <- map_dfr(mz_pathway_annotations, function(df) {
-      if (is.null(df) || nrow(df) == 0) {
-        # Return a 1-row tibble of NAs if NULL or empty
-        tibble(ramp_id = NA, max_cor = NA, n_sig_path = NA, z_score = NA,pval = NA, pval_adj = NA)
-      } else {
-        df %>%
-          select(all_of(column_names)) %>%
-          slice_min(pval_adj, with_ties = FALSE)
-      }
-    }, .id = "source")
-
-    get_most_common_name <- function(ramp_id) {
-      if (is.na(ramp_id)) return(NA)
-
-      matches <- source_df_copy[source_df_copy$rampId == ramp_id, ]
-      if (nrow(matches) == 0) return(NA)
-
-      name_counts <- sort(table(matches$commonName), decreasing = TRUE)
-      return(names(name_counts)[1])
-    }
-
-    # Apply to df
-    df$metabolite <- sapply(df$ramp_id, get_most_common_name)
-    df$ramp_id <- NULL
-    df <- df[c("metabolite","n_sig_path", "max_cor", "z_score", "pval", "pval_adj")]
-
-    combined_df <- bind_cols(meta_rows[c(1,2)], df)
-    combined_df$original_annotations <- meta_rows$all_IsomerNames
-
-    return(combined_df)
-  } else {
-    warning("Returning results for all annotations per m/z. For returning a data.frame with only the most significant metabolite per m/z set `return.type` == 'top' ")
-
-    result_list <- lapply(mz_pathway_annotations, function(x){
-      if (is.null(x) || nrow(x) == 0) {
-        return(tibble(ramp_id = NA, max_cor = NA, n_sig_path = NA, z_score = NA, pval = NA, pval_adj = NA, metabolite = NA))
-      } else {
-        get_most_common_name <- function(ramp_id) {
-          if (is.na(ramp_id)) return(NA)
-
-          matches <- source_df_copy[source_df_copy$rampId == ramp_id, ]
-          if (nrow(matches) == 0) return(NA)
-
-          name_counts <- sort(table(matches$commonName), decreasing = TRUE)
-          return(names(name_counts)[1])
-        }
-
-        # Apply to df
-        x$metabolite <- sapply(x$ramp_id, get_most_common_name)
-        return(x[c("metabolite","ramp_id", "n_sig_path", "max_cor", "z_score", "pval", "pval_adj")])
-      }
-    })
-
-    names(result_list) <- meta_rows$mz_names
-    return(result_list)
-
+calculateAnnotationStatistics <- function(
+    data, mz.assay = "main", pathway.assay = "pathway",
+    mz.slot = "counts", pathway.slot = "counts", return.top = TRUE,
+    corr_theshold = 0, corr_weight = 1, n_weight = 1,
+    database = NULL, database_version = "latest",
+    database_source = c("auto", "spamtpdb"), database_local_dir = NULL,
+    pathway.scores = FALSE
+) {
+  source <- match.arg(database_source)
+  required <- c("source_df", "analytehaspathway", if (!pathway.scores) "pathway")
+  resources <- .spamtp_db_bundle(required, database = database,
+    version = database_version, source = source, local_dir = database_local_dir)
+  if (!methods::is(data, "SingleCellExperiment"))
+    stop("Use SingleCellExperiment/SpatialExperiment; convert Seurat input explicitly.",
+         call. = FALSE)
+  if (!pathway.scores) {
+    .nativeExpression(data, pathway.assay, pathway.slot)
+    newName <- tail(make.unique(c(SingleCellExperiment::altExpNames(data),
+                                  ".annotationPathways")), 1L)
+    data <- createPathwayObject(data, assay = pathway.assay, slot = pathway.slot,
+      new.assay = newName, database = resources, database_version = database_version,
+      database_source = source, database_local_dir = database_local_dir)
+    pathway.assay <- newName
+    pathway.slot <- "pathwayScores"
   }
+  input <- .annotationStatisticsInput(data, mz.assay, mz.slot, pathway.assay,
+    pathway.slot, resources, corr_theshold, corr_weight, n_weight)
+  ids <- rownames(input$expression)
+  result <- stats::setNames(lapply(ids, .scoreAnnotationFeature, input = input,
+    threshold = corr_theshold, corrWeight = corr_weight, nWeight = n_weight), ids)
+  if (!return.top) return(result)
+  empty <- data.frame(metabolite = NA_character_, ramp_id = NA_character_,
+    n_sig_path = NA_integer_, max_cor = NA_real_, z_score = NA_real_,
+    pval = NA_real_, pval_adj = NA_real_)
+  top <- do.call(rbind, lapply(result, function(table) {
+    if (is.null(table) || !any(is.finite(table$z_score))) return(empty)
+    as.data.frame(table[which(is.finite(table$z_score))[1L], ])
+  }))
+  metadata <- .featureMetadata(data, mz.assay)
+  metadata$mz_names <- ids
+  metadata$mz <- .massValues(metadata, ids)
+  # A repeated call must not create duplicate output column names.
+  for (column in names(top)) metadata[[column]] <- top[[column]]
+  rownames(metadata) <- ids
+  metadata
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/LoadData.R
 \name{loadSM}
 \alias{loadSM}
-\title{Loads spatial metabolic data into a SpaMTP Seurat Object}
+\title{Load imzML data into a Bioconductor-native spatial container}
 \usage{
 loadSM(
   file,
@@ -11,13 +11,15 @@ loadSM(
   units = "ppm",
   verbose = TRUE,
   assay = "Spatial",
-  multi.run = FALSE
+  multi.run = FALSE,
+  returnType = c("auto", "Cardinal", "SpatialExperiment")
 )
 }
 \arguments{
 \item{file}{Character string defining the directory path of the file and the file name.}
 
-\item{mass.range}{Vector of numeric values indicating the mass range to use for the imported data (default = NULL).}
+\item{mass.range}{Optional two-element mass range for binning. Requires
+resolution; raw spectral filtering should be performed in Cardinal.}
 
 \item{resolution}{Numeric value defining the the accuracy to which the m/z values will be binned after reading. This value can be in either "ppm" or "mz" depending on the units type specified (default = 10).}
 
@@ -25,16 +27,22 @@ loadSM(
 
 \item{verbose}{Boolean indicating whether to show informative processing messages. If TRUE the message will be show, else the message will be suppressed (default = TRUE)}
 
-\item{assay}{Character string describing the name of the new assay which stores the imported data (default = "Spatial").}
+\item{assay}{Label stored in mainExpName(); intensities are in the counts assay.}
 
-\item{multi.run}{Boolean indicating if there are multiple runs within the imported data. If \code{TRUE}, an index will be added to the pixel names per run, and an individual FOV will be generated per run in the Seurat Object (default = FALSE).}
+\item{multi.run}{Retained for compatibility; Cardinal run IDs are preserved.}
+
+\item{returnType}{Output container. \code{"auto"} returns Cardinal for raw data
+and SpatialExperiment after binning. SpatialExperiment output requires resolution.}
 }
 \value{
-A new SpaMTP Seurat object contain the imported spatial metabolic intensity values
+A Cardinal \code{MSImagingArrays}/\code{MSImagingExperiment}, or a \code{SpatialExperiment}.
 }
 \description{
-This function loads raw spatial metabolic data in a .imzML and .ibd format and generates a SpaMTP Seurat Object.
-This function adapts the \code{readImzML} function implmented in Cardinal to correctly import large data.
+Raw spectra remain in Cardinal's file-backed \code{MSImagingArrays}, without
+asking the reader to infer a shared mass axis.
+Once a resolution is supplied and Cardinal has
+produced a common binned feature axis, the default return value is a
+\code{SpatialExperiment}. Seurat conversion is explicit and optional.
 }
 \examples{
 utils::str(formals(loadSM))

@@ -2,12 +2,12 @@
 % Please edit documentation in R/PathwayAnalysis.R
 \name{createPathwayObject}
 \alias{createPathwayObject}
-\title{Create a SpaMTP Seurat Object containing expression values for all present pathways}
+\title{Store pathway scores in an alternative experiment}
 \usage{
 createPathwayObject(
   object,
-  assay = SeuratObject::DefaultAssay(object),
-  slot = "scale.data",
+  assay = NULL,
+  slot = "logcounts",
   new.assay = "pathway",
   remove.nans = TRUE,
   database = NULL,
@@ -17,15 +17,17 @@ createPathwayObject(
 )
 }
 \arguments{
-\item{object}{A SpaMTP Seurat object containing the expression data.}
+\item{object}{A SingleCellExperiment (including SpatialExperiment) with expression
+features indexed by RaMP IDs.}
 
-\item{assay}{Character. Name of the assay to extract analyte expression from. If no value is assigned, the DefaultAssay of the SpaMTP Seurat Object will be used (default = \code{DefaultAssay(object)}).}
+\item{assay}{Primary or alternative experiment to score.}
 
-\item{slot}{Character. Which data slot to use (e.g., "scale.data") (default = "scale.data").}
+\item{slot}{Expression assay. If omitted for a Bioconductor container,
+prefers logcounts, normcounts, then counts in the selected experiment.}
 
 \item{new.assay}{Character. Name of the new assay where pathway scores will be stored (defaults = "pathway").}
 
-\item{remove.nans}{Logical. Whether to remove pathways with all NaN values (e.g., no matched analytes) (defaults = TRUE).}
+\item{remove.nans}{Remove pathways without matched analytes (default TRUE).}
 
 \item{database}{Optional named list of database resources, normally created
 by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
@@ -37,16 +39,16 @@ by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 \item{database_local_dir}{Optional staged SpaMTPdb resource directory.}
 }
 \value{
-A SpaMTP Seurat object with a new assay containing pathway-level expression scores.
-Feature names are adjusted to use underscores instead of dashes.
+The input with pathwayScores in a new alternative experiment.
+Pathway identifiers are preserved.
 }
 \description{
 This function computes pathway-level scores from analyte-level expression data
-and stores the results as a new assay in a Seurat object. Each pathway score
-is calculated as the scaled mean expression of the analytes associated with
-that pathway, adjusted by the square root of the pathway size.
+and stores them in altExp for SingleCellExperiment-derived objects.
+Each score is the sum of matched expression divided by the square root
+of the matched feature count, then centred and scaled across pixels.
+Constant scores are zero; unmatched pathways are removed or stored as NA.
 }
 \examples{
 utils::str(formals(createPathwayObject))
-#object <- createPathwayObject(seurat_obj, assay = "RNA", slot = "scale.data")
 }

@@ -2,12 +2,12 @@
 % Please edit documentation in R/DifferentialMZPeaks.R
 \name{runPooling}
 \alias{runPooling}
-\title{Pools SpaMTP Seurat object into random pools for pseudo-bulking.}
+\title{Pools Bioconductor experiment into random pools for pseudo-bulking.}
 \usage{
 runPooling(data.filt, idents, n, assay, slot, seed = 1234, verbose = TRUE)
 }
 \arguments{
-\item{data.filt}{A Seurat Object containing count values for pooling.}
+\item{data.filt}{A Bioconductor experiment containing count values for pooling.}
 
 \item{idents}{A character string defining the idents column to pool the data against.}
 
@@ -22,13 +22,15 @@ runPooling(data.filt, idents, n, assay, slot, seed = 1234, verbose = TRUE)
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 }
 \value{
-A SinglCellExpereiment object which contains pooled (n)-pseudo-replicate counts data based on the Seurat Object input
+A SingleCellExperiment object which contains pooled (n)-pseudo-replicate counts data based on the Bioconductor experiment input
 }
 \description{
 Runs pooling of a SpaMTP dataset to generate pseudo-replicates for each unique identity provided.
 This function is used by \code{findAllDEMs()}.
+These random pools are technical partitions, not independent biological
+replicates; resulting p-values must not be interpreted as biological
+replication. For population inference aggregate independent samples instead.
 }
 \examples{
 utils::str(formals(runPooling))
-# runPooling <- list(seuratObj, idents = "sample", n = 3, assay = "Spatial", slot = "counts")
 }

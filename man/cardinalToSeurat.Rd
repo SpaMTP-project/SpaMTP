@@ -2,7 +2,7 @@
 % Please edit documentation in R/ConvertingBetweenObjects.R
 \name{cardinalToSeurat}
 \alias{cardinalToSeurat}
-\title{Converts a Cardinal Object into a SpaMTP Seurat Object}
+\title{Convert a Cardinal object to an optional Seurat object}
 \usage{
 cardinalToSeurat(
   data,
@@ -13,23 +13,24 @@ cardinalToSeurat(
 )
 }
 \arguments{
-\item{data}{A Cardinal Object that is being converted into a Seurat Object.}
+\item{data}{A Cardinal \code{MSImagingExperiment} with aligned spectra.}
 
-\item{multi.run}{Boolean indicating if there are multiple runs within the imported data. If \code{TRUE}, an index will be added to the pixel names per run, and an individual FOV will be generated per run in the Seurat Object (default = FALSE).}
+\item{multi.run}{Retained for compatibility; run identities are preserved
+during the intermediate conversion.}
 
-\item{seurat.coord}{A Data.Frame containing two columns titled 'X_new' and 'Y_new' specifying the pixel coordinates of each data point. This is only required if mapping Spatial Metabolic data with a H&E image was done externally, and the SM coordinates need to change to align correctly to the ST data. Else, set to \code{NULL} (default = NULL).}
+\item{seurat.coord}{Optional replacement coordinates with \code{X_new} and
+\code{Y_new} columns.}
 
-\item{assay}{Character string containing the name of the assay (default = "Spatial").}
+\item{assay}{Name of the Seurat assay.}
 
-\item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+\item{verbose}{Show conversion messages.}
 }
 \value{
-A Seurat Object containing the mz count data of the supplied Cardinal Object
+A Seurat object.
 }
 \description{
-Converts a Cardinal Object into a SpaMTP Seurat Object
+Convert a Cardinal object to an optional Seurat object
 }
 \examples{
 utils::str(formals(cardinalToSeurat))
-# cardinalToSeurat(CardinalObj, run_name = "run_1", seurat.coord = NULL)
 }

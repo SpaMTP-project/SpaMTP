@@ -6,13 +6,14 @@
 #' @importFrom graphics abline arrows par points text
 #' @importFrom methods new
 #' @importFrom purrr map_dfr
-#' @importFrom sp Polygon Polygons SpatialPointsDataFrame SpatialPolygons SpatialPolygonsDataFrame over
-#' @importFrom stats as.dendrogram as.dist cor density dnorm hclust median model.matrix na.omit prcomp quantile setNames
+#' @importFrom stats as.dendrogram as.dist cor density dnorm hclust median model.matrix na.omit p.adjust prcomp quantile setNames
+#' @rawNamespace import(ggplot2, except = last_plot)
+#' @rawNamespace import(tidyr, except = c(expand, pack, unpack))
 #' @noRd
 NULL
 
 utils::globalVariables(c(
-  ".SD", "Adduct", "Error", "FDR", "Formula", "IsomerNames", "Isomers",
+  ".SD", "Adduct", "Error", "FDR", "Features", "Formula", "IsomerNames", "Isomers",
   "Isomers_IDs", "NES", "Ramp_IDs", "Score", "Significance", "abs_cor",
   "adduct_info", "all_IsomerNames", "analytes_in_pathways", "annotation",
   "bottom_cutoff", "cluster", "color", "commonName", "cor", "exactmass",
@@ -26,6 +27,6 @@ utils::globalVariables(c(
   "pathway_id", "pathway_name", "pixel", "ppm_diff", "present", "pval",
   "pval_adj", "rampId", "rampId.y", "ramp_id", "ratio", "reaction_type",
   "regulate", "size", "sourceId", "top_cutoff", "total_in_pathways", "type",
-  "value", "var", "variable", "x", "xend", "y", "yend", "z_cor", "z_path",
-  "z_score"
+  "intensity", "value", "var", "variable", "x", "xend", "y", "yend", "z_cor", "z_path",
+  "z_score", "sample_id", "score", "dataset", "opacity"
 ))

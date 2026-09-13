@@ -21,7 +21,7 @@ visualisePathways(
 )
 }
 \arguments{
-\item{SpaMTP}{SpaMTP Seurat object used to run fishersPathwayAnalysis function.}
+\item{SpaMTP}{A SpatialExperiment used for fishersPathwayAnalysis.}
 
 \item{pathway_df}{Dataframe containing the pathway enrichment results (output from SpaMTP::fishersPathwayAnalysis function).}
 

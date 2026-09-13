@@ -16,17 +16,17 @@ saveSpaMTPData(
 )
 }
 \arguments{
-\item{data}{A Spatial Metabolomic SpaMTP Seurat Object being saved.}
+\item{data}{A Spatial Metabolomic Bioconductor experiment being saved.}
 
 \item{outdir}{Character string of the directory to save the mtx.mtx, barcode.tsv, features.tsv, barcode_metadata.csv and feature_metadata.csv in.}
 
-\item{assay}{Character string defining the Seurat assay that contains the m/z count data (default = "Spatial").}
+\item{assay}{Character string defining the primary or alternative experiment that contains the m/z count data (default = "Spatial").}
 
-\item{slot}{Character string defining the Seurat assay slot that contains the m/z values directly (default = "counts").}
+\item{slot}{Character string defining the primary or alternative experiment slot that contains the m/z values directly (default = "counts").}
 
-\item{image}{Character string defining the image stored within the SpaMTP Seurat object to save. If \code{NULL} no image will be saved (default = NULL).}
+\item{image}{Image ID identifying exactly one imgData row; NULL omits image export.}
 
-\item{annotations}{Boolean values defining if the Seurat Object contains annotations to be saved (default = FALSE).}
+\item{annotations}{Boolean values defining if the Bioconductor experiment contains annotations to be saved (default = FALSE).}
 
 \item{generate.h5}{Boolean value indicating whether to generate a filtered_feature_bc_matrix.h5 file. Often used by data loading functions (e.g. scanpy.load_visium). If \code{FALSE}, only a filtered_feature_bc_matrix folder will be generated (default = TRUE).}
 
@@ -42,11 +42,10 @@ saveSpaMTPData(
 The output-directory path, invisibly.
 }
 \description{
-This function saves a SpaMTP Seurat Object into a standard single-cell/spatial file format.
+This function saves a Bioconductor experiment into a standard single-cell/spatial file format.
 This includes a filtered_feature_bc_matrix folder containing files storing the features, barcode/pixels and intensity matrix.
 Metadata and sapatial files (such as scale factors and hires/lowres images) are also stored.
 }
 \examples{
 utils::str(formals(saveSpaMTPData))
-# saveSpaMTPData(SeuratObject, "../output", annotations = TRUE)
 }

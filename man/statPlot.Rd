@@ -5,9 +5,9 @@
 \title{Helper function for QC plots by generating intensity count data}
 \usage{
 statPlot(
-  seurat.obj,
+  data,
   group.by = NULL,
-  assay = "Spatial",
+  assay = "main",
   slot = "counts",
   bottom.cutoff = NULL,
   top.cutoff = NULL,
@@ -16,13 +16,13 @@ statPlot(
 )
 }
 \arguments{
-\item{seurat.obj}{Seruat object containing the intensity data.}
+\item{data}{A SingleCellExperiment, including SpatialExperiment.}
 
-\item{group.by}{Character string specifying the meta.data column to group by (default = NULL).}
+\item{group.by}{Name of the \code{colData()} column to group by (default = NULL).}
 
-\item{assay}{Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").}
+\item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment.}
 
 \item{bottom.cutoff}{Numeric value defining the percent of data to exclude for the lower end of the distribution. A bottom.cutoff = 0.05 will remove the bottom 5\% of data point (default = NULL).}
 
@@ -40,5 +40,4 @@ Helper function for QC plots by generating intensity count data
 }
 \examples{
 utils::str(formals(statPlot))
-# df <- statPlot(SeuratObj, group.by = "sample", bottom.cutoff = 0.05, top.cutoff = 0.05, log.data = TRUE)
 }

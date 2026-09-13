@@ -1,7 +1,7 @@
 Package: SpaMTP
 Type: Package
 Title: Spatial Metabolomics and Multi-Omics Analysis
-Version: 0.99.1
+Version: 0.99.4
 Authors@R: c(
     person("Andrew", "Causer",
             email = "a.causer@uq.edu.au", 
@@ -27,15 +27,15 @@ Authors@R: c(
             )
 Description: Provides analysis, annotation, visualisation, and multi-omic
     integration methods for spatial metabolomics data. SpaMTP interoperates
-    with Cardinal, Seurat, and Bioconductor data structures; supports indexed
-    accurate-mass annotation using versioned RaMP resources; and implements
+    with Cardinal and SpatialExperiment containers, with optional Seurat
+    conversion; supports indexed accurate-mass annotation using versioned
+    RaMP resources; and implements
     spatial feature analysis, pathway enrichment, pathway-network
     visualisation, and alignment with spatial transcriptomics data.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Suggests: 
-    ape,
     BiocStyle,
     EnhancedVolcano,
     htmlTable,
@@ -46,19 +46,21 @@ Suggests:
     patchwork,
     reticulate,
     rmarkdown,
-    SpaMTPData,
+    SeuratObject (>= 5.0.0),
+    SpaMTPData (>= 0.99.4),
     testthat (>= 3.0.0),
     viridis,
     yaml
 Config/testthat/edition: 3
-biocViews: MassSpectrometry, ImagingMassSpectrometry, Metabolomics, Spatial
+biocViews: MassSpectrometry, ImagingMassSpectrometry, Metabolomics, Spatial,
+    Transcriptomics, Alignment
 Imports: 
+    ape,
     Cardinal,
     cowplot,
     data.table,
     dplyr,
     DropletUtils,
-    EBImage,
     edgeR,
     fgsea,
     FNN,
@@ -78,7 +80,6 @@ Imports:
     magick,
     magrittr,
     Matrix,
-    matter,
     methods,
     MSnbase,
     naturalsort,
@@ -88,29 +89,24 @@ Imports:
     plotly,
     png,
     purrr,
-    RColorBrewer,
     rgoslin,
     rlang,
     RSpectra,
     scales,
     scater,
-    Seurat,
-    SeuratObject,
     sf,
     shiny,
-    shinyjs,
     SingleCellExperiment,
     S4Vectors,
-    SpaMTPdb,
-    sp,
+    SpaMTPdb (>= 0.99.2),
+    SpatialExperiment,
     stats,
     stringr,
     SummarizedExperiment,
     tibble,
     tidyr,
     utils,
-    withr,
-    zeallot
+    withr
 URL: https://github.com/SpaMTP-project/SpaMTP,
     https://github.com/GenomicsMachineLearning/SpaMTP,
     https://genomicsmachinelearning.github.io/SpaMTP/,
@@ -120,4 +116,3 @@ Depends:
     R (>= 4.6.0)
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.1.0
-RoxygenNote: 7.3.3

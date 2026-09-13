@@ -5,10 +5,10 @@
 \title{Generates a ridge plot of spatial metabolic intensity data}
 \usage{
 mzRidgePlot(
-  seurat.obj,
+  data,
   group.by = NULL,
   mzs = NULL,
-  assay = "Spatial",
+  assay = "main",
   slot = "counts",
   title = "RidgePlot",
   x.lab = "intensity",
@@ -22,15 +22,15 @@ mzRidgePlot(
 )
 }
 \arguments{
-\item{seurat.obj}{Seurat object containing the metabolomic intensity data.}
+\item{data}{Bioconductor experiment containing the metabolomic intensity data.}
 
-\item{group.by}{Character string specifying the meta.data column to group by (default = NULL).}
+\item{group.by}{Name of the \code{colData()} column to group by (default = NULL).}
 
 \item{mzs}{Vector of characters defining which features (m/z's) to label on the plot. If \code{NULL} no features will be labeled (default = NULL).}
 
-\item{assay}{Character string defining the name of the Seurat Object assay to pull the corresponding intensity data from (default = "Spatial").}
+\item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Character string defining the name of the slot within the Seurat Object assay to pull the corresponding intensity data from (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment.}
 
 \item{title}{Character string of the plot title (default = "RidgePlot").}
 
@@ -58,5 +58,4 @@ Generates a ridge plot of spatial metabolic intensity data
 }
 \examples{
 utils::str(formals(mzRidgePlot))
-# mzRidgePlot(SeuratObj, group.by = "sample")
 }

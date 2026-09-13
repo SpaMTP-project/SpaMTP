@@ -2,15 +2,15 @@
 % Please edit documentation in R/PathwaybasedAnnotationStatistics.R
 \name{calculateSingleAnnotationStatistics}
 \alias{calculateSingleAnnotationStatistics}
-\title{Calculate annotation statistics for a single m/z value suggesting the most likely metabolite based on correlated pathway expression.}
+\title{Rank candidate metabolite annotations using paired pathway expression}
 \usage{
 calculateSingleAnnotationStatistics(
   mz,
   data,
-  mz.assay,
+  mz.assay = "main",
   pathway.assay = "pathway",
-  mz.slot = "scale.data",
-  pathway.slot = "scale.data",
+  mz.slot = "counts",
+  pathway.slot = "pathwayScores",
   corr_theshold = 0,
   corr_weight = 1,
   n_weight = 1,
@@ -21,57 +21,58 @@ calculateSingleAnnotationStatistics(
 )
 }
 \arguments{
-\item{mz}{Character or numeric. The target m/z feature. If numeric, the closest matching m/z in the dataset will be selected.}
+\item{mz}{One numeric m/z query or exact character feature ID.}
 
-\item{data}{A SpaMTP Seurat object containing both metabolite and pathway assays generated from \code{createPathwayObject}.}
+\item{data}{A SingleCellExperiment or SpatialExperiment with paired altExp.}
 
-\item{mz.assay}{Character string defining the name of the assay containing m/z features.}
+\item{mz.assay}{Primary experiment ("main") or alternative MSI experiment.}
 
-\item{pathway.assay}{Character string matching the name of the assay containing pathway features (default = "pathway").}
+\item{pathway.assay}{Alternative experiment containing pathway-level scores.}
 
-\item{mz.slot}{Character string stating the slot to extract m/z values from (default = "scale.data").}
+\item{mz.slot}{Expression assay in the MSI experiment.}
 
-\item{pathway.slot}{Character string defining the slot to extract pathway features from (default = "scale.data").}
+\item{pathway.slot}{Expression assay in the pathway experiment.}
 
-\item{corr_theshold}{Numeric value stating the correlation threshold to consider a pathway as significantly colocalized. If set to \code{0}, all pathways will be counted (default = 0).}
+\item{corr_theshold}{Minimum signed pathway correlation (legacy spelling).}
 
-\item{corr_weight}{Numeric weight applied to correlation score in z-score calculation. If significance should be based more on the correlation, increase this value (default = 1).}
+\item{corr_weight, n_weight}{Non-negative weights, not both zero.}
 
-\item{n_weight}{Numeric weight applied to number of correlated pathways in z-score calculation (default = 1).}
+\item{database}{Optional named list from loadSpaMTPDatabase.}
 
-\item{database}{Optional named list of database resources, normally created
-by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
-
-\item{database_version}{SpaMTPdb/RaMP version used for pathway lookup.}
-
-\item{database_source}{Database source; see \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
-
-\item{database_local_dir}{Optional staged SpaMTPdb resource directory.}
+\item{database_version, database_source, database_local_dir}{Database selection;
+see loadSpaMTPDatabase.}
 }
 \value{
-A tibble with the ranked annotations for the m/z value, containing:
-\describe{
-\item{metabolite}{Most common name of the metabolite associated with the RAMP ID}
-\item{ramp_id}{The RAMP ID corresponding to the annotation}
-\item{n_sig_path}{Number of correlated pathways above the threshold}
-\item{max_cor}{Maximum correlation value among significant pathways}
-\item{z_score}{Combined z-score used to rank annotations}
-\item{pval}{Unadjusted p-value}
-\item{pval_adj}{Adjusted p-value (BH method)}
-}
+A tibble ordered by decreasing score, containing metabolite,
+ramp_id, n_sig_path, max_cor, z_score, pval and pval_adj.
 }
 \description{
-This function evaluates the potential biological relevance of an annotation for a given m/z value by:
-\itemize{
-\item Identifying pathways associated with each possible annotated metabolite
-\item Calculating colocalisation score between the m/z intensity and the expression of each corresponding pathway
-\item Ranking annotations by a combined z-score based on correlation strength and number of supporting significant pathways
-\item NOTE: this function requires \code{createPathwayAssay} and \code{createPathwayObject} to be run first
+Pearson correlations are calculated directly between a selected m/z assay
+and pathway expression in altExp, aligned by pixel IDs. This replaces the
+former temporary Seurat assay and synthetic-mass Cardinal conversion.
 }
+\details{
+For each candidate, max_cor is the signed correlation of the
+pathway with largest absolute correlation; ties use pathway ID order.
+n_sig_path counts finite correlations strictly greater than corr_theshold
+(zero therefore counts positive correlations, not every pathway).
+The score is corr_weight * scale(abs(max_cor)) +
+n_weight * scale(n_sig_path), across candidates for one feature.
+A constant component contributes zero. Constant expression and unmeasured
+pathways have undefined correlations. Scores require two evaluable
+candidates; otherwise scores and probabilities are NA.
+
+pval is the standard-normal upper tail of this weighted score; pval_adj
+applies BH within each feature. These are legacy heuristic ranking measures,
+not calibrated identification p-values: the weighted components are not
+independent, the combined score need not be standard normal, and pixels are
+not biological replicates. Correlation is across all supplied pixels;
+subset samples/conditions beforehand when appropriate.
+
+Current scored RaMP annotations take precedence over rowData RaMP IDs.
+Older all_Isomers_IDs columns can be mapped via source_df$sourceId.
+Duplicate candidate IDs are counted once.
 }
 \examples{
 utils::str(formals(calculateSingleAnnotationStatistics))
-#data <- createPathwayObject(data,assay="SPT_pathway",slot = "scale.data")
-#calculateSingleAnnotationStatistics(mz = "mz-674.2805",data = data,mz.assay = "SPM",pathway.assay = "pathway",mz.slot = "scale.data")
-
 }

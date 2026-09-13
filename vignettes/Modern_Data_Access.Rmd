@@ -1,0 +1,222 @@
+---
+title: "SpaMTP: Modern Data Access and Workflow Migration"
+output:
+  BiocStyle::html_document:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{SpaMTP: Modern Data Access and Workflow Migration}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "##", fig.align = "center")
+```
+
+# One container, public accessors
+
+The submission-branch API uses existing Bioconductor S4 containers. Raw,
+unaligned spectra remain in Cardinal; a common feature-by-pixel matrix belongs
+in `SpatialExperiment`. No knowledge of internal S4 slots is needed to read,
+modify or subset these objects. The historical Seurat tutorials remain on the
+published-workflow branch; their code is not the submission-branch API.
+
+| Data to access | Public interface |
+|---|---|
+| Expression/intensity matrices | `assay()`, `assayNames()` |
+| Feature m/z and annotations | `rowData()` |
+| Pixel metadata and groups | `colData()`, `colLabels()` |
+| Pixel coordinates | `spatialCoords()`, `spatialCoordsNames()` |
+| Optical images | `imgData()`, `imgRaster()`, `addImg()` |
+| Paired modalities | `altExp()`, `altExpNames()` |
+| PCA and other embeddings | `reducedDim()`, `reducedDimNames()` |
+| Analysis provenance | `metadata()` |
+
+These accessors also have replacement forms. For example,
+`colData(spe)$region <- values` modifies pixel metadata through the container's
+public API. A `slot = "counts"` argument retained by some SpaMTP functions is a
+compatibility spelling for the expression assay name; it is not an instruction
+to inspect an S4 slot.
+
+```{r load-package, message=FALSE}
+library(SpaMTP)
+```
+
+# Read a binned MSI table
+
+The CSV contains one row per pixel, `x` and `y` coordinate columns, and one
+column per measured m/z. This runnable example writes a small temporary input
+file. Replace it with your own path for real data. Raw imzML processing is
+demonstrated in the [native workflow](SpaMTP_Bioconductor.html).
+
+```{r read-matrix}
+input <- data.frame(
+  x = rep(1:3, each = 2), y = rep(1:2, 3),
+  check.names = FALSE,
+  "100.01" = c(0, 2, 3, 5, 7, 9),
+  "200.02" = c(4, 1, 6, 2, 8, 3),
+  "300.03" = c(2, 3, 1, 4, 2, 6)
+)
+spe <- local({
+  path <- tempfile(fileext = ".csv")
+  on.exit(unlink(path))
+  utils::write.csv(input, path, row.names = FALSE)
+  readSMMatrix(path, project.name = "section1", verbose = FALSE)
+})
+stopifnot(methods::is(spe, "SpatialExperiment"), nrow(spe) == 3, ncol(spe) == 6)
+SummarizedExperiment::assayNames(spe)
+SummarizedExperiment::assay(spe, "counts")
+SummarizedExperiment::rowData(spe)$mz
+```
+
+# Pixel and feature metadata
+
+Use feature identifiers to index matrix rows, and pixel identifiers to index
+columns. m/z is explicit feature metadata, not something to recover by editing
+feature names. For discrete plotting groups, use a factor even if labels were
+originally stored as integer cluster numbers.
+
+```{r metadata-access}
+SummarizedExperiment::colData(spe)$region <- factor(rep(c("edge", "core"), 3))
+SingleCellExperiment::colLabels(spe) <- spe$region
+SummarizedExperiment::rowData(spe)$feature_label <- c("peak A", "peak B", "peak C")
+
+intensity <- SummarizedExperiment::assay(spe, "counts")
+SummarizedExperiment::colData(spe)$total_intensity <- Matrix::colSums(intensity)
+SummarizedExperiment::colData(spe)$detected_features <- Matrix::colSums(intensity > 0)
+as.data.frame(SummarizedExperiment::colData(spe))
+```
+
+QC values above are summaries of MSI intensities, not UMI counts. They are
+computed from the selected matrix instead of assuming that historical
+Seurat-generated QC columns still describe the current features and assay.
+
+```{r expression-access, fig.width=6, fig.height=4}
+spe <- normalizeSMData(spe, "LogNormalize", verbose = FALSE)
+SummarizedExperiment::assayNames(spe)
+scater::plotExpression(
+  spe, features = rownames(spe)[1], x = "region", exprs_values = "logcounts"
+)
+```
+
+# Coordinates and optical images
+
+`spatialCoords()` is the coordinate source for native spatial analysis.
+Historical `x_coord`/`y_coord` metadata may describe an earlier alignment;
+retaining these columns for provenance does not make them authoritative.
+SpaMTP expects named `x` and `y` axes in a shared coordinate system. If an
+importer uses names such as `pxl_col_in_fullres` and `pxl_row_in_fullres`, map
+the known column axis to `x` and row axis to `y` with `spatialCoordsNames()`.
+Renaming does not convert units, reverse an axis or perform image registration.
+
+```{r coordinate-access}
+xy <- SpatialExperiment::spatialCoords(spe)
+SpatialExperiment::spatialCoordsNames(spe)
+shifted <- spe
+SpatialExperiment::spatialCoords(shifted)[, "x"] <- xy[, "x"] + 10
+stopifnot(identical(SpatialExperiment::spatialCoords(spe), xy))
+
+# Demonstrate an explicit name mapping on a copy, without changing the values.
+imported <- spe
+SpatialExperiment::spatialCoordsNames(imported) <-
+  c("pxl_col_in_fullres", "pxl_row_in_fullres")
+axisNames <- SpatialExperiment::spatialCoordsNames(imported)
+axisNames[match(c("pxl_col_in_fullres", "pxl_row_in_fullres"), axisNames)] <- c("x", "y")
+SpatialExperiment::spatialCoordsNames(imported) <- axisNames
+stopifnot(identical(SpatialExperiment::spatialCoords(imported), xy))
+```
+
+An image has its own sample ID, image ID and scale factor in `imgData()`.
+Adding a raster does not register it to the MSI pixels. This small artificial
+image illustrates storage only. With `load = TRUE`, the raster remains usable
+after the temporary PNG is removed; a path-backed image requires a lasting path.
+
+```{r image-access}
+spe <- local({
+  path <- tempfile(fileext = ".png")
+  on.exit(unlink(path))
+  png::writePNG(matrix(seq(0, 1, length.out = 12), nrow = 3), path)
+  addSpatialImage(spe, imageSource = path, sampleId = "section1",
+    imageId = "demo", scaleFactor = 1, load = TRUE)
+})
+SpatialExperiment::imgData(spe)[, c("sample_id", "image_id", "scaleFactor")]
+raster <- SpatialExperiment::imgRaster(spe, sample_id = "section1", image_id = "demo")
+stopifnot(inherits(raster, "raster"))
+```
+
+# Paired modalities and standard subsetting
+
+Only measurements of the same pixels belong in an `altExp()`. First align and
+map independent MSI pixels and transcriptomic spots with `mapSpatialOmics()`;
+do not rename unrelated spots to force a match. `addTranscriptome()` validates
+pixel names and reorders an already paired matrix.
+
+```{r paired-access}
+transcriptome <- matrix(seq_len(12), nrow = 2,
+  dimnames = list(c("gene1", "gene2"), rev(colnames(spe))))
+spe <- addTranscriptome(spe, transcriptome)
+rna <- SingleCellExperiment::altExp(spe, "transcriptome")
+stopifnot(identical(colnames(rna), colnames(spe)))
+SummarizedExperiment::assay(rna, "counts")
+
+selected <- spe[, spe$region == "edge"]
+stopifnot(identical(colnames(SingleCellExperiment::altExp(selected, "transcriptome")),
+  colnames(selected)))
+stopifnot(nrow(SpatialExperiment::spatialCoords(selected)) == ncol(selected))
+```
+
+Feature subsetting affects the primary experiment's rows; each alternative
+experiment retains its own feature space. Standard column subsetting keeps
+coordinates and alternative experiments aligned to the selected pixels.
+
+```{r provenance-access}
+S4Vectors::metadata(spe)$analysis <- list(
+  input_type = "binned MSI", normalization = "LogNormalize")
+S4Vectors::metadata(spe)$analysis
+```
+
+For full annotation examples, see the
+[indexed annotation pipeline](Metabolite_Annotation_Pipeline.html).
+It reads candidate summaries from `rowData()` and stores ranked candidates
+and annotation provenance in `metadata()`.
+
+# Optional Seurat boundary
+
+SeuratObject is optional and is needed only for explicit conversion. In Seurat
+5, `LayerData()` reads an exact expression layer, double brackets read cell or
+feature metadata, and `GetTissueCoordinates()` reads image/FOV coordinates.
+SpaMTP's converters use these public APIs. Older serialized objects that cannot
+be read by current accessors should be updated explicitly with
+`SeuratObject::UpdateSeuratObject()` in the external Seurat workflow; SpaMTP
+does not patch their internal slots.
+
+```{r optional-conversion}
+if (requireNamespace("SeuratObject", quietly = TRUE)) {
+  seurat <- spatialExperimentToSeurat(spe)
+  values <- SeuratObject::LayerData(seurat, assay = "Spatial", layer = "counts")
+  pixel_metadata <- seurat[[]]
+  feature_metadata <- seurat[["Spatial"]][[]]
+  centres <- SeuratObject::GetTissueCoordinates(seurat, image = "fov", full = FALSE)
+
+  converted <- seuratToSpatialExperiment(seurat, image = "fov", layer = "counts")
+  stopifnot(identical(colnames(converted), colnames(spe)))
+  stopifnot(isTRUE(all.equal(
+    as.matrix(SummarizedExperiment::assay(converted, "counts")), as.matrix(values))))
+  S4Vectors::metadata(converted)$seurat_interoperability
+}
+```
+
+When no image is specified, a single image/FOV is authoritative over any
+historical metadata coordinates. Metadata is used automatically only if there
+are no images. With multiple images, select `image` or supply explicit named
+`coordinates`; the converter never guesses which slice to use. Centroids are
+read as one centre per pixel, not as expanded boundary vertices.
+
+Only the requested exact layer is transferred. Join split Seurat layers first
+if the complete dataset is intended. Unpaired assays are skipped with a warning.
+Optical rasters, graphs and reductions are not transferred. After conversion,
+continue with native accessors; Seurat is not used for SpaMTP analysis.
+
+```{r session-info}
+sessionInfo()
+```

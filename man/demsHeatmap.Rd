@@ -77,7 +77,6 @@ This function uses \code{pheatmap} to plot data.
 }
 \examples{
 utils::str(formals(demsHeatmap))
-# DEMs <- findAllDEMs(SeuratObj, "sample")
 
 # demsHeatmap(DEMs)
 }

@@ -20,7 +20,7 @@ findAllDEMs(
 )
 }
 \arguments{
-\item{data}{A Seurat object containing mz values for differential expression analysis.}
+\item{data}{A Bioconductor experiment containing mz values for differential expression analysis.}
 
 \item{ident}{A character string defining the metadata column or groups to compare mz values between.}
 
@@ -32,7 +32,7 @@ findAllDEMs(
 
 \item{run_name}{A character string defining the title of this DE analysis that will be used when saving DEMs to .csv file (default = 'findAllDEMs').}
 
-\item{annotation.column}{Character string defining the column where annotation information is stored in the assay metadata. This requires AnnotateSeuratMALDI() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").}
+\item{annotation.column}{Character string defining the column where annotation information is stored in the assay metadata. This requires annotateSM() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").}
 
 \item{assay}{A character string defining the assay where the mz count data and annotations are stored (default = "Spatial").}
 
@@ -52,5 +52,4 @@ Finds differentially expressed m/z values/metabolites between all comparison gro
 }
 \examples{
 utils::str(formals(findAllDEMs))
-# findAllDEMs(SeuratObj, "sample",DE_output_dir = "~/Documents/DE_output/", annotations = TRUE)
 }

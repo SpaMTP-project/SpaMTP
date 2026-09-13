@@ -2,7 +2,7 @@
 % Please edit documentation in R/METASPACEr.R
 \name{loadMetaspace}
 \alias{loadMetaspace}
-\title{Load METASPACE Data and Create Seurat Object}
+\title{Load METASPACE Data as a SpatialExperiment}
 \usage{
 loadMetaspace(
   dataset_id,
@@ -11,7 +11,8 @@ loadMetaspace(
   api_key = NULL,
   relative = FALSE,
   transform = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  returnType = "SpatialExperiment"
 )
 }
 \arguments{
@@ -28,12 +29,17 @@ loadMetaspace(
 \item{transform}{Boolean specifiying whether to transform/flip the image (default = FALSE).}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+
+\item{returnType}{Output container; only \code{"SpatialExperiment"} is supported.}
 }
 \value{
-A Seurat object initialized with the METASPACE data in the 'Spatial' assay.
+A \code{SpatialExperiment}.
 }
 \description{
-Downloads METASPACE data, converts it to a feature matrix, and packages it into a Seurat object with spatial metadata.
+Downloads METASPACE data, converts it to a feature matrix, and
+packages it in a Bioconductor \code{SpatialExperiment}. Use explicit conversion for other containers.
+Coordinates are stored in \code{spatialCoords()} without redundant copies in
+\code{colData()}; dataset and acquisition metadata remain in \code{colData()}.
 }
 \examples{
 utils::str(formals(loadMetaspace))

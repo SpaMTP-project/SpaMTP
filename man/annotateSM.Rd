@@ -7,7 +7,7 @@
 annotateSM(
   data,
   db = NULL,
-  assay = "Spatial",
+  assay = "main",
   raw.mz.column = "raw_mz",
   ppm_error = NULL,
   adducts = NULL,
@@ -26,16 +26,16 @@ annotateSM(
 )
 }
 \arguments{
-\item{data}{Seurat Spatial Metabolomic Object containing m/z values for annotation.}
+\item{data}{Bioconductor experiment containing m/z values for annotation.}
 
 \item{db}{Reference metabolite dataset in the form of a data.frame. When
 \code{NULL}, the versioned SpaMTPdb \code{chem_props} table is used, unless a
 pre-built \code{index} is supplied through \code{...}. Versioned resources are loaded
 from SpaMTPdb and may be staged locally for offline use.}
 
-\item{assay}{Character string defining the Seurat assay which contains the mz counts being annotated (default = "Spatial").}
+\item{assay}{Character string defining the primary or alternative experiment which contains the mz counts being annotated (default = "Spatial").}
 
-\item{raw.mz.column}{Character string naming the feature-metadata column containing raw m/z values without the \verb{mz-} prefix. This is created by \code{cardinalToSeurat()} (default = "raw_mz").}
+\item{raw.mz.column}{Character string naming the feature-metadata column containing raw m/z values without the \verb{mz-} prefix. This is created by \code{cardinalToSpatialExperiment()} (default = "raw_mz").}
 
 \item{ppm_error}{Mass tolerance in ppm. If \code{NULL}, a strict 5 ppm maximum
 is used (or a smaller value inferred from \code{tof_resolution}). Set to zero
@@ -54,11 +54,11 @@ it can only tighten, not widen, the default 5 ppm mass-accuracy threshold.}
 
 \item{filepath}{Character string of the directory to store the _annotated_mz_peaks.csv. If set to NULL no dataframe will be saved (default = NULL).}
 
-\item{return.only.annotated}{Boolean value indicating if the annotated Seurat Object should only include m/z values that were successfully annotated (default = TRUE).}
+\item{return.only.annotated}{Boolean value indicating if the annotated Bioconductor experiment should only include m/z values that were successfully annotated (default = TRUE).}
 
 \item{save.intermediate}{Boolean indicating whether to store the scored
 annotation result and its pipeline/RaMP provenance in
-\code{SeuratObject::Misc(data, slot = "mz_annotation")}. A compatibility copy
+\code{S4Vectors::metadata(data)$mz_annotation}. A compatibility copy
 is retained under the \code{db_3} key (default = TRUE).}
 
 \item{min_score}{Minimum annotation score retained in the stored candidate
@@ -86,7 +86,7 @@ search space when explicitly supplied.}
 \code{min_structure_score}.}
 }
 \value{
-A Seurat Object with m/z values annotated. These annotations are stored in the relative assay's meta.data (e.g. SeuratObj\verb{[["Spatial"]][[]]})
+A Bioconductor experiment with m/z values annotated. These annotations are stored in the selected experiment's rowData().
 }
 \description{
 This function assigns each valid m/z peak with one/multiple metabolite names based on the mass difference between the observed value and the theoretical value documented in the reference database.
@@ -96,5 +96,4 @@ SpaMTPdb and can be combined with user-supplied reference tables.
 \examples{
 utils::str(formals(annotateSM))
 # HMDB_db <- load("data/HMDB_1_names.rds")
-# Annotated_SeuratObj <- annotateSM(SeuratObj, HMDB_db)
 }

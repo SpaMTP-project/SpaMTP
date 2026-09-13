@@ -10,7 +10,72 @@
 
 <!-- badges: end -->
 
-SpaMTP is an R package designed for the integrative analysis of spatial metabolomics and spatial transcriptomics data. SpaMTP inherits functionalities from two well established R packages (Cardinal and Seurat) to present a user-friendly platform for integrative spatial-omics analysis. Build on the foundation of a [*Seurat Class Object*](https://satijalab.org/seurat/), this package has three major functionalities which include; (1) mass-to-charge ratio (m/z) metabolite annotation, (2) various downstream statistical analysis including differential metabolite expression and pathway analysis, and (3) integrative spatial-omics analysis. In addition, this package includes various functions for data visualisation and data import/export, permitting flexible usage with other established R and Python  packages.   
+SpaMTP is an R package for integrative analysis of spatial metabolomics and
+spatial transcriptomics data. Raw and continuous MSI spectra remain in
+Cardinal's `MSImagingArrays` (unaligned mass axes) or matter-backed
+`MSImagingExperiment`; aligned or binned MSI uses
+`SpatialExperiment`, including `rowData()` annotations, `colData()` pixel
+metadata, `spatialCoords()`, `imgData()`, and paired transcriptomes in
+`altExp()`. Seurat is an optional interoperability target rather than the
+package's foundation.
+
+SpaMTP provides (1) mass-to-charge ratio (m/z) metabolite annotation, (2)
+downstream statistical analysis including differential metabolite expression
+and pathway analysis, and (3) integrative spatial-omics analysis. Explicit
+`asSpatialExperiment()`, `asCardinal()`, `seuratToSpatialExperiment()`, and
+`spatialExperimentToSeurat()` entry points connect these workflows.
+
+The analysis package does not require Seurat. Only explicit conversion
+functions use the optional SeuratObject package; loading, preprocessing,
+plotting and integration do not convert inputs automatically. See
+[migration status](BIOCONDUCTOR_MIGRATION.md) for validation and scientific limits.
+
+## Moving a Seurat workflow to Bioconductor
+
+Convert once, then keep the result in a Bioconductor container:
+
+```r
+# xy has numeric x/y columns and row names matching Seurat pixel names.
+spe <- seuratToSpatialExperiment(
+    seuratObject, assay = "SPM", layer = "counts", coordinates = xy)
+spe <- normalizeSMData(spe, "LogNormalize", verbose = FALSE)
+spe <- scaleSMData(spe)
+spe <- runMetabolicPCA(spe, slot = "logcounts")
+
+# Non-spatial transcriptomics does not need invented coordinates.
+sce <- seuratToSingleCellExperiment(seuratObject, assay = "RNA")
+```
+
+| Operation in a Seurat workflow | Native alternative |
+|---|---|
+| NormalizeData | normalizeSMData: normcounts/logcounts assays |
+| ScaleData | scaleSMData: feature-wise centring/scaling in a scaled assay |
+| RunPCA | runMetabolicPCA / scater::runPCA: reducedDim |
+| VlnPlot | mzViolinPlot / scater::plotExpression |
+| Cell/feature metadata | colData / rowData |
+| Multiple modalities | Paired altExp entries |
+| Subsetting cells | Standard brackets, or subsetSPM with colData/colLabels |
+| FindMultiModalNeighbors | multiOmicIntegration supplies a **different**, equal-weight PCA embedding, not WNN |
+
+Conversion preserves the requested exact layer, metadata, identities and
+paired alternative assays. It does not transfer optical rasters, graphs or
+reductions. Split Seurat v5 layers must be joined beforehand or selected
+explicitly. Other assays without the same pixels are skipped with a warning.
+The original layer name is retained: a converted data layer is still called
+data, so either select it explicitly or normalize counts to create logcounts.
+Scaling creates a dense matrix; it is not an out-of-memory operation.
+
+Optical images can be attached with addSpatialImage(). To return to an
+external Seurat workflow, explicitly call spatialExperimentToSeurat().
+Historical Seurat/WNN tutorials belong to the published-workflow branch.
+
+For runnable native examples, see [modern data access](vignettes/Modern_Data_Access.Rmd)
+and the [full annotation pipeline](vignettes/Metabolite_Annotation_Pipeline.Rmd).
+Spatial coordinates have one authoritative store: `spatialCoords()`.
+Seurat conversion reads a single image/FOV through `GetTissueCoordinates()`
+before considering historical metadata copies; multiple images require an
+explicit selection. Native matrix and METASPACE imports no longer duplicate
+coordinates in pixel metadata.
 
 Please head to the [**SpaMTP website**](https://genomicsmachinelearning.github.io/SpaMTP/) for tutorials and documentation, including the [**RaMP 3.0 indexed metabolite annotation pipeline**](https://genomicsmachinelearning.github.io/SpaMTP/developmental/articles/Metabolite_Annotation_Pipeline.html). Active development and website deployment remain in the [**project development repository**](https://github.com/GenomicsMachineLearning/SpaMTP/tree/developmental); this repository contains the streamlined Bioconductor package source.
 
@@ -24,6 +89,28 @@ SpaMTP is now published in *Nature Methods*: [**SpaMTP: integrative statistical 
 
 ## Installation
 
+Keep the coordinated source versions together: SpaMTP >= 0.99.4,
+SpaMTPdb >= 0.99.3 and SpaMTPData >= 0.99.4. For local sibling checkouts,
+install the data packages before the software package:
+
+```sh
+R CMD INSTALL ../SpaMTPdb
+R CMD INSTALL ../SpaMTPData
+R CMD INSTALL .
+```
+
+The [three-package workflow](vignettes/SpaMTP_Companion_Workflow.Rmd) runs
+without downloads using SpaMTPData's native synthetic SpatialExperiment,
+SpaMTPdb's registry and SpaMTP's analysis/annotation functions. Data packages
+remain independent of the software package; conversion logic stays in SpaMTP.
+The RaMP 3.0.7 snapshot and historical experiment-data 1.0.0 remain unchanged.
+SpaMTPData now defaults to resource release 1.1.0, with seven native
+SpatialExperiment RDS in [Zenodo record 22733262](https://zenodo.org/records/22733262)
+and eleven unchanged auxiliary/Cardinal resources. Use `spaMTPData()` to
+retrieve native datasets without Seurat. The one-time preparation recipe is
+retained for reproducibility; historical archives require an explicit
+`version = "1.0.0"` request.
+
 During Bioconductor review, install the companion annotation package and this
 submission source from GitHub:
 
@@ -32,6 +119,7 @@ if (!requireNamespace("remotes", quietly = TRUE))
     install.packages("remotes")
 
 remotes::install_github("BCRL-tylu/SpaMTPdb")
+remotes::install_github("BCRL-tylu/SpaMTPData")
 remotes::install_github("SpaMTP-project/SpaMTP")
 ```
 

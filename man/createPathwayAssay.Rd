@@ -20,7 +20,7 @@ createPathwayAssay(
 )
 }
 \arguments{
-\item{SpaMTP}{A SpaMTP Seurat object containing either spatial metabolic or transcriptomic data}
+\item{SpaMTP}{A Bioconductor experiment containing either spatial metabolic or transcriptomic data}
 
 \item{analyte_type}{Character string specifying the type of analytes to process.Must be either "genes" or "metabolites" (default = "metabolites").}
 
@@ -52,7 +52,7 @@ by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 A SpaMTP object with a new assay added, containing respective gene/metabolite data formatted based on RAMP_db IDs.
 }
 \description{
-This function creates a new assay within the provided SpaMTP Seurat object which contains features (either genes or metabolites) labeled by their respective RAMP ID. This assay can be used for running feature set co-regulation analysis (based on GSCA; \doi{10.1093/bioinformatics/btp502}).
+This function creates a new assay within the provided Bioconductor experiment which contains features (either genes or metabolites) labeled by their respective RAMP ID. This assay can be used for running feature set co-regulation analysis (based on GSCA; \doi{10.1093/bioinformatics/btp502}).
 }
 \examples{
 utils::str(formals(createPathwayAssay))

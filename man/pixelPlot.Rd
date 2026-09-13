@@ -2,20 +2,21 @@
 % Please edit documentation in R/PlottingSpaMTP.R
 \name{pixelPlot}
 \alias{pixelPlot}
-\title{Helper function for converting Seurat Class ggplots from spot to pixel layout}
+\title{Convert point symbols to squares without changing coordinates or scales}
 \usage{
 pixelPlot(plot)
 }
 \arguments{
-\item{plot}{ggplot object contating the doplot to be converted into pixel layout}
+\item{plot}{A ggplot with point layers, or a list of such plots.}
 }
 \value{
-plot where spots are in pixel layout rather then spot
+The ggplot or list, retaining images, coordinates, scales and labels.
 }
 \description{
-Helper function for converting Seurat Class ggplots from spot to pixel layout
+For combined feature panels, request combine=FALSE from the original plot
+function and pass the resulting list. This function changes point symbols,
+not tissue geometry or the physical pixel footprint.
 }
 \examples{
 utils::str(formals(pixelPlot))
-#pixelPlot(SpatialFeaturPlot(SpaMTP.obj, features = "nFeature_Spatial"))
 }

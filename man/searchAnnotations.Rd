@@ -7,17 +7,17 @@
 searchAnnotations(
   data,
   metabolite,
-  assay = "Spatial",
+  assay = "main",
   search.exact = FALSE,
   column.name = "all_IsomerNames"
 )
 }
 \arguments{
-\item{data}{Seurat Spatial Metabolomic Object containing annotated m/z values.}
+\item{data}{Bioconductor experiment containing annotated m/z values.}
 
 \item{metabolite}{Character string of metabolite search term.}
 
-\item{assay}{Character string defining the Seurat assay that contains the annotated metadata corresponding to the m/z values (default = "Spatial").}
+\item{assay}{Character string defining the primary or alternative experiment that contains the annotated metadata corresponding to the m/z values (default = "Spatial").}
 
 \item{search.exact}{Boolean value defining if to only return m/z values which contain the exact match to the metabolite search term (default = FALSE).}
 
@@ -31,5 +31,4 @@ Searches through annotated m/z values to return all which contain the metabolite
 }
 \examples{
 utils::str(formals(searchAnnotations))
-# searchAnnotations(SeuratObj, "Glucose", search.exact = TRUE)
 }

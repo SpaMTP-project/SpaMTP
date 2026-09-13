@@ -7,7 +7,7 @@
 labels_to_show(annotation_column, n = 3)
 }
 \arguments{
-\item{annotation_column}{Vector of the meta.data column containing the m/z annotations.}
+\item{annotation_column}{Vector from the \code{rowData()} column containing m/z annotations.}
 
 \item{n}{Numeric value defining the number of annotations to keep (default = 3).}
 }
@@ -16,7 +16,4 @@ Vector containing the first n number of annotations
 }
 \description{
 Filters the annotation list to only include the first n number of annotations per m/z
-}
-\examples{
-# labels_to_show(SeuratObject[["Spatial"]][[]]$annotations, n = 3)
 }
