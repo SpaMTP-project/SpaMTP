@@ -89,8 +89,8 @@ SpaMTP is now published in *Nature Methods*: [**SpaMTP: integrative statistical 
 
 ## Installation
 
-Keep the coordinated source versions together: SpaMTP >= 0.99.4,
-SpaMTPdb >= 0.99.3 and SpaMTPData >= 0.99.4. For local sibling checkouts,
+Keep the coordinated source versions together: SpaMTP >= 0.99.5,
+SpaMTPdb >= 0.99.4 and SpaMTPData >= 0.99.5. For local sibling checkouts,
 install the data packages before the software package:
 
 ```sh
@@ -110,6 +110,16 @@ and eleven unchanged auxiliary/Cardinal resources. Use `spaMTPData()` to
 retrieve native datasets without Seurat. The one-time preparation recipe is
 retained for reproducibility; historical archives require an explicit
 `version = "1.0.0"` request.
+
+For human gene mapping, see the [gene identifier workflow](vignettes/Gene_Identifier_Mapping.Rmd).
+SpaMTPdb supplies a separately versioned, checksum-verified HGNC archive;
+SpaMTPData supplies experiments with species provenance. SpaMTP's
+`buildGeneMappingIndex()`, `mapGeneIdentifiers()` and
+`annotateGeneIdentifiers()` resolve symbols and stable IDs with an input audit.
+Pathway analyses unite memberships of RaMP records belonging to one HGNC gene
+and count that gene once. Ambiguous aliases and conflicting gene records remain
+explicitly unresolved. Targeted-panel Fisher analysis requires the full measured
+panel as `universe`; all eligible pathways enter the BH correction.
 
 During Bioconductor review, install the companion annotation package and this
 submission source from GitHub:

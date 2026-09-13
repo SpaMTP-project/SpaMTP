@@ -23,7 +23,13 @@ findRegionalPathways(
   database = NULL,
   database_version = "latest",
   database_source = c("auto", "spamtpdb"),
-  database_local_dir = NULL
+  database_local_dir = NULL,
+  gene_mapping = c("auto", "hgnc", "ramp"),
+  gene_reference = NULL,
+  gene_index = NULL,
+  gene_reference_version = "latest",
+  gene_reference_local_dir = NULL,
+  organism = "Homo sapiens"
 )
 }
 \arguments{
@@ -72,12 +78,45 @@ by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 \item{database_source}{Database source; see \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 
 \item{database_local_dir}{Optional staged SpaMTPdb resource directory.}
+
+\item{gene_mapping}{\code{"auto"} uses HGNC identity harmonization for official
+SpaMTPdb resources and for custom bundles with \code{gene_reference} or
+\code{gene_index}. \code{"hgnc"} requires harmonization; \code{"ramp"} explicitly retains
+RaMP-only mapping for historical reproduction or a curated non-human
+database. Custom bundles without a reference use RaMP-only mapping in auto
+mode and never trigger a reference download.}
+
+\item{gene_reference}{HGNC reference data frame. \code{NULL} retrieves the pinned
+reference through \code{\link[SpaMTPdb:spaMTPdbGeneReference]{SpaMTPdb::spaMTPdbGeneReference()}}. Custom references
+require unique \code{hgnc_id} and \code{symbol}; optional fields are \code{status},
+\code{entrez_id}, \code{ensembl_gene_id}, \code{uniprot_ids}, \code{prev_symbol}, \code{alias_symbol}.}
+
+\item{gene_index}{Optional index built from the same source table by
+\code{\link[=buildGeneMappingIndex]{buildGeneMappingIndex()}}. Multiple RaMP records of a resolved HGNC gene
+have their pathway memberships united and count once. Conflicting RaMP
+records and ambiguous symbols are excluded and recorded in the audit.}
+
+\item{gene_reference_version}{Version in SpaMTPdb's separate HGNC registry.}
+
+\item{gene_reference_local_dir}{Local HGNC resource directory.}
+
+\item{organism}{Must be \code{"Homo sapiens"}; this index is not a mouse-to-human
+orthology map. Use a separately curated species-specific database for other
+organisms.}
 }
 \value{
 A SpaMTP object with set enrichment on given analyte types.
 }
 \description{
 This the function used to compute the gene/metabolites set enrichment for multi-omics spatial data
+}
+\details{
+Gene mapping uses the same identity index as
+\code{\link[=fishersPathwayAnalysis]{fishersPathwayAnalysis()}}. Multiple RaMP records of a gene have their
+memberships united. If multiple input features map to that gene with
+different differential statistics in one cluster, resolve the duplicate
+features before differential analysis; the function does not select an
+arbitrary statistic.
 }
 \examples{
 utils::str(formals(findRegionalPathways))

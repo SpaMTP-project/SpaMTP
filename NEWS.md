@@ -1,3 +1,36 @@
+# SpaMTP 0.99.5
+
+* Added `buildGeneMappingIndex()`, `mapGeneIdentifiers()` and native
+  `annotateGeneIdentifiers()` using SpaMTPdb's versioned HGNC reference.
+  Approved/previous/alias symbols and stable IDs have explicit resolution
+  status; ambiguous aliases and conflicting RaMP records are never expanded
+  into multiple genes. Gene-specific IDs can resolve shared protein IDs.
+* Fisher and regional pathway analyses merge RaMP records belonging to the
+  same HGNC gene and unite their pathway memberships before counting. Network
+  displays reuse the same identity mapping. Conflicting differential values
+  from multiple features of one gene require resolution before analysis.
+  Gene mapping and reference provenance are retained in outputs and rowData.
+* Gene indices now record a normalized source-table fingerprint and reject
+  incompatible reuse even when RaMP record IDs are unchanged. Older index
+  schemas must be rebuilt. Shared crossreferences retain unresolved and
+  conflicting raw candidates instead of implying a unique match. Conflict
+  membership is indexed once and repeated queries are resolved once while
+  preserving the original input order and per-row audit.
+* Official database workflows use HGNC mapping automatically for human genes;
+  custom fixtures remain offline, and `gene_mapping = "ramp"` supports explicit
+  historical reproduction or curated non-human resources. HGNC mapping does
+  not perform cross-species orthology conversion.
+
+* Fixed the Fisher pathway contingency table: foreground non-members are
+  K - overlap, not max(0, K - pathway_size). Added an explicit measured
+  `universe`, deduplicated RaMP memberships and validated foreground inclusion.
+  Background size is fixed before pathway-size filtering. Every eligible
+  pathway, including zero-overlap sets, now belongs to the BH testing family.
+  `pval_cutoff` now filters FDR as documented (previously it filtered raw p).
+  Results include foreground/background counts, internal pathway IDs and an
+  `enrichment` audit attribute; missing display metadata no longer drops tests.
+  These corrections intentionally change previous p-values and FDRs.
+
 # SpaMTP 0.99.4
 
 * Updated the companion workflow for SpaMTPData >= 0.99.4 and its published

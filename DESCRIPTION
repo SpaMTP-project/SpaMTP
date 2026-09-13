@@ -1,7 +1,7 @@
 Package: SpaMTP
 Type: Package
 Title: Spatial Metabolomics and Multi-Omics Analysis
-Version: 0.99.4
+Version: 0.99.5
 Authors@R: c(
     person("Andrew", "Causer",
             email = "a.causer@uq.edu.au", 
@@ -47,7 +47,7 @@ Suggests:
     reticulate,
     rmarkdown,
     SeuratObject (>= 5.0.0),
-    SpaMTPData (>= 0.99.4),
+    SpaMTPData (>= 0.99.5),
     testthat (>= 3.0.0),
     viridis,
     yaml
@@ -84,7 +84,6 @@ Imports:
     MSnbase,
     naturalsort,
     parallel,
-    pbapply,
     pheatmap,
     plotly,
     png,
@@ -98,7 +97,7 @@ Imports:
     shiny,
     SingleCellExperiment,
     S4Vectors,
-    SpaMTPdb (>= 0.99.2),
+    SpaMTPdb (>= 0.99.4),
     SpatialExperiment,
     stats,
     stringr,

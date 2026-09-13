@@ -1,0 +1,134 @@
+---
+title: "Auditable gene mapping with SpaMTPdb and SpaMTPData"
+output:
+  BiocStyle::html_document:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Auditable gene mapping with SpaMTPdb and SpaMTPData}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "##")
+```
+
+## Reference ownership and reproducibility
+
+SpaMTPdb provides RaMP annotation tables and a separate versioned HGNC gene
+reference. SpaMTPData supplies native experiment data and declared species.
+SpaMTP resolves identifiers, annotates row metadata and runs pathway analyses.
+Use SpaMTP >= 0.99.5, SpaMTPdb >= 0.99.4 and SpaMTPData >= 0.99.5 together.
+
+```{r registry}
+library(SpaMTP)
+SpaMTPdb::spaMTPdbGeneReference(metadata = TRUE)
+SpaMTPdb::spaMTPdbVersion()
+```
+
+The HGNC reference uses a fixed quarterly archive, with its own version and
+checksum. It does not change the existing RaMP 3.0.7 or experiment 1.1.0 files.
+HGNC mapping is for **Homo sapiens**; it does not convert mouse genes to human
+orthologues. Native experiments loaded by SpaMTPData carry their registry species
+in `metadata(x)$SpaMTPData`, including their nested experiments. Species
+checks therefore still apply after extracting RNA with `altExp()`.
+
+## Build once, inspect before testing
+
+The following resource-loading examples are not evaluated while building this
+vignette. Local files and verified caches can be used with `offline = TRUE`.
+
+```{r reference, eval=FALSE}
+database <- loadSpaMTPDatabase(
+  c("source_df", "analyte", "analytehaspathway", "pathway"),
+  version = "3.0.7", local_dir = "/path/to/RaMP/3.0.7", offline = TRUE
+)
+reference <- SpaMTPdb::spaMTPdbGeneReference(
+  version = "2026.7.7", local_dir = "/path/to/gene-reference", offline = TRUE
+)
+index <- buildGeneMappingIndex(database$source_df, gene_reference = reference)
+mapping <- mapGeneIdentifiers(
+  c("gene_symbol:AATK", "entrez:9625", "gene_symbol:BANK1"), index = index
+)
+mapping
+```
+
+The index records a fingerprint of the source table's gene identifiers and
+common names. Pathway workflows reject a cached index built from different
+identity assignments, even if the RaMP ID set is unchanged. Rebuild older
+saved indices with `buildGeneMappingIndex()`; changing row order or duplicating
+identical source rows does not invalidate the fingerprint.
+
+Symbols, previous symbols and aliases are resolved to an HGNC gene. An approved
+symbol takes priority over other genes' aliases. Entrez, HGNC, UniProt and
+versioned Ensembl gene IDs are supported. A shared protein ID can be resolved
+by a compatible gene-specific ID in the same RaMP record. Conflicting specific
+IDs quarantine the record rather than joining different genes.
+
+`gene_id` is the stable HGNC identity. `ramp_ids` lists its non-conflicting RaMP
+records, and `canonical_ramp_id` is one representative used to count the gene
+once. For example, AATK's UniProt and Entrez records in RaMP 3.0.7 belong to one
+HGNC gene, so their pathway memberships are united before enrichment.
+
+Inspect `status`, `method`, `candidate_gene_ids` and `candidate_ramp_ids`.
+The latter exposes raw RaMP candidates for direct IDs and crossreferences.
+A shared crossreference with unresolved or conflicting competitors remains
+ambiguous even when only one candidate has a known HGNC identity.
+`not_in_ramp` means HGNC
+recognizes the gene but no usable RaMP record was found; `ambiguous` and
+`conflicting_ramp_records` require review. `mapped_ramp_only` denotes a raw
+RaMP record whose HGNC identity was not resolved. A warning is not evidence
+that the gene has no biological function or pathway membership.
+
+## Annotate experiment features without altering expression
+
+```{r experiment, eval=FALSE}
+spe <- SpaMTPData::spaMTPData("human_brain_integrated", version = "1.1.0")
+SingleCellExperiment::altExpNames(spe)
+# Select the actual transcriptome altExp shown above. If identifiers live in
+# a rowData column, set id_column; otherwise row names are used.
+spe <- annotateGeneIdentifiers(
+  spe, assay = "SPT", index = index, organism = "Homo sapiens"
+)
+rna <- SingleCellExperiment::altExp(spe, "SPT")
+SummarizedExperiment::rowData(rna)
+S4Vectors::metadata(rna)$gene_mapping
+```
+
+Mapping columns remain aligned with original features. Counts, feature names,
+coordinates and paired modalities are preserved. If multiple expression rows
+map to the same gene, annotation records that fact without summing expression.
+Resolve those features before differential analysis. Regional pathway and
+network workflows reject different differential statistics for the same gene
+within a cluster rather than selecting an arbitrary row.
+
+## Use the whole measured panel as the universe
+
+```{r enrichment, eval=FALSE}
+result <- fishersPathwayAnalysis(
+  Analyte = list(genes = significant_genes),
+  universe = list(genes = measured_panel_genes),
+  database = database, gene_index = index,
+  min_path_size = 5, pval_cutoff = NULL
+)
+attr(result, "enrichment")$gene_mapping$inputs
+attr(result, "enrichment")$gene_mapping$groups
+```
+
+Foreground and universe use the same complete identity index. All RaMP records
+of a resolved gene contribute to its union of pathway memberships, but the gene
+counts once in K, M, U and overlap. The universe is fixed before size filtering;
+zero-overlap eligible pathways remain in the BH family. `pval_cutoff` filters
+FDR after correction. Missing identifiers are excluded with an explicit audit;
+do not set U to the raw panel length to hide mapping failures.
+
+Official SpaMTPdb workflows harmonize human genes automatically. A custom
+bundle can provide `gene_reference`, or an index can be supplied explicitly.
+Custom bundles without a reference retain RaMP-only behavior without a network
+request. `gene_mapping = "ramp"` explicitly reproduces historical mapping or
+uses a separately curated species-specific database; it is not an orthology
+conversion switch. Previously saved gene-ID mappings and p-values may change
+after identity reconciliation even though Fisher arithmetic is unchanged.
+
+Use the same `gene_index` in `findRegionalPathways()` and
+`pathwayNetworkPlots()` to keep annotation identity and provenance consistent.

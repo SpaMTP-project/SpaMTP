@@ -59,6 +59,10 @@
 #' @param database_version SpaMTPdb/RaMP version used for pathway lookup.
 #' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
+#' @inheritParams fishersPathwayAnalysis
+#' @details Gene differential values use the shared HGNC mapping index. For
+#'   display, the same resolved gene value is attached to its equivalent raw
+#'   RaMP topology nodes; this does not introduce additional enrichment tests.
 #'
 #' @return Invisibly returns the generated HTML file path.
 #' @export
@@ -95,7 +99,12 @@ pathwayNetworkPlots <- function(SpaMTP,
                                 database = NULL,
                                 database_version = "latest",
                                 database_source = c("auto", "spamtpdb"),
-                                database_local_dir = NULL) {
+                                database_local_dir = NULL,
+                                gene_mapping = c("auto", "hgnc", "ramp"),
+                                gene_reference = NULL, gene_index = NULL,
+                                gene_reference_version = "latest",
+                                gene_reference_local_dir = NULL,
+                                organism = "Homo sapiens") {
   SpaMTP <- .nativeSingleSample(SpaMTP)
   analyte_types <- match.arg(
     analyte_types, c("genes", "metabolites"), several.ok = TRUE
@@ -257,7 +266,12 @@ pathwayNetworkPlots <- function(SpaMTP,
   metabolite_annotations <- NULL
   annotation_metadata <- NULL
   if ("genes" %in% analyte_types) {
-    gene_de <- .pn_prepare_gene_de(differential[["genes"]], source_df)
+    gene_view <- .gene_pathway_view(
+      database_resources, database, gene_mapping, gene_reference, gene_index,
+      gene_reference_version, gene_reference_local_dir, organism
+    )
+    if (!is.null(gene_view$index)) .gene_check_experiment_species(SpaMTP, ST_assay, organism)
+    gene_de <- .pn_prepare_gene_de(differential[["genes"]], source_df, gene_view$index)
   }
   if ("metabolites" %in% analyte_types) {
     db_3 <- .resolve_pathway_metabolite_annotations(
@@ -342,6 +356,7 @@ pathwayNetworkPlots <- function(SpaMTP,
     metadata = list(
       max_nodes = max_nodes,
       annotation = annotation_metadata,
+      gene_mapping = attr(gene_de, "gene_mapping"),
       annotation_score_threshold = annotation_score_threshold,
       annotation_score_floor = annotation_score_floor,
       annotation_score_ceiling = max(

@@ -111,6 +111,9 @@
     resource = resource,
     version = as.character(resource_metadata$version[[1L]]),
     source = "spamtpdb",
+    expected_md5 = as.character(resource_metadata$md5[[1L]]),
+    expected_bytes = as.numeric(resource_metadata$bytes[[1L]]),
+    source_url = paste0(resource_metadata$location_prefix[[1L]], resource_metadata$rdata_path[[1L]]),
     local_dir = local_dir,
     offline = offline,
     verify_local = verify

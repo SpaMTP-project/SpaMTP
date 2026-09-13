@@ -262,7 +262,8 @@
   result
 }
 
-.pn_prepare_gene_de <- function(de, source_table) {
+.pn_prepare_gene_de <- function(de, source_table, gene_index = NULL) {
+  if (!is.null(gene_index)) return(.gene_prepare_de(de, gene_index, expand_records = TRUE))
   direct <- startsWith(toupper(de$gene), "RAMP_G_")
   direct_de <- de[direct, , drop = FALSE]
   direct_de$rampId <- toupper(direct_de$gene)

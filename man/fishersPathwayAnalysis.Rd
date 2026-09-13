@@ -2,7 +2,7 @@
 % Please edit documentation in R/PathwayAnalysis.R
 \name{fishersPathwayAnalysis}
 \alias{fishersPathwayAnalysis}
-\title{Calculates Significant Metabolic Pathways using a Fisher Exact Test}
+\title{Fisher Exact Tests for Pathway Enrichment}
 \usage{
 fishersPathwayAnalysis(
   Analyte,
@@ -16,26 +16,46 @@ fishersPathwayAnalysis(
   database_version = "latest",
   database_source = c("auto", "spamtpdb"),
   database_local_dir = NULL,
+  universe = NULL,
+  gene_mapping = c("auto", "hgnc", "ramp"),
+  gene_reference = NULL,
+  gene_index = NULL,
+  gene_reference_version = "latest",
+  gene_reference_local_dir = NULL,
+  organism = "Homo sapiens",
   ...
 )
 }
 \arguments{
-\item{Analyte}{A list of analytes containing a combination of three possible elements, namely "mzs", "genes" and/or "metabolites". The list must be named with these titles, corresponding to the relative input datasets. Read below for supported input formats.}
+\item{Analyte}{Foreground analytes as a named list with elements \code{genes},
+\code{metabolites} and/or \code{mzs}. Identifiers are matched case-insensitively to
+source IDs (e.g. \code{gene_symbol:TP53}, \code{hmdb:HMDB0000122}), known RaMP IDs,
+then common names for otherwise unmatched queries. Duplicate mappings to
+the same RaMP ID count once. m/z values may be numeric or numeric strings,
+optionally prefixed with \verb{mz-} or \code{mz_}.}
 
-\item{max_path_size}{The max number of  in a specific pathway (default = 500).}
+\item{max_path_size}{Maximum pathway size within the analysis universe
+(inclusive; default 500).}
 
-\item{min_path_size}{The min number of  in a specific pathway (default = 5).}
+\item{min_path_size}{Minimum pathway size within the analysis universe
+(inclusive; positive integer, default 5).}
 
-\item{alternative}{The hypothesis of the fisher exact test (default = "greater").}
+\item{alternative}{Fisher test alternative: \code{"greater"}, \code{"less"} or
+\code{"two.sided"}.}
 
-\item{pathway_all_info}{Whether to included all genes/ screened in the return (default = FALSE).}
+\item{pathway_all_info}{Include names, input IDs and m/z adduct information
+for foreground members of each pathway. Does not change the tests.}
 
-\item{pval_cutoff}{A numerical value defining the adjusted p value cutoff for keeing significant pathways (default = NULL).}
+\item{pval_cutoff}{Optional BH-adjusted p-value (FDR) cutoff in \verb{[0, 1]}.
+Applied only after correcting over all eligible pathways.}
 
-\item{verbose}{Boolean indicating whether to show informative messages. If FALSE these messages will be suppressed (default = TRUE).}
+\item{verbose}{Whether to print progress messages. Mapping warnings are
+always emitted, including when \code{verbose = FALSE}.}
 
-\item{database}{Optional named list of database resources, normally created
-by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
+\item{database}{Optional named resource list from \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.
+Identifier analysis requires \code{source_df}, \code{analyte}, \code{analytehaspathway}
+and \code{pathway}; m/z analysis additionally uses \code{chem_props} unless \code{db}
+or \code{index} is supplied through \code{...}.}
 
 \item{database_version}{SpaMTPdb/RaMP version used for pathway lookup.}
 
@@ -43,31 +63,86 @@ by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 
 \item{database_local_dir}{Optional staged SpaMTPdb resource directory.}
 
-\item{...}{Additional parameters that can be passed through to \code{annotateTable()} when running \code{mz}-based analysis. Please see documentation for \code{annotateTable()} for more details.
-\subsection{Details}{
-\itemize{
-\item Supported \code{metabolites} format: strings which contain the metabolite ID with database name. For example = "hmdb:HMDBX", "chebi:X", "pubchem:X","wikidata:X" ,"kegg:X" ,"CAS:X","lipidbank:X","chemspider:X","    LIPIDMAPS:X" (where X stands for upper case of the cooresponding ID in each database)
-\item Supported \code{genes} data format: strings which contain the gene name and formatting. For example = "entrez:X", "gene_symbol:X", "uniprot:X", "ensembl:X", "hmdb:HMDBPX"
-\item Supported \code{mzs} format: any string or numeric vector containing m/z. If
-\code{mzs} values are provided, the current indexed annotation pipeline and the
-versioned SpaMTPdb \code{chem_props} table is used by default.
-}
-}}
+\item{universe}{Optional measured background, in the same named-list format
+as \code{Analyte}. Supply all analytes eligible for foreground selection, not
+just significant hits. Foreground and universe must specify the same
+biological modalities (genes and/or compounds; \code{mzs} and \code{metabolites}
+both denote compounds). All mapped foreground IDs must belong to the
+mapped universe, otherwise an error is raised. Mapped background IDs
+without any pathway membership still contribute to the universe size.
+When \code{NULL}, use all pathway-linked IDs of the specified modalities in
+the database, before pathway-size filtering; mapped foreground IDs without
+pathway membership are then excluded with a warning.}
+
+\item{gene_mapping}{\code{"auto"} uses HGNC identity harmonization for official
+SpaMTPdb resources and for custom bundles with \code{gene_reference} or
+\code{gene_index}. \code{"hgnc"} requires harmonization; \code{"ramp"} explicitly retains
+RaMP-only mapping for historical reproduction or a curated non-human
+database. Custom bundles without a reference use RaMP-only mapping in auto
+mode and never trigger a reference download.}
+
+\item{gene_reference}{HGNC reference data frame. \code{NULL} retrieves the pinned
+reference through \code{\link[SpaMTPdb:spaMTPdbGeneReference]{SpaMTPdb::spaMTPdbGeneReference()}}. Custom references
+require unique \code{hgnc_id} and \code{symbol}; optional fields are \code{status},
+\code{entrez_id}, \code{ensembl_gene_id}, \code{uniprot_ids}, \code{prev_symbol}, \code{alias_symbol}.}
+
+\item{gene_index}{Optional index built from the same source table by
+\code{\link[=buildGeneMappingIndex]{buildGeneMappingIndex()}}. Multiple RaMP records of a resolved HGNC gene
+have their pathway memberships united and count once. Conflicting RaMP
+records and ambiguous symbols are excluded and recorded in the audit.}
+
+\item{gene_reference_version}{Version in SpaMTPdb's separate HGNC registry.}
+
+\item{gene_reference_local_dir}{Local HGNC resource directory.}
+
+\item{organism}{Must be \code{"Homo sapiens"}; this index is not a mouse-to-human
+orthology map. Use a separately curated species-specific database for other
+organisms.}
+
+\item{...}{Arguments passed to the indexed \code{annotateTable()} pipeline for
+m/z inputs, such as \code{ppm_error}, \code{adducts}, \code{db} or \code{index}.}
 }
 \value{
-a dataframe with the relevant pathway information
+A data frame sorted by \code{p_val}, retaining the columns \code{pathway_name},
+\code{pathway_id}, \code{type}, \code{pathwayCategory}, \code{p_val}, \code{fdr}, \code{ratio},
+\code{analytes_in_pathways} (overlap) and \code{total_in_pathways} (size within the
+universe). Also includes \code{pathwayRampId}, \code{foreground_analytes_number}
+and \code{background_analytes_number}. \code{pathway_all_info = TRUE} adds member
+information. The \code{enrichment} attribute records mapped foreground and
+universe IDs, unmapped inputs, excluded foreground IDs, universe source,
+alternative, size limits and the number of tests before output filtering.
+Its \code{gene_mapping} entry contains per-input mapping status, gene groups,
+excluded conflicting RaMP records and versioned reference provenance.
 }
 \description{
-Calculates Significant Metabolic Pathways using a Fisher Exact Test
+Fisher Exact Tests for Pathway Enrichment
+}
+\details{
+With universe size U, foreground size K, pathway size M and overlap a, the
+test table is \code{matrix(c(a, M - a, K - a, U - K - M + a), nrow = 2)}.
+Memberships and identifiers are deduplicated by RaMP ID. Pathway sizes are
+computed after intersecting with the universe; size filtering never changes
+that universe. All pathways passing the size limits are tested, including
+zero-overlap pathways. BH correction uses this complete family, before any
+output cutoff. Missing display metadata does not remove a test.
+
+Unmapped input values are excluded with warnings and recorded in the
+\code{enrichment} attribute. An empty mapped universe is an error. An empty
+foreground gives p-values of 1 for all eligible pathways. If no pathways
+pass the size limits, a zero-row data frame is returned.
+
+For a targeted panel, provide the measured panel as \code{universe}; the default
+database background is not a substitute for the detection background.
+m/z foreground and background values are annotated together with identical
+settings. All mapped candidate RaMP IDs are retained; ambiguous mass matches
+are not confirmed compound identifications. In a combined analysis, genes
+and compounds are counted as individual RaMP IDs in a single pooled test.
 }
 \examples{
 utils::str(formals(fishersPathwayAnalysis))
-## Running in 'mzs' mode:
-# fishersPathwayAnalysis(Analyte = list("mzs" = mz_values), ppm_error = 3)
-
-## Running in 'metabolites' mode
-# fishersPathwayAnalysis(Analyte = list("metabolites" = metabolite_ids))
-
-## Running 'metabolites' and 'genes' combined
-# fishersPathwayAnalysis(Analyte = list("metabolites" = metabolite_ids, "genes" = gene_names))
+# For a targeted gene panel:
+# fishersPathwayAnalysis(
+#   Analyte = list(genes = paste0("gene_symbol:", significant_genes)),
+#   universe = list(genes = paste0("gene_symbol:", measured_panel_genes))
+# )
 }
