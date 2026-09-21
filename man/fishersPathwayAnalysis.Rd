@@ -23,6 +23,7 @@ fishersPathwayAnalysis(
   gene_reference_version = "latest",
   gene_reference_local_dir = NULL,
   organism = "Homo sapiens",
+  pathway_index = NULL,
   ...
 )
 }
@@ -98,6 +99,10 @@ records and ambiguous symbols are excluded and recorded in the audit.}
 \item{organism}{Must be \code{"Homo sapiens"}; this index is not a mouse-to-human
 orthology map. Use a separately curated species-specific database for other
 organisms.}
+
+\item{pathway_index}{A reusable index from buildPathwayIndex(). When supplied,
+its gene identities and memberships must match any explicit database or
+gene_index. Fingerprints prevent incompatible reuse.}
 
 \item{...}{Arguments passed to the indexed \code{annotateTable()} pipeline for
 m/z inputs, such as \code{ppm_error}, \code{adducts}, \code{db} or \code{index}.}

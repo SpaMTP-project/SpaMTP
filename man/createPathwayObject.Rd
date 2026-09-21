@@ -13,12 +13,22 @@ createPathwayObject(
   database = NULL,
   database_version = "latest",
   database_source = c("auto", "spamtpdb"),
-  database_local_dir = NULL
+  database_local_dir = NULL,
+  gene_mapping = c("auto", "hgnc", "ramp"),
+  gene_reference = NULL,
+  gene_index = NULL,
+  gene_reference_version = "latest",
+  gene_reference_local_dir = NULL,
+  organism = "Homo sapiens",
+  pathway_index = NULL,
+  duplicate_genes = c("error", "mean", "sum"),
+  min_path_size = 1,
+  max_path_size = Inf
 )
 }
 \arguments{
 \item{object}{A SingleCellExperiment (including SpatialExperiment) with expression
-features indexed by RaMP IDs.}
+features indexed by gene identifiers or RaMP IDs.}
 
 \item{assay}{Primary or alternative experiment to score.}
 
@@ -37,6 +47,44 @@ by \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 \item{database_source}{Database source; see \code{\link[=loadSpaMTPDatabase]{loadSpaMTPDatabase()}}.}
 
 \item{database_local_dir}{Optional staged SpaMTPdb resource directory.}
+
+\item{gene_mapping}{\code{"auto"} uses HGNC identity harmonization for official
+SpaMTPdb resources and for custom bundles with \code{gene_reference} or
+\code{gene_index}. \code{"hgnc"} requires harmonization; \code{"ramp"} explicitly retains
+RaMP-only mapping for historical reproduction or a curated non-human
+database. Custom bundles without a reference use RaMP-only mapping in auto
+mode and never trigger a reference download.}
+
+\item{gene_reference}{HGNC reference data frame. \code{NULL} retrieves the pinned
+reference through \code{\link[SpaMTPdb:spaMTPdbGeneReference]{SpaMTPdb::spaMTPdbGeneReference()}}. Custom references
+require unique \code{hgnc_id} and \code{symbol}; optional fields are \code{status},
+\code{entrez_id}, \code{ensembl_gene_id}, \code{uniprot_ids}, \code{prev_symbol}, \code{alias_symbol}.}
+
+\item{gene_index}{Optional index built from the same source table by
+\code{\link[=buildGeneMappingIndex]{buildGeneMappingIndex()}}. Multiple RaMP records of a resolved HGNC gene
+have their pathway memberships united and count once. Conflicting RaMP
+records and ambiguous symbols are excluded and recorded in the audit.}
+
+\item{gene_reference_version}{Version in SpaMTPdb's separate HGNC registry.}
+
+\item{gene_reference_local_dir}{Local HGNC resource directory.}
+
+\item{organism}{Must be \code{"Homo sapiens"}; this index is not a mouse-to-human
+orthology map. Use a separately curated species-specific database for other
+organisms.}
+
+\item{pathway_index}{A reusable index from buildPathwayIndex(). When supplied,
+its gene identities and memberships must match any explicit database or
+gene_index. Fingerprints prevent incompatible reuse.}
+
+\item{duplicate_genes}{How to aggregate expression rows of one gene.
+The default errors for differing rows and deduplicates identical rows.
+Explicit mean or sum requires choosing an appropriate expression scale;
+sum is generally inappropriate for log-transformed expression.}
+
+\item{min_path_size}{Minimum measured unique members to score (default 1).}
+
+\item{max_path_size}{Maximum measured unique members to score (default Inf).}
 }
 \value{
 The input with pathwayScores in a new alternative experiment.
@@ -48,6 +96,16 @@ and stores them in altExp for SingleCellExperiment-derived objects.
 Each score is the sum of matched expression divided by the square root
 of the matched feature count, then centred and scaled across pixels.
 Constant scores are zero; unmatched pathways are removed or stored as NA.
+}
+\details{
+Accepts gene identifiers directly or a harmonized RaMP assay.
+min_path_size and max_path_size are applied to measured unique members.
+rowData contains database_size (after identity reconciliation),
+database_raw_size, measured_size, coverage_fraction, used_size,
+database_members, measured_members, used_members and excluded_conflict_records.
+The complete coverage table, including excluded and unmeasured pathways,
+is retained in metadata(altExp(x, new.assay))$pathway_mapping$coverage.
+Scores summarize observed expression; they are not pathway activity tests.
 }
 \examples{
 utils::str(formals(createPathwayObject))

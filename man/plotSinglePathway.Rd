@@ -13,6 +13,8 @@ plotSinglePathway(
   reduction = NULL,
   colors = c("darkblue", "lightgrey", "darkred"),
   guide = "colourbar",
+  pathway_index = NULL,
+  duplicate_genes = "error",
   ...
 )
 }
@@ -33,6 +35,15 @@ then PCA, otherwise the first available reduction.}
 \item{colors}{Gradient colours.}
 
 \item{guide}{Colour guide type.}
+
+\item{pathway_index}{A reusable index from buildPathwayIndex(). When supplied,
+its gene identities and memberships must match any explicit database or
+gene_index. Fingerprints prevent incompatible reuse.}
+
+\item{duplicate_genes}{How to aggregate expression rows of one gene.
+The default errors for differing rows and deduplicates identical rows.
+Explicit mean or sum requires choosing an appropriate expression scale;
+sum is generally inappropriate for log-transformed expression.}
 
 \item{...}{Additional arguments to scater::plotReducedDim.}
 }

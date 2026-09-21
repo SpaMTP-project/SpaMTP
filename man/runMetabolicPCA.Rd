@@ -15,7 +15,9 @@ runMetabolicPCA(
   resolution_units = "ppm",
   bin_method = "sum",
   reduction.name = "pca",
-  verbose = TRUE
+  verbose = TRUE,
+  features = NULL,
+  scale = FALSE
 )
 }
 \arguments{
@@ -40,6 +42,11 @@ runMetabolicPCA(
 \item{reduction.name}{Character string indicating the name associated with the PCA results stored in the output Bioconductor experiment (default = "pca").}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+
+\item{features}{Optional exact feature identifiers. When supplied, all and
+only these rows enter PCA; the scater top-500 default is bypassed.}
+
+\item{scale}{Scale features to unit variance before PCA.}
 }
 \value{
 The input with PCA embeddings in reducedDim().

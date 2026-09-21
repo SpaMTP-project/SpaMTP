@@ -13,6 +13,12 @@
 #' @param SM.slot Assay containing metabolite values.
 #' @param ST.slot Assay containing transcriptomic values.
 #' @param nfeatures Maximum results per reference; NULL returns all features.
+#' @param covariates Optional colData fields to regress from both features before
+#'   correlation, for example sample and annotated region. Raw correlations are
+#'   also returned. This is a descriptive conditional association, not a causal
+#'   or spatial significance test.
+#' @param features Optional named list of exact target IDs, with entries
+#'   `metabolite` and/or `gene`. Selection does not change the reference vector.
 #' @return A data frame with features, correlation, modality, mz, rank and,
 #'   for multiple reference groups, ident.
 #' @export
@@ -25,7 +31,8 @@
 #' findCorrelatedFeatures(x, mz = 100)
 findCorrelatedFeatures <- function(
     data, mz = NULL, gene = NULL, ident = NULL, SM.assay = "main",
-    ST.assay = NULL, SM.slot = "counts", ST.slot = "counts", nfeatures = 10
+    ST.assay = NULL, SM.slot = "counts", ST.slot = "counts", nfeatures = 10,
+    covariates = NULL, features = NULL
 ) {
   data <- .nativeSpatialObject(data)
   if (sum(!vapply(list(mz, gene, ident), is.null, logical(1))) != 1L)
@@ -62,7 +69,32 @@ findCorrelatedFeatures <- function(
     references <- stats::setNames(
       lapply(levels, function(level) as.numeric(groups == level)), levels)
   }
-  masses <- .massValues(.featureMetadata(data, SM.assay), rownames(metabolites))
+  # Exact feature queries also support RNA/protein as the first modality.
+  # Numeric m/z queries were already validated by findNearestMZ above.
+  masses <- tryCatch(.massValues(.featureMetadata(data, SM.assay), rownames(metabolites)),
+    error = function(e) rep(NA_real_, nrow(metabolites)))
+  adjustment <- NULL
+  if (length(covariates)) {
+    md <- as.data.frame(SummarizedExperiment::colData(data))
+    if (!is.character(covariates) || anyDuplicated(covariates) ||
+        !all(covariates %in% names(md)) || anyNA(md[, covariates, drop = FALSE]))
+      stop("covariates must name complete, distinct colData fields.", call. = FALSE)
+    varying <- covariates[vapply(md[, covariates, drop = FALSE], function(z) length(unique(z)) > 1L, logical(1))]
+    design <- if (length(varying)) stats::model.matrix(~ ., md[, varying, drop = FALSE]) else matrix(1, ncol(data), 1)
+    adjustment <- qr(design)
+    if (adjustment$rank >= ncol(data) - 2L)
+      stop("Covariate model leaves fewer than three residual dimensions.", call. = FALSE)
+  }
+  if (!is.null(features)) {
+    if (!is.list(features) || is.null(names(features)) || anyDuplicated(names(features)) ||
+        any(!names(features) %in% names(matrices))) stop("Invalid target features list.", call. = FALSE)
+    for (m in names(features)) {
+      f <- features[[m]]
+      if (anyNA(f) || anyDuplicated(f) || !all(f %in% rownames(matrices[[m]])))
+        stop("Target features must be distinct, observed IDs.", call. = FALSE)
+      matrices[[m]] <- matrices[[m]][f, , drop = FALSE]
+    }
+  }
   results <- lapply(names(references), function(reference) {
     tables <- lapply(names(matrices), function(modality) {
       expression <- matrices[[modality]]
@@ -70,12 +102,19 @@ findCorrelatedFeatures <- function(
         values <- as.numeric(expression[index, ])
         target <- references[[reference]]
         if (length(values) < 3L || any(!is.finite(c(values, target))) ||
-            stats::sd(values) == 0 || stats::sd(target) == 0) return(NA_real_)
-        stats::cor(values, target, method = "pearson")
-      }, numeric(1))
-      data.frame(features = rownames(expression), correlation = correlations,
+            stats::sd(values) == 0 || stats::sd(target) == 0) return(c(NA_real_, NA_real_))
+        raw <- stats::cor(values, target, method = "pearson")
+        if (is.null(adjustment)) return(c(raw, raw))
+        r1 <- qr.resid(adjustment, values); r2 <- qr.resid(adjustment, target)
+        adjusted <- if (sum(r1^2) < 1e-12 * sum((values - mean(values))^2) ||
+          sum(r2^2) < 1e-12 * sum((target - mean(target))^2)) NA_real_ else stats::cor(r1, r2)
+        c(adjusted, raw)
+      }, numeric(2))
+      data.frame(features = rownames(expression), correlation = correlations[1, ],
+                 correlation_raw = correlations[2, ],
                  modality = modality,
-                 mz = if (modality == "metabolite") masses else NA_real_)
+                 assay = if (modality == "metabolite") SM.assay else ST.assay,
+                 mz = if (modality == "metabolite") masses[match(rownames(expression), rownames(metabolites))] else NA_real_)
     })
     result <- do.call(rbind, tables)
     result <- result[order(-abs(result$correlation), na.last = TRUE), ]
@@ -86,6 +125,9 @@ findCorrelatedFeatures <- function(
   })
   result <- do.call(rbind, results)
   rownames(result) <- NULL
+  attr(result, "association") <- list(covariates = covariates,
+    residual_df = if (is.null(adjustment)) ncol(data) - 1L else ncol(data) - adjustment$rank,
+    observations = colnames(data), method = "Pearson correlation; optional linear residualization of both features")
   result
 }
 

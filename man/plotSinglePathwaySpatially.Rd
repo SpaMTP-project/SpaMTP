@@ -23,7 +23,9 @@ plotSinglePathwaySpatially(
   shape = 16,
   stroke = 0,
   interactive = FALSE,
-  image.labels = NULL
+  image.labels = NULL,
+  pathway_index = NULL,
+  duplicate_genes = "error"
 )
 }
 \arguments{
@@ -62,6 +64,15 @@ plotSinglePathwaySpatially(
 \item{interactive}{Convert the result to an interactive plotly plot.}
 
 \item{image.labels}{Optional labels for the selected images.}
+
+\item{pathway_index}{A reusable index from buildPathwayIndex(). When supplied,
+its gene identities and memberships must match any explicit database or
+gene_index. Fingerprints prevent incompatible reuse.}
+
+\item{duplicate_genes}{How to aggregate expression rows of one gene.
+The default errors for differing rows and deduplicates identical rows.
+Explicit mean or sum requires choosing an appropriate expression scale;
+sum is generally inappropriate for log-transformed expression.}
 }
 \value{
 A ggplot or combined plot; a plotly object if interactive is TRUE.

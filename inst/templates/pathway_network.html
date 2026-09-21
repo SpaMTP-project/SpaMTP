@@ -240,7 +240,7 @@
       <aside class="inspector">
         <h2 class="section-title">Network details</h2>
         <div class="card">
-          <h3>Log2 fold change</h3>
+          <h3 id="effect-title">Log2 fold change</h3>
           <div class="gradient"></div>
           <div class="gradient-labels"><span id="fc-min">−1</span><span>0</span><span id="fc-max">1</span></div>
           <div class="node-key"><span class="circle-key"></span>Gene / RNA</div>
@@ -277,7 +277,7 @@
   </div>
   <div class="tooltip" id="tooltip"></div>
 
-  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>__SPAMTP_D3_LIBRARY__</script>
   <script>
     const payload = __SPAMTP_PAYLOAD__;
     const state = {
@@ -321,6 +321,8 @@
       .clamp(true);
 
     pageTitle.textContent = payload.title || "SpaMTP pathway networks";
+    const effectLabel = payload.metadata?.effect_label || "Log2 fold change";
+    document.getElementById("effect-title").textContent = effectLabel;
     labelSelect.value = state.labelMode;
     layoutSelect.value = state.layoutMode;
     evidenceSelect.value = state.metaboliteDetection;
@@ -527,7 +529,7 @@
         .attr("stroke", edge => edge.colour || "#64748b")
         .attr("stroke-width", edge => 1 + Math.min(1.5, Math.log1p(+edge.weight || 1) / 3))
         .attr("stroke-dasharray", edge => edge.style === "dashed" ? "5 4" : null)
-        .attr("marker-end", edge => `url(#${markerKey(edge)})`)
+        .attr("marker-end", edge => edge.head === "none" ? null : `url(#${markerKey(edge)})`)
         .on("mousemove", (event, edge) => showTooltip(event, edge.reaction || "Interaction"))
         .on("mouseleave", hideTooltip);
 
@@ -539,7 +541,7 @@
         .attr("class", item => `node ${item.detected ? "node-detected" : "node-undetected"}${item.leading_edge ? " node-leading-edge" : ""}${item.pinned ? " node-pinned" : ""}`)
         .style("color", item => Number.isFinite(+item.expr) ? foldColour(+item.expr) : "#94a3b8")
         .on("mousemove", (event, item) => {
-          const fc = Number.isFinite(+item.expr) ? `<br>log2FC: ${formatNumber(+item.expr)}` : "<br>log2FC: not matched";
+          const fc = Number.isFinite(item.expr) ? `<br>${effectLabel}: ${formatNumber(item.expr)}` : `<br>${effectLabel}: not matched`;
           const evidence = item.leading_edge
             ? "<br>Evidence: GSEA leading edge"
             : (item.annotated

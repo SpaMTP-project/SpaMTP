@@ -136,7 +136,11 @@
         !all(c("src", "dest", "reaction_type") %in% names(edge))) {
       return(NULL)
     }
-    edge[, intersect(c("src", "dest", "directed", "reaction_type"), names(edge)), drop = FALSE]
+    edge <- edge[, intersect(c("src", "dest", "directed", "reaction_type",
+                                "source_reaction_type"), names(edge)), drop = FALSE]
+    if (!"directed" %in% names(edge)) edge$directed <- NA_integer_
+    if (!"source_reaction_type" %in% names(edge)) edge$source_reaction_type <- NA_character_
+    edge
   })
   parts <- Filter(Negate(is.null), parts)
   if (!length(parts)) return(.pn_empty_links())
@@ -159,9 +163,13 @@
     value
   }
   edges$reaction_name <- lookup("reaction_name", "Interaction")
+  labelled <- !is.na(edges$source_reaction_type) & nzchar(edges$source_reaction_type)
+  edges$reaction_name[labelled] <- as.character(edges$source_reaction_type[labelled])
   edges$linetype <- lookup("linetype", "solid")
   edges$arrowhead <- lookup("arrowhead", "arrow")
   edges$colour <- lookup("colour", "#64748b")
+  # graphite direction code 2 is undirected; do not imply a causal arrow.
+  edges$arrowhead[!is.na(edges$directed) & edges$directed == 2L] <- "none"
 
   degree <- table(c(edges$src, edges$dest))
   edges$weight <- as.integer(degree[edges$src]) + as.integer(degree[edges$dest])
@@ -248,6 +256,10 @@
     }
     if ("FDR" %in% names(de) && !"p_val_adj" %in% names(de)) {
       names(de)[names(de) == "FDR"] <- "p_val_adj"
+    }
+    if (!"p_val_adj" %in% names(de) && all(c("mean_auc", "mean_cohen") %in% names(de))) {
+      # Native descriptive markers have effects, but no pixel P values.
+      de$p_val_adj <- NA_real_
     }
     .pn_assert_columns(de, c("cluster", "gene", "avg_log2FC", "p_val_adj"),
                        paste0("DE.list[['", type, "']]") )
@@ -782,6 +794,13 @@
 
 .pn_render_html <- function(payload, template_path = .pn_template_path()) {
   template <- paste(readLines(template_path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  library_path <- system.file("vendor", "d3", "d3.min.js", package = "SpaMTP")
+  if (!nzchar(library_path)) library_path <- file.path("inst", "vendor", "d3", "d3.min.js")
+  if (!file.exists(library_path)) stop("Cannot locate the bundled offline D3 library.")
+  script <- paste(readLines(library_path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  parts <- strsplit(template, "__SPAMTP_D3_LIBRARY__", fixed = TRUE)[[1]]
+  if (length(parts) != 2L) stop("Pathway network template is missing its D3 placeholder.")
+  template <- paste0(parts[1], script, parts[2])
   payload$pathways <- I(as.character(payload$pathways))
   payload$clusters <- I(as.character(payload$clusters))
   payload$networks <- unname(lapply(payload$networks, function(cluster) {

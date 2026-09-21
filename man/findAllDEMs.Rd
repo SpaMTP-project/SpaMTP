@@ -16,7 +16,12 @@ findAllDEMs(
   slot = "counts",
   return.individual = FALSE,
   verbose = TRUE,
-  seed = 1234
+  seed = 1234,
+  method = c("technical", "markers", "replicate"),
+  replicate = NULL,
+  contrasts = list(),
+  min_region_size = 3,
+  spatial_blocks = 0
 )
 }
 \arguments{
@@ -43,6 +48,23 @@ findAllDEMs(
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 
 \item{seed}{Numeric value used to set the seed for reproducible randomisation (default = 1234).}
+
+\item{method}{\code{markers} uses scran effect-size summaries without pixel P
+values; \code{replicate} fits configured contrasts on biological-replicate means.
+The historical \code{technical} mode is retained for compatibility, but random
+pools are technical subdivisions and cannot establish biological replication.}
+
+\item{replicate}{Complete colData field identifying biological replicates.}
+
+\item{contrasts}{Named list of numerator, denominator and paired settings,
+required for replicate inference. At least three replicates per arm or
+three complete pairs are required.}
+
+\item{min_region_size}{Minimum labelled observations in a marker group.}
+
+\item{spatial_blocks}{Number of spatial blocks per sample for a leave-one-block
+sensitivity analysis of marker effects, or zero to disable. Blocks use
+coordinates only. They are not biological replicates or confidence intervals.}
 }
 \value{
 Returns an list() contains the EdgeR DE results. Pseudo-bulk counts are stored in $counts and DEMs are in $DEMs.

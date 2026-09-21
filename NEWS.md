@@ -1,3 +1,122 @@
+# SpaMTP 0.99.9
+
+* Annotation statistics now select the requested MSI modality's candidate store
+  for both single-feature and batch ranking, without borrowing another modality's
+  latest root-level annotations. Historical and assay-local stores remain usable.
+* Regional marker scores, spatial-block sensitivity and biological-replicate
+  contrasts preserve matrix dimensions for single-feature inputs.
+
+* Replaced the installed mouse-brain demo and preparation recipes with native
+  SpatialExperiment workflows. Installed examples no longer load a legacy
+  checkout, read S4 slots directly or require Seurat. Compound networks reuse
+  scored annotations, scran-based regional effects and a shared pathway index.
+  Optional optical images and spot geometry are supplied explicitly; FMP10
+  mapping refuses a missing radius rather than guessing it from pixel spacing.
+  Existing output paths are preserved and script sourcing has no side effects.
+
+* Fixed pathway interaction corruption in the graphite-derived RaMP 3.0.7
+  graphs. A pinned, checksum-guarded correction restores per-edge source labels,
+  directions, and parallel interactions for KEGG, Reactome, WikiPathways and
+  SMPDB. Interaction styles now use label semantics across databases, and
+  undirected edges have no arrowhead. The original published resource bytes
+  retain their checksums; SpaMTP applies corrections when loading them.
+* Added the Pathway Database Integration vignette, a reproducible correction
+  builder, source checksums, and regression tests for the Cell Cycle report.
+
+
+* Reorganized the workflow around measurement quality, correspondence,
+  representation comparisons, regional markers, replicate inference,
+  conditional cross-omic association and shared-identity pathway analysis.
+  Reports connect native heatmaps, H&E feature maps, effect plots, 3D views
+  and pathway networks with their actual analytical inputs.
+* Native PCA accepts explicit features and records the fitted feature set.
+  Graph PCA uses a sparse Laplacian and all retained observations; its
+  embeddings now feed spatial joint integration and optional clustering.
+  Comparisons use matched feature selection/scaling, multiple requested K,
+  external-reference ARI, approximate silhouettes and block-omission
+  clustering sensitivity conditional on the fitted embeddings.
+* findAllDEMs() supports descriptive scran marker effects/AUC and explicit
+  biological-replicate limma contrasts. Spatial-block marker sensitivity
+  carries no invented P values. The historical technical-pool mode warns
+  that its pools are not biological replicates. Native heatmaps preserve
+  the actual analysis matrix and rank numeric FDR correctly.
+* findCorrelatedFeatures() supports generic feature IDs, explicit target
+  sets and raw versus covariate-residual correlations. Exact RNA/protein
+  features no longer require m/z metadata for native plots.
+* findRegionalPathways() accepts complete unfiltered identity-level ranks.
+  Competitive enrichment, scores, GESECA and network views reuse the same
+  membership index. Compound identity assays support sparse inputs and
+  audit ambiguity exclusions and exact aggregation weights. Annotation
+  stores are preserved separately for multiple MS modalities.
+* plotRegionalPathways() displays BH-adjusted significance and orders
+  pathways using 1 minus Jaccard similarity, including single-pathway input.
+  The region explorer adds directional AUC and marker-stability filters.
+* Reports audit pathways with identical measured members across regions without
+  shrinking the BH family. Native networks embed a pinned, licensed D3
+  distribution for offline use, retain missing effects as unavailable, and
+  label descriptive effects in the declared workflow units.
+* Added portable FMP10/Visium and DHB/Visium recipes using pinned
+  SpaMTPData/SpaMTPdb resources, plus a rewritten analytical tutorial with
+  three synthetic modalities. Mouse genes are not mapped to human HGNC
+  by changing case. Equal-weight joint embeddings remain distinct from
+  the historical Seurat WNN method.
+
+# SpaMTP 0.99.8
+
+* Added analyzeSpaMTPRegions() and a portable offline region/DE explorer.
+  Modality, region and replicate contrast selectors link feature tables,
+  effect/volcano plots, spatial maps, regional means and distributions.
+  Search, effect/direction/FDR filters, point inspection, zoom/pan and filtered
+  CSV export operate on an explicitly labelled bounded preview; full results
+  are exported separately. Blank region labels are excluded and audited.
+* Reports now show native plotSpatialFeature(), mzViolinPlot(),
+  findSpatiallyVariableMetabolites() and runSpatialGraphPCA() outputs, plus
+  regional pathway score heatmaps when a compatible index is configured.
+  Native spatial analyses record selected features and positions per sample.
+  Descriptive region effects never receive pixel-based DE P values.
+* Method descriptions use smaller serif text and collapsible detail panels.
+  Capability cards identify computed and unavailable native modules.
+  Existing workflow results can be extended without changing their original
+  contrasts; core, extension and renderer versions remain distinguishable.
+* Expanded the generic workflow tutorial with paired mouse brain, independent
+  single-omic inputs, arbitrary region metadata, preview controls and native
+  analysis settings. No study-specific feature names or species conversion
+  are embedded in the workflow or report renderer.
+* Single-modality workflows now apply requested clustering to their PCA and
+  expose those exploratory labels to the region browser. Previously, clusters
+  were only computed after joint integration and a single-omic request was
+  silently ignored. Cluster input and settings are recorded.
+
+# SpaMTP 0.99.7
+
+* Added runSpaMTPWorkflow() for explicit paired or independent spatial
+  modalities: pinned companion data acquisition, QC, registration/mapping,
+  normalization, per-modality PCA, joint representation, exploratory
+  associations, biological-replicate contrasts and optional annotation/pathways.
+  Unmatched positions are audited and excluded from joint analysis.
+* Added renderSpaMTPReport() with embedded figures, full CSV tables, native
+  result RDS, registration weights, resource provenance and file checksums.
+  Rendering needs neither Pandoc nor network access and preserves existing files.
+* Added an offline end-to-end vignette demonstrating two/three modalities,
+  known-transform registration and portable reporting, with explicit boundaries
+  for raw preprocessing, biological inference and platform-specific settings.
+
+# SpaMTP 0.99.6
+
+* Added buildPathwayIndex() to share reconciled gene identities and pathway
+  memberships across enrichment, RaMP expression assays, pathway scores,
+  GESECA, named plots and network coverage. Pathway IDs distinguish different
+  sets with the same display name. Reuse validates membership fingerprints.
+* createPathwayAssay() now maps human genes with the audited HGNC index and
+  preserves the selected expression layer. Identical duplicate gene rows are
+  counted once; different rows require explicit mean or sum aggregation.
+  createPathwayObject() accepts original gene identifiers or mapped assays.
+* Pathway outputs retain database sizes before/after reconciliation, measured
+  coverage, actual used members and excluded conflicting RaMP records.
+  Zero-coverage and size-excluded pathways remain visible in coverage audits.
+  Scoring and enrichment use the same measured membership sets. Regional and
+  GESECA size filters use members actually supplied to their test engines.
+
 # SpaMTP 0.99.5
 
 * Added `buildGeneMappingIndex()`, `mapGeneIdentifiers()` and native

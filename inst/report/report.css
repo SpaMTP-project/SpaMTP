@@ -1,0 +1,20 @@
+body{margin:0;background:#f4f6f8;color:#183344;font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:#173e55;color:white;padding:32px max(4vw,20px)}main{max-width:1360px;margin:auto;padding:24px}
+h1{font-size:30px;margin:0}h2{font-size:24px;color:#16465a}h3{font-size:17px}h4{font-size:14px;font-weight:550;margin:12px 0}
+section{background:white;padding:26px;margin:20px 0;border-radius:10px;box-shadow:0 2px 12px #193d5010}
+nav{display:flex;flex-wrap:wrap;gap:14px}nav a{color:#d8edf1}a{color:#126c89}.lead{font-size:22px}figure{margin:20px 0}img{display:block;max-width:100%;height:auto;margin:auto}
+table{border-collapse:collapse;font-size:12px;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #e0e7eb;vertical-align:top}th{background:#eaf1f5;position:sticky;top:0;white-space:nowrap}td{max-width:580px;overflow-wrap:anywhere}.table-scroll{max-height:440px;overflow:auto}
+pre{overflow:auto;font-size:11px}details{padding:12px 16px;background:#f6f8fa;margin:12px 0;border:1px solid #e6ecf0;border-radius:6px}summary{cursor:pointer;font-size:13px;font-weight:550}
+.method-note,.method-note p,details p{font:12px/1.55 Georgia,"Times New Roman",serif;color:#667987;letter-spacing:.05px;margin:8px 0 14px}
+.function-name,code{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:11px}.method-note code{font-size:10.5px}
+.capability-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:12px}.capability{padding:13px 16px;border:1px solid #e2eaee;border-radius:7px;background:#fbfcfd}.capability strong{font-size:14px}.capability .status{float:right;font-size:11px;color:#496c78}
+.explorer{position:relative}.explorer-controls{display:grid;grid-template-columns:1fr 2fr 1.7fr 1fr 1fr 1fr;gap:12px;background:#f0f5f8;padding:16px;border-radius:8px}
+label{display:flex;flex-direction:column;font-size:12px;font-weight:550;gap:4px}input,select,button{font:13px system-ui;color:#244c61;border:1px solid #beced8;border-radius:5px;padding:7px;background:white;min-width:0}button{cursor:pointer}button:hover{background:#eaf2f6}button:disabled,input:disabled{opacity:.45;cursor:default}
+.explorer-plots{display:grid;grid-template-columns:1fr 1fr;gap:18px}.explorer-plots>div{min-width:0}canvas{width:100%;height:auto;border:1px solid #e2eaee;border-radius:5px;touch-action:none;background:white}.spatial-controls{display:flex;align-items:end;gap:10px;margin:12px 0}.spatial-controls label{flex:1}
+.explorer-actions{display:flex;align-items:center;gap:10px;margin:16px 0;font-size:12px}.explorer-actions span{flex:1;color:#5f7583}
+#ex-table td:first-child{width:35%;max-width:360px}#ex-table .feature-button{font-size:12px;border:0;padding:0;text-align:left;background:transparent;overflow-wrap:anywhere;color:#126c89}#ex-table th button{border:0;background:none;font-size:12px;font-weight:650;padding:0}#ex-table tr.selected{background:#e6f2f5}
+.plot-tooltip{position:fixed;z-index:1000;pointer-events:none;white-space:pre-line;font-size:12px;max-width:310px;padding:10px 13px;background:#173a50ed;color:white;border-radius:5px;box-shadow:0 2px 8px #0003}
+@media(max-width:900px){.explorer-controls{grid-template-columns:1fr 1fr}.explorer-plots{grid-template-columns:1fr}main{padding:12px}section{padding:18px}.explorer-actions{flex-wrap:wrap}}
+@media print{body{background:white}section{box-shadow:none;break-inside:avoid}.table-scroll{max-height:none}nav,.explorer-controls,.explorer-actions{display:none}details{display:block}}
+
+figcaption{font:12px/1.6 Georgia,serif;color:#586d7a;max-width:1100px;margin:12px auto 28px}figure{border-bottom:1px solid #e5ebef;padding-bottom:12px}.explorer-controls{grid-template-columns:repeat(4,minmax(120px,1fr))}

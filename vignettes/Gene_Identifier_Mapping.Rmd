@@ -18,7 +18,7 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "##")
 SpaMTPdb provides RaMP annotation tables and a separate versioned HGNC gene
 reference. SpaMTPData supplies native experiment data and declared species.
 SpaMTP resolves identifiers, annotates row metadata and runs pathway analyses.
-Use SpaMTP >= 0.99.5, SpaMTPdb >= 0.99.4 and SpaMTPData >= 0.99.5 together.
+Use SpaMTP >= 0.99.6, SpaMTPdb >= 0.99.4 and SpaMTPData >= 0.99.5 together.
 
 ```{r registry}
 library(SpaMTP)
@@ -132,3 +132,82 @@ after identity reconciliation even though Fisher arithmetic is unchanged.
 
 Use the same `gene_index` in `findRegionalPathways()` and
 `pathwayNetworkPlots()` to keep annotation identity and provenance consistent.
+
+## One membership index for enrichment, expression and plots
+
+`buildPathwayIndex()` joins the gene identity index to RaMP memberships once.
+A pathway's `database_size` counts unique identities after reconciliation and
+conflict exclusion; `database_raw_size` counts original RaMP records.
+`measured_size` and `coverage_fraction` describe the selected assay or measured
+universe. `used_size` and `used_members` record what actually contributes to a
+score or test. In regional analysis these can be smaller than the measured set
+because of the requested ranking filters. A pathway score is an expression
+summary, not evidence that the whole pathway is activated.
+
+This small example runs offline. Its fictional gene has two RaMP records with
+complementary pathway memberships; both contribute while the gene counts once.
+
+```{r shared-membership-example}
+reference_example <- data.frame(
+  hgnc_id = c("HGNC:1", "HGNC:2", "HGNC:3"),
+  symbol = c("GENEA", "GENEB", "GENEC"), entrez_id = c("101", "102", "103"),
+  uniprot_ids = c("U1", "U2", "U3")
+)
+database_example <- list(
+  source_df = data.frame(rampId = paste0("RAMP_G_", c(1, 2, 3, 4)),
+    sourceId = c("entrez:101", "uniprot:U1", "entrez:102", "entrez:103")),
+  analytehaspathway = data.frame(rampId = paste0("RAMP_G_", c(1, 3, 2, 4)),
+    pathwayRampId = c("P1", "P1", "P2", "P2")),
+  pathway = data.frame(pathwayRampId = c("P1", "P2"), pathwayName = c("First", "Second")),
+  gene_reference = reference_example
+)
+pathway_index_example <- buildPathwayIndex(database_example)
+example <- SpaMTPData::spaMTPExampleData()
+E_example <- matrix(seq_len(36), 3, dimnames = list(c("GENEA", "GENEB", "GENEC"), colnames(example)))
+SingleCellExperiment::altExp(example, "transcriptome") <-
+  SingleCellExperiment::SingleCellExperiment(assays = list(logcounts = log1p(E_example)))
+example <- createPathwayAssay(example, analyte_type = "genes", assay = "transcriptome",
+  slot = "logcounts", new_assay = "gene_ids", pathway_index = pathway_index_example)
+example <- createPathwayObject(example, assay = "gene_ids", new.assay = "gene_scores",
+  pathway_index = pathway_index_example)
+SummarizedExperiment::rowData(SingleCellExperiment::altExp(example, "gene_scores"))[
+  , c("pathwayRampId", "database_size", "measured_size", "coverage_fraction", "used_members")]
+```
+
+For the real human experiment loaded above, use the full measured RNA panel
+and the same index for every entry point. This resource-dependent chunk is not
+run during package builds; the real-data validation uses all 339 RNA features
+and all 37,886 observations of human_brain_integrated 1.1.0.
+
+```{r human-pathway-closure, eval=FALSE}
+pathway_index <- buildPathwayIndex(database = database, gene_index = index)
+spe <- createPathwayAssay(spe, analyte_type = "genes", assay = "SPT",
+  slot = "counts", new_assay = "gene_ids", pathway_index = pathway_index)
+spe <- createPathwayObject(spe, assay = "gene_ids", new.assay = "gene_pathways",
+  pathway_index = pathway_index, min_path_size = 5, max_path_size = 500)
+pathways <- SingleCellExperiment::altExp(spe, "gene_pathways")
+coverage <- S4Vectors::metadata(pathways)$pathway_mapping$coverage
+coverage[, c("pathwayRampId", "database_size", "database_raw_size",
+             "measured_size", "coverage_fraction", "excluded_conflict_count")]
+coverage$used_members
+coverage$excluded_conflict_records
+selected <- head(coverage$pathwayRampId[coverage$eligible], 2)
+plots <- plotPathwaysSpatially(selected, spe, assay = "SPT", slot = "counts",
+  pathway_index = pathway_index)
+attr(plots, "pathway_coverage")
+```
+
+The original assays, feature names, coordinates and paired modalities are
+preserved. A derived gene assay keeps its selected layer name: logcounts do
+not become counts. Different expression rows mapping to one gene error by
+default; choose `duplicate_genes = "mean"` or `"sum"` only after considering
+the measurement scale (summing log-expression is generally inappropriate).
+Identical repeated rows are deduplicated. Named pathway plots accept exact
+`pathwayRampId` values; ambiguous display names error instead of choosing the
+first match. Gene and pathway reference fingerprints are retained in outputs.
+
+Fisher's complete coverage table is `attr(result, "pathway_coverage")`; its
+per-row size columns also appear in the result. Pathway score objects put
+coverage in rowData and the complete audit in metadata. Named plots return
+coverage attributes and the exact plotted score vector. Unmeasured and
+conflict-only pathways stay in the complete audit even when no score is drawn.

@@ -7,7 +7,7 @@
 findRegionalPathways(
   SpaMTP,
   ident,
-  DE.list,
+  DE.list = NULL,
   analyte_types = c("genes", "metabolites"),
   SM_assay = "main",
   ST_assay = "transcriptome",
@@ -29,7 +29,11 @@ findRegionalPathways(
   gene_index = NULL,
   gene_reference_version = "latest",
   gene_reference_local_dir = NULL,
-  organism = "Homo sapiens"
+  organism = "Homo sapiens",
+  pathway_index = NULL,
+  ranks = NULL,
+  rank_scale = c("rms", "none"),
+  nPermSimple = 1000
 )
 }
 \arguments{
@@ -103,6 +107,20 @@ records and ambiguous symbols are excluded and recorded in the audit.}
 \item{organism}{Must be \code{"Homo sapiens"}; this index is not a mouse-to-human
 orthology map. Use a separately curated species-specific database for other
 organisms.}
+
+\item{pathway_index}{A reusable index from buildPathwayIndex(). When supplied,
+its gene identities and memberships must match any explicit database or
+gene_index. Fingerprints prevent incompatible reuse.}
+
+\item{ranks}{Alternative to DE.list: named genes/metabolites matrices with
+features in rows and regions in columns. Uses complete, unfiltered ranks.
+Metabolite rows must be explicit RaMP compound IDs. Map expression with
+createPathwayAssay before calculating identity-level effects.}
+
+\item{rank_scale}{RMS-scale each modality's rank vector before concatenating,
+or none. Pathways can still be dominated by the more densely measured modality.}
+
+\item{nPermSimple}{Preliminary permutations for the ranks interface.}
 }
 \value{
 A SpaMTP object with set enrichment on given analyte types.

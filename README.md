@@ -30,6 +30,62 @@ functions use the optional SeuratObject package; loading, preprocessing,
 plotting and integration do not convert inputs automatically. See
 [migration status](BIOCONDUCTOR_MIGRATION.md) for validation and scientific limits.
 
+## From modalities to a complete report
+
+SpaMTP 0.99.9 connects native data acquisition, QC, alignment and mapping
+to an analytical report: compare individual, spatial and joint representations;
+evaluate region markers; inspect replicate effects and conditional cross-omic
+associations; then trace pathway evidence to measured members.
+
+```r
+x <- SpaMTPData::spaMTPExampleData(paired = TRUE)
+result <- runSpaMTPWorkflow(x,
+  modalities = list(
+    main = list(type = "metabolomics", layer = "counts"),
+    transcriptome = list(type = "transcriptomics", layer = "counts")
+  ), group = "region", npcs = 2, clusters = 2,
+  structure = list(primary = "spatial", k_grid = c(2, 3),
+                   reference = "region", umap = FALSE),
+  observation_unit = "synthetic paired pixel", output_dir = "my_report")
+# Open my_report/report.html; full tables and workflow.rds accompany it.
+```
+
+Supply a third alternative experiment to include another modality, or a named
+list of independent SpatialExperiments with a reference and explicit alignment
+and mapping geometry. RDS paths and pinned SpaMTPData resource specifications
+also work. Raw-signal preprocessing and scientific design choices remain
+explicit. Reports embed images; inferred contrasts require biological
+replicates. See [the end-to-end tutorial](vignettes/End_to_End_Workflow.Rmd)
+for independent inputs, three modalities, companion database indexes, coverage
+audits and the current workflow's limits.
+
+The offline region/DE explorer links feature selection to effect/volcano plots,
+regional expression and spatial positions, with search, filters, zoom and CSV
+export. Set `regions = "anatomical_region"` independently of the comparison
+`group`; without biological replication, region effects remain descriptive.
+Native `findAllDEMs(method="markers")` supplies pairwise AUC, standardized
+effects, detection and spatial-block sensitivity. Native heatmaps and H&E
+maps display the same regional markers. PCA and graph PCA use matched features
+and all observations, and both feed joint representations. K sensitivity,
+external-reference ARI and raw versus region-adjusted correlation make the
+effects of analytical choices visible. Moran's I is an optional descriptive
+screen. Small serif descriptions keep methods separate from result figures.
+
+```r
+# Extend a saved result while preserving its original contrasts:
+result <- analyzeSpaMTPRegions(result, regions = "region", spatial_blocks = 6)
+renderSpaMTPReport(result, "interactive_report",
+  preview_points = 2000, preview_features = 180, table_rows = 1000)
+```
+
+The same entry points accept paired mouse brain MS/RNA resources, single-omic
+MS or Visium inputs, and three-modality experiments. The tutorial and installed
+`workflows/` recipes include
+`mouse_brain_dhb_striatum`, `mouse_brain_fmp10` and `mouse_brain_visium`
+configurations using pinned SpaMTPData resources; no cohort-specific logic is
+required. Pathways require a compatible species-specific index from the
+configured database; human HGNC identities are not assigned to mouse genes.
+
 ## Moving a Seurat workflow to Bioconductor
 
 Convert once, then keep the result in a Bioconductor container:
@@ -89,7 +145,7 @@ SpaMTP is now published in *Nature Methods*: [**SpaMTP: integrative statistical 
 
 ## Installation
 
-Keep the coordinated source versions together: SpaMTP >= 0.99.5,
+Keep the coordinated source versions together: SpaMTP >= 0.99.9,
 SpaMTPdb >= 0.99.4 and SpaMTPData >= 0.99.5. For local sibling checkouts,
 install the data packages before the software package:
 
@@ -107,9 +163,14 @@ The RaMP 3.0.7 snapshot and historical experiment-data 1.0.0 remain unchanged.
 SpaMTPData now defaults to resource release 1.1.0, with seven native
 SpatialExperiment RDS in [Zenodo record 22733262](https://zenodo.org/records/22733262)
 and eleven unchanged auxiliary/Cardinal resources. Use `spaMTPData()` to
-retrieve native datasets without Seurat. The one-time preparation recipe is
-retained for reproducibility; historical archives require an explicit
-`version = "1.0.0"` request.
+retrieve native datasets without Seurat. Installed mouse-brain recipes and the
+network demo use this native release directly. Preparation accepts optional
+independent optical images with explicit scale factors; FMP10/Visium mapping
+also requires an explicit spot radius in original image pixels. Historical
+archives are not loaded by these examples. See the
+[end-to-end workflow](vignettes/End_to_End_Workflow.Rmd) for the portable commands
+and spatial-configuration format. Historical resources remain available only
+through an explicit `version = "1.0.0"` request.
 
 For human gene mapping, see the [gene identifier workflow](vignettes/Gene_Identifier_Mapping.Rmd).
 SpaMTPdb supplies a separately versioned, checksum-verified HGNC archive;
@@ -120,6 +181,13 @@ Pathway analyses unite memberships of RaMP records belonging to one HGNC gene
 and count that gene once. Ambiguous aliases and conflicting gene records remain
 explicitly unresolved. Targeted-panel Fisher analysis requires the full measured
 panel as `universe`; all eligible pathways enter the BH correction.
+
+Use `buildPathwayIndex(database, gene_index = index)` and pass the resulting
+`pathway_index` to enrichment, `createPathwayAssay()`, `createPathwayObject()`
+and named pathway plots. Coverage audits report database and measured sizes,
+actual member IDs, coverage fractions and excluded identity conflicts.
+Different pathways with the same name remain distinct through pathwayRampId.
+Pathway scores describe measured expression and are not pathway activity tests.
 
 During Bioconductor review, install the companion annotation package and this
 submission source from GitHub:
@@ -163,3 +231,7 @@ citation("SpaMTP")
 ## Maintainer
 
 SpaMTP is currently maintained by **Tianyao Lu** ([GitHub](https://github.com/BCRL-tylu), [email](mailto:lu.t@wehi.edu.au)). **Andrew Causer** remains credited as an original author and former maintainer.
+
+Pathway membership, topology provenance, the interaction-code correction, and
+rebuild instructions are documented in
+[Pathway Database Integration](vignettes/Pathway_Database_Integration.Rmd).

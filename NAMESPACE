@@ -9,6 +9,7 @@ export(addSpatialImage)
 export(addTranscriptome)
 export(adductRules)
 export(alignSpatialOmics)
+export(analyzeSpaMTPRegions)
 export(annotateBigData)
 export(annotateGeneIdentifiers)
 export(annotateMZ)
@@ -23,6 +24,7 @@ export(binSpaMTP)
 export(binnedCardinalToSeurat)
 export(buildGeneMappingIndex)
 export(buildMZAnnotationIndex)
+export(buildPathwayIndex)
 export(calculateAnnotationStatistics)
 export(calculateSingleAnnotationStatistics)
 export(cardinalToSeurat)
@@ -81,10 +83,12 @@ export(predictAdductsFromSMILES)
 export(queryMZAnnotationIndex)
 export(readSMMatrix)
 export(refineLipids)
+export(renderSpaMTPReport)
 export(runDE)
 export(runMetabolicPCA)
 export(runPooling)
 export(runRAMPGeseca)
+export(runSpaMTPWorkflow)
 export(runSpatialGraphPCA)
 export(savePheatmapAsPDF)
 export(saveSpaMTPData)
@@ -228,6 +232,9 @@ importFrom(tidyr,
   separate_rows
 )
 importFrom(utils,
+  capture.output,
+  head,
   setTxtProgressBar,
+  str,
   txtProgressBar
 )

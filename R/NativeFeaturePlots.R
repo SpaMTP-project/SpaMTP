@@ -37,7 +37,12 @@
   expression <- .nativeExpression(object, assay, slot)
   if (!nrow(expression)) stop("No features to plot.", call. = FALSE)
   features <- rownames(expression)
-  masses <- .massValues(.featureMetadata(object, assay), features)
+  masses <- tryCatch(.massValues(.featureMetadata(object, assay), features),
+    error = function(e) {
+      if (!is.null(plusminus) || (is.null(metabolites) &&
+          !all(as.character(mzs) %in% features))) stop(e)
+      rep(NA_real_, length(features))
+    })
   if (!is.null(plusminus) && (!is.numeric(plusminus) ||
       length(plusminus) != 1L || !is.finite(plusminus) || plusminus < 0))
     stop("plusminus must be one finite non-negative mass tolerance.", call. = FALSE)
@@ -49,7 +54,9 @@
       if (!is.finite(target)) stop("Unknown m/z feature.", call. = FALSE)
       which.min(abs(masses - target))
     })
-    labels <- paste0("m/z ", format(masses[unlist(indices)], digits = 7, trim = TRUE))
+    masses_selected <- masses[unlist(indices)]
+    labels <- ifelse(is.finite(masses_selected),
+      paste0("m/z ", format(masses_selected, digits = 7, trim = TRUE)), features[unlist(indices)])
   } else {
     if (!length(metabolites) || anyNA(metabolites))
       stop("Supply metabolite names.", call. = FALSE)

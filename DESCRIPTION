@@ -1,7 +1,7 @@
 Package: SpaMTP
 Type: Package
 Title: Spatial Metabolomics and Multi-Omics Analysis
-Version: 0.99.5
+Version: 0.99.9
 Authors@R: c(
     person("Andrew", "Causer",
             email = "a.causer@uq.edu.au", 
@@ -42,7 +42,6 @@ Suggests:
     htmltools,
     kableExtra,
     knitr,
-    mclust,
     patchwork,
     reticulate,
     rmarkdown,
@@ -56,9 +55,12 @@ biocViews: MassSpectrometry, ImagingMassSpectrometry, Metabolomics, Spatial,
     Transcriptomics, Alignment
 Imports: 
     ape,
+    BiocSingular,
+    bluster,
     Cardinal,
     cowplot,
     data.table,
+    digest,
     dplyr,
     DropletUtils,
     edgeR,
@@ -67,19 +69,19 @@ Imports:
     future,
     future.apply,
     ggdendro,
-    ggnewscale,
     ggplot2,
     ggridges,
     grDevices,
     graphics,
     grid,
     httr,
-    igraph,
+    htmlwidgets,
     jsonlite,
     limma,
     magick,
     magrittr,
     Matrix,
+    mclust,
     methods,
     MSnbase,
     naturalsort,
@@ -93,6 +95,7 @@ Imports:
     RSpectra,
     scales,
     scater,
+    scran,
     sf,
     shiny,
     SingleCellExperiment,
@@ -104,6 +107,7 @@ Imports:
     SummarizedExperiment,
     tibble,
     tidyr,
+    tools,
     utils,
     withr
 URL: https://github.com/SpaMTP-project/SpaMTP,

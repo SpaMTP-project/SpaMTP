@@ -123,3 +123,89 @@ test_that("Pearson correlation agrees with Cardinal colocalization", {
   observed <- result$cor[match(200, result$mz)]
   expect_equal(observed, stats::cor(1:6, c(2, 1, 5, 3, 6, 4)), tolerance = 1e-6)
 })
+
+multiModalityStatisticsFixture <- function() {
+  fixture <- annotationStatisticsFixture()
+  object <- fixture$object
+  SingleCellExperiment::altExp(object, "otherMSI") <-
+    SingleCellExperiment::SingleCellExperiment(
+      assays = list(counts = SummarizedExperiment::assay(object, "counts")),
+      rowData = SummarizedExperiment::rowData(object))
+  store <- function(assay, ids) {
+    results <- data.frame(mz_name = "a", observed_mz = 100, Adduct = "M+H",
+      Ramp_IDs = paste(ids, collapse = "; "), Score = 1, MassScore = 1,
+      ChemicalScore = 1, IsotopeScore = NA_real_, AdductNetworkScore = NA_real_)
+    list(mz_annotation = list(results = results,
+      metadata = list(schema_version = 2L, assay = assay)), db_3 = results)
+  }
+  fixture$stores <- list(
+    main = store("Spatial", paste0("RAMP_C_", 1:2)),
+    otherMSI = store("otherMSI", paste0("RAMP_C_", 2:3)))
+  fixture$object <- .setStoredData(object, "modality_annotations", fixture$stores)
+  fixture
+}
+
+test_that("single and batch annotation ranks use the requested modality store", {
+  fixture <- multiModalityStatisticsFixture()
+  expected <- list(main = paste0("RAMP_C_", 1:2),
+    otherMSI = paste0("RAMP_C_", 2:3))
+  for (latest in names(fixture$stores)) {
+    object <- fixture$object
+    for (field in names(fixture$stores[[latest]]))
+      object <- .setStoredData(object, field, fixture$stores[[latest]][[field]])
+    before <- object
+    for (assay in c("main", "Spatial", "otherMSI")) {
+      ids <- expected[[if (assay == "Spatial") "main" else assay]]
+      single <- calculateSingleAnnotationStatistics("a", object,
+        mz.assay = assay, pathway.assay = "scores", database = fixture$database)
+      batch <- calculateAnnotationStatistics(object, mz.assay = assay,
+        pathway.assay = "scores", pathway.slot = "pathwayScores",
+        pathway.scores = TRUE, return.top = FALSE, database = fixture$database)
+      expect_setequal(single$ramp_id, ids)
+      expect_equal(batch$a, single)
+    }
+    expect_identical(object, before)
+  }
+})
+
+test_that("assay-local and historical stores cannot borrow unrelated candidates", {
+  fixture <- multiModalityStatisticsFixture()
+  object <- .setStoredData(fixture$object, "modality_annotations", NULL)
+  for (field in names(fixture$stores$otherMSI))
+    object <- .setStoredData(object, field, fixture$stores$otherMSI[[field]])
+  # A matching explicitly labelled root store remains usable for older objects.
+  other <- calculateSingleAnnotationStatistics("a", object,
+    mz.assay = "otherMSI", pathway.assay = "scores", database = fixture$database)
+  expect_setequal(other$ramp_id, paste0("RAMP_C_", 2:3))
+  # The root store belongs to otherMSI; main must use its own rowData candidates.
+  main <- calculateSingleAnnotationStatistics("a", object,
+    pathway.assay = "scores", database = fixture$database)
+  expect_setequal(main$ramp_id, paste0("RAMP_C_", 1:3))
+
+  child <- SingleCellExperiment::altExp(object, "otherMSI")
+  for (field in names(fixture$stores$otherMSI))
+    child <- .setStoredData(child, field, fixture$stores$otherMSI[[field]])
+  SingleCellExperiment::altExp(object, "otherMSI") <- child
+  for (field in names(fixture$stores$main))
+    object <- .setStoredData(object, field, fixture$stores$main[[field]])
+  other <- calculateSingleAnnotationStatistics("a", object,
+    mz.assay = "otherMSI", pathway.assay = "scores", database = fixture$database)
+  main <- calculateSingleAnnotationStatistics("a", object,
+    pathway.assay = "scores", database = fixture$database)
+  expect_setequal(other$ramp_id, paste0("RAMP_C_", 2:3))
+  expect_setequal(main$ramp_id, paste0("RAMP_C_", 1:2))
+
+  extracted <- SingleCellExperiment::altExp(object, "otherMSI")
+  SingleCellExperiment::altExp(extracted, "scores") <-
+    SingleCellExperiment::altExp(object, "scores")
+  standalone <- calculateSingleAnnotationStatistics("a", extracted,
+    pathway.assay = "scores", database = fixture$database)
+  expect_setequal(standalone$ramp_id, paste0("RAMP_C_", 2:3))
+
+  # A saved compatibility-only store must clear an unrelated current root store.
+  object <- .setStoredData(object, "modality_annotations",
+    list(main = list(db_3 = fixture$stores$otherMSI$db_3)))
+  main <- calculateSingleAnnotationStatistics("a", object,
+    pathway.assay = "scores", database = fixture$database)
+  expect_setequal(main$ramp_id, paste0("RAMP_C_", 2:3))
+})

@@ -25,7 +25,8 @@ plotRegionalPathways(
 
 \item{selected_pathways}{A character vector specifying the names or IDs of pathways to be included in the analysis (e.g., \code{c("Amino acid metabolism", "WP1902", "Aspartate and asparagine metabolism")}). This argument is not case-sensitive (default = NULL).}
 
-\item{sig_cutoff}{A numeric value defining the p-value cutoff for classifying significant pathways. If NULL the p-value cutoff will be = 0.05 (default = NULL).}
+\item{sig_cutoff}{Within-family BH-adjusted P-value cutoff for the point
+outline. NULL uses 0.05. Display selection does not recompute adjustment.}
 
 \item{num_display}{An integer specifying the number of pathways to display in the plot. If set to null will plot the smaller of either 10 pathways or the number of unique pathways provided in 'regpathway' (default = NULL).}
 

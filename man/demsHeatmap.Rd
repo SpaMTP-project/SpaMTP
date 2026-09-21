@@ -38,7 +38,9 @@ demsHeatmap(
 
 \item{logfc.threshold}{Numeric value that defines the logFC threshold to use for filtering significant results (default = 0.5).}
 
-\item{order.by}{Character string defining which parameter to order markers by, options are either 'FDR' or 'logFC' (default = "FDR").}
+\item{order.by}{Ranking column: \code{FDR}, \code{logFC}, \code{mean_auc} or \code{mean_cohen}.
+Descriptive native marker results default to \code{mean_auc}; other inputs use
+\code{FDR}. FDR ranking is unavailable for descriptive marker results.}
 
 \item{scale}{A character string indicating if the values should be centered and scaled in either the row direction or the column direction, or none. Corresponding values are "row", "column" and "none"}
 

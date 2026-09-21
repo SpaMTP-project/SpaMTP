@@ -184,6 +184,7 @@ runDE <- function(pooled_data, data, ident, output_dir, run_name, n, logFC_thres
     }
 
     # Store results
+    y$expression <- expression_data
     y$DEMs <- de_group_limma
     annotation_result[[condition]] <- y
 
@@ -218,6 +219,7 @@ runDE <- function(pooled_data, data, ident, output_dir, run_name, n, logFC_thres
     combined_dems <- do.call(rbind, dems)
     rownames(combined_dems) <- 1:length(combined_dems$cluster)
 
+    edger$expression <- annotation_result[[1]]$expression
     edger$DEMs <- combined_dems
     return(edger)
   }
@@ -240,12 +242,40 @@ runDE <- function(pooled_data, data, ident, output_dir, run_name, n, logFC_thres
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #' @param seed Numeric value used to set the seed for reproducible randomisation (default = 1234).
 #'
+#' @param method `markers` uses scran effect-size summaries without pixel P
+#'   values; `replicate` fits configured contrasts on biological-replicate means.
+#'   The historical `technical` mode is retained for compatibility, but random
+#'   pools are technical subdivisions and cannot establish biological replication.
+#' @param replicate Complete colData field identifying biological replicates.
+#' @param contrasts Named list of numerator, denominator and paired settings,
+#'   required for replicate inference. At least three replicates per arm or
+#'   three complete pairs are required.
+#' @param min_region_size Minimum labelled observations in a marker group.
+#' @param spatial_blocks Number of spatial blocks per sample for a leave-one-block
+#'   sensitivity analysis of marker effects, or zero to disable. Blocks use
+#'   coordinates only. They are not biological replicates or confidence intervals.
 #' @returns Returns an list() contains the EdgeR DE results. Pseudo-bulk counts are stored in $counts and DEMs are in $DEMs.
 #' @export
 #'
 #' @examples
 #' utils::str(formals(findAllDEMs))
-findAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir = NULL, run_name = "findAllDEMs", annotation.column = NULL, assay = "Spatial", slot = "counts", return.individual = FALSE, verbose = TRUE, seed = 1234){
+findAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir = NULL, run_name = "findAllDEMs", annotation.column = NULL, assay = "Spatial", slot = "counts", return.individual = FALSE, verbose = TRUE, seed = 1234,
+    method = c("technical", "markers", "replicate"), replicate = NULL,
+    contrasts = list(), min_region_size = 3, spatial_blocks = 0){
+  method <- match.arg(method)
+  if (method != "technical") {
+    if (!is.null(DE_output_dir) || return.individual)
+      stop("For markers/replicate modes, export the returned tables explicitly.", call. = FALSE)
+    .requireExperiment(data, "SingleCellExperiment")
+    if (length(ident) != 1L || !ident %in% colnames(SummarizedExperiment::colData(data)))
+      stop("ident must name a colData column.", call. = FALSE)
+    if (method == "replicate") return(.replicateRegionContrasts(
+      .assayData(data, assay, slot), as.data.frame(SummarizedExperiment::colData(data)),
+      ident, replicate, contrasts))
+    return(.nativeRegionMarkers(data, ident, assay, slot, min_region_size,
+      spatial_blocks, seed, annotation.column))
+  }
+  warning("Random pixel pools are technical subdivisions, not biological replicates. Use method='markers' for region characterization or method='replicate' for biological inference.", call. = FALSE)
 
   if (!(is.null(DE_output_dir))){
     if (dir.exists(DE_output_dir)){
@@ -284,7 +314,9 @@ findAllDEMs <- function(data, ident, n = 3, logFC_threshold = 1.2, DE_output_dir
 #' @param only.pos Boolean indicating if only positive markers should be returned (default = FALSE).
 #' @param FDR.threshold Numeric value that defines the FDR threshold to use for defining most significant results (default = 0.05).
 #' @param logfc.threshold Numeric value that defines the logFC threshold to use for filtering significant results (default = 0.5).
-#' @param order.by Character string defining which parameter to order markers by, options are either 'FDR' or 'logFC' (default = "FDR").
+#' @param order.by Ranking column: `FDR`, `logFC`, `mean_auc` or `mean_cohen`.
+#'   Descriptive native marker results default to `mean_auc`; other inputs use
+#'   `FDR`. FDR ranking is unavailable for descriptive marker results.
 #' @param scale A character string indicating if the values should be centered and scaled in either the row direction or the column direction, or none. Corresponding values are "row", "column" and "none"
 #' @param color A vector of colors used in heatmap (default = grDevices::colorRampPalette(c("navy", "white", "red"))(50)).
 #' @param cluster_cols Boolean value determining if columns should be clustered or hclust object (default = FALSE).
@@ -331,87 +363,59 @@ demsHeatmap <- function(edgeR_output,
                          annotation_colors = NULL){
 
 
+  .validateFeatureCount(n, "n")
   degs <- edgeR_output$DEMs
-  degs <- subset(degs, FDR < FDR.threshold)
-
-  if (order.by == "FDR"){
-
-    grouped_pos<- degs %>%
-      group_by(cluster) %>%
-      filter( logFC > logfc.threshold) %>%
-      arrange(desc(regulate)) %>%
-      slice_head(n = n)
-
-
-    if (only.pos) {
-      grouped_neg <- NULL
-
-    } else {
-      grouped_neg <- degs %>%
-        group_by(cluster) %>%
-        filter(logFC < - logfc.threshold) %>%
-        arrange(regulate) %>%
-        slice_head(n = n)
-    }
-    df <- do.call(rbind, list(grouped_pos,grouped_neg))
-    df <- df[order(df$cluster, dplyr::desc(df$regulate)), ]
-
-  } else {
-    if ( order.by != "logFC"){
-      warning("order.by has invalid argument. Must be either 'FDR' or 'logFC'. Heatmap defaulting to order by logFC")
-    }
-
-    grouped_pos<- degs %>%
-      group_by(cluster) %>%
-      filter(logFC > logfc.threshold) %>%
-      arrange(-logFC) %>%
-      slice_head(n = n)
-
-
-    if (only.pos) {
-      grouped_neg <- NULL
-    } else {
-      grouped_neg <- degs %>%
-        group_by(cluster) %>%
-        filter(logFC < - logfc.threshold) %>%
-        arrange(logFC) %>%
-        slice_head(n = n)
-    }
-    df <- do.call(rbind, list(grouped_pos,grouped_neg))
-    df <- df[order(df$cluster, -df$logFC), ]
+  markers <- inherits(edgeR_output, "spamtp_markers")
+  if (markers && missing(order.by)) order.by <- "mean_auc"
+  if (!order.by %in% c("FDR", "logFC", "mean_auc", "mean_cohen"))
+    stop("Unknown marker ranking column.", call. = FALSE)
+  if (order.by == "FDR" && !"FDR" %in% names(degs))
+    stop("These descriptive markers have no FDR. Rank by mean_auc or mean_cohen.", call. = FALSE)
+  if (!markers) degs <- degs[!is.na(degs$FDR) & degs$FDR < FDR.threshold, , drop = FALSE]
+  selected <- lapply(unique(degs$cluster), function(g) {
+    d <- degs[degs$cluster == g, , drop = FALSE]
+    positive <- d[d$logFC > logfc.threshold & !is.na(d$logFC), , drop = FALSE]
+    negative <- d[d$logFC < -logfc.threshold & !is.na(d$logFC), , drop = FALSE]
+    pos <- head(positive[order(if (order.by == "FDR") positive$FDR else -positive[[order.by]], positive$gene, na.last = TRUE), , drop = FALSE], n)
+    neg <- if (only.pos) NULL else head(negative[order(negative[[order.by]], negative$gene, na.last = TRUE), , drop = FALSE], n)
+    rbind(pos, neg)
+  })
+  df <- do.call(rbind, selected)
+  if (!nrow(df)) stop("No features meet the heatmap selection criteria.", call. = FALSE)
+  # Native marker / replicate results supply exactly the matrix used by the
+  # analysis. Do not re-normalize already transformed values through edgeR CPM.
+  expression <- edgeR_output$expression
+  if (is.null(expression)) expression <- edgeR::cpm(edgeR_output, log = TRUE)
+  genes <- unique(df$gene)
+  mtx <- as.matrix(expression[genes, , drop = FALSE])
+  if (scale == "row") {
+    variable <- apply(mtx, 1, stats::sd) > 0
+    mtx <- mtx[variable, , drop = FALSE]; genes <- genes[variable]
   }
-
-
-
-  col_annot <- data.frame(sample = edgeR_output$samples$ident)
-  row.names(col_annot) <- colnames(as.data.frame(edgeR::cpm(edgeR_output,log=TRUE)))
-
-  if (!is.null(annotation_colors)){
-    annotation_colors <- list(sample = unlist(annotation_colors))
-  } else {
-    annotation_colors <- NA
+  if (!nrow(mtx)) stop("No variable heatmap rows remain.", call. = FALSE)
+  col_annot <- data.frame(region = edgeR_output$samples$ident, row.names = colnames(mtx))
+  labels <- genes
+  if (!is.null(plot_annotations_column)) {
+    if (!plot_annotations_column %in% names(df)) stop("Unknown annotation column.", call. = FALSE)
+    annotation <- as.character(df[[plot_annotations_column]][match(genes, df$gene)])
+    if (!is.null(nlabels.to.show)) annotation <- labels_to_show(annotation, n = nlabels.to.show)
+    good <- !is.na(annotation) & nzchar(annotation)
+    labels[good] <- paste0(annotation[good], " [", genes[good], "]")
   }
+  colors <- if (is.null(annotation_colors)) NA else if (is.list(annotation_colors) &&
+    "region" %in% names(annotation_colors)) annotation_colors else list(region = unlist(annotation_colors))
+  p <- pheatmap::pheatmap(mtx, scale = scale, color = color,
+    cluster_cols = if (ncol(mtx) < 2L) FALSE else cluster_cols,
+    annotation_col = col_annot, cluster_rows = if (nrow(mtx) < 2L) FALSE else cluster_rows,
+    labels_row = labels, fontsize_row = fontsize_row, fontsize_col = fontsize_col,
+    cutree_cols = if (identical(cluster_cols, FALSE)) NA else min(cutree_cols, ncol(mtx)),
+    silent = silent, annotation_colors = colors)
+  p$selected_features <- genes
+  p$expression <- mtx
+  p$selection <- df
+  if (!is.null(save_to_path)) savePheatmapAsPDF(p, save_to_path, plot.save.width, plot.save.height)
+  p
 
-  mtx <- as.matrix(as.data.frame(edgeR::cpm(edgeR_output,log=TRUE))[unique(df$gene),])
-  if (!(is.null(plot_annotations_column))){
-    if (is.null(edgeR_output$DEMs[[plot_annotations_column]])){
-      warning("There are no annotations present in the edgeR_output object. Run 'annotateSM()' prior to 'findAllDEMs' and set annotations = TRUE .....\n Heatmap will plot default m/z values ... ")
-    } else{
-      if (!is.null(nlabels.to.show)){
-        df[[plot_annotations_column]] <- labels_to_show(df[[plot_annotations_column]], n = nlabels.to.show)
-      }
-      rownames(mtx) <- unique(df[[plot_annotations_column]])
-    }
-  }
-
-  p <- pheatmap::pheatmap(mtx,scale=scale,color=color,cluster_cols = cluster_cols, annotation_col=col_annot, cluster_rows = cluster_rows,
-                          fontsize_row = fontsize_row, fontsize_col = fontsize_col, cutree_cols = cutree_cols, silent = silent, annotation_colors = annotation_colors)
-
-   if (!(is.null(save_to_path))){
-     savePheatmapAsPDF(pheatmap = p, filename = save_to_path, width = plot.save.width, height = plot.save.height)
-   }
-
-  return(p)
 }
 
 

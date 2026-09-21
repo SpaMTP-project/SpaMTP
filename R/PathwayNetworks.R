@@ -7,12 +7,15 @@
 #'
 #' @param SpaMTP A SpatialExperiment with paired transcriptomics in altExp.
 #'   Subset to one sample before exporting. Metabolomics must be annotated by
-#'   [annotateSM()].
+#'   [annotateSM()], or supplied as explicit compound IDs from
+#'   [createPathwayAssay()].
 #' @param ident Metadata column used to identify spatial clusters or regions.
 #' @param regpathway Data frame returned by [findRegionalPathways()].
 #' @param DE.list One differential-expression data frame per requested analyte
 #'   type. Data frames must contain `cluster`, `gene`, `avg_log2FC` (or
-#'   `logFC`), and `p_val_adj` (or `FDR`). A named list is recommended.
+#'   `logFC`), and `p_val_adj` (or `FDR`). Descriptive native marker tables
+#'   containing `mean_auc` and `mean_cohen` are also supported; their P values
+#'   remain unavailable. A named list is recommended.
 #' @param selected_pathways Optional pathway names or source IDs. Matching is
 #'   case-insensitive. When `NULL`, the most important pathways are selected by
 #'   summed absolute NES.
@@ -104,7 +107,8 @@ pathwayNetworkPlots <- function(SpaMTP,
                                 gene_reference = NULL, gene_index = NULL,
                                 gene_reference_version = "latest",
                                 gene_reference_local_dir = NULL,
-                                organism = "Homo sapiens") {
+                                organism = "Homo sapiens", pathway_index = NULL) {
+  database <- .pathway_database(database, pathway_index)
   SpaMTP <- .nativeSingleSample(SpaMTP)
   analyte_types <- match.arg(
     analyte_types, c("genes", "metabolites"), several.ok = TRUE
@@ -171,7 +175,17 @@ pathwayNetworkPlots <- function(SpaMTP,
   annotation_score_floor <- min(
     annotation_score_floor, annotation_score_threshold
   )
-  if ("metabolites" %in% analyte_types && annotation_source == "current") {
+  compound_ids <- if ("metabolites" %in% analyte_types)
+    rownames(.assayData(SpaMTP, SM_assay, SM_slot)) else character()
+  identity_input <- length(compound_ids) > 0L && all(grepl("^RAMP_C_", compound_ids))
+  if (identity_input) {
+    identity_mapping <- S4Vectors::metadata(.experimentForAssay(SpaMTP, SM_assay))$pathway_mapping
+    rank_index <- attr(regpathway, "pathway_index", exact = TRUE)
+    if (!is.null(identity_mapping$provenance) && !is.null(rank_index) &&
+        !identical(identity_mapping$provenance, rank_index))
+      stop("Compound identity assay and regional enrichment use different pathway indexes.", call. = FALSE)
+  }
+  if ("metabolites" %in% analyte_types && annotation_source == "current" && !identity_input) {
     if (!.pn_is_current_annotation_metadata(regpathway_annotation)) {
       stop(
         "regpathway was not generated with a current scored annotation ",
@@ -240,7 +254,9 @@ pathwayNetworkPlots <- function(SpaMTP,
   ]
 
   verbose_message("Preparing pathway edges once per topology ... ", verbose)
-  prepared_edges <- lapply(topologies, .pn_prepare_edges, reaction_types = reaction_type)
+  styles <- new.env(parent = emptyenv())
+  utils::data("reaction_type", package = "SpaMTP", envir = styles)
+  prepared_edges <- lapply(topologies, .pn_prepare_edges, reaction_types = styles$reaction_type)
   usable <- lengths(lapply(prepared_edges, function(x) unique(c(x$src, x$dest)))) > 0L
   if (any(!usable)) {
     verbose_message(
@@ -265,21 +281,32 @@ pathwayNetworkPlots <- function(SpaMTP,
   metabolite_de <- NULL
   metabolite_annotations <- NULL
   annotation_metadata <- NULL
+  gene_view <- .pathway_context(database_resources, database,
+    if ("genes" %in% analyte_types || !is.null(pathway_index)) gene_mapping else "ramp",
+    gene_reference, gene_index, gene_reference_version, gene_reference_local_dir, organism, pathway_index)
   if ("genes" %in% analyte_types) {
-    gene_view <- .gene_pathway_view(
-      database_resources, database, gene_mapping, gene_reference, gene_index,
-      gene_reference_version, gene_reference_local_dir, organism
-    )
     if (!is.null(gene_view$index)) .gene_check_experiment_species(SpaMTP, ST_assay, organism)
     gene_de <- .pn_prepare_gene_de(differential[["genes"]], source_df, gene_view$index)
   }
   if ("metabolites" %in% analyte_types) {
-    db_3 <- .resolve_pathway_metabolite_annotations(
-      SpaMTP,
-      annotation_source = annotation_source,
-      score_threshold = annotation_score_floor,
-      chemical_properties = chem_props
-    )
+    ids <- rownames(.assayData(SpaMTP, SM_assay, SM_slot))
+    if (length(ids) && all(grepl("^RAMP_C_", ids))) {
+      # A createPathwayAssay result already has explicit identities. Reusing the
+      # original mass-candidate expansion here would change the member universe.
+      db_3 <- data.frame(ramp_id = ids, mz_name = ids, Adduct = "",
+        IsomerNames = NA_character_, observed_mz = NA_real_, chem_source_id = "")
+      attr(db_3, "annotation_metadata") <- list(engine = "explicit-compound-identities",
+        pathway_index = identity_mapping$provenance, source_annotation = identity_mapping$annotation,
+        ambiguity = identity_mapping$ambiguity, excluded_conflicts = identity_mapping$excluded_conflicts,
+        original_features = identity_mapping$original_features)
+    } else {
+      db_3 <- .resolve_pathway_metabolite_annotations(
+        .pathwayAnnotationObject(SpaMTP, SM_assay),
+        annotation_source = annotation_source,
+        score_threshold = annotation_score_floor,
+        chemical_properties = chem_props
+      )
+    }
     metabolite_annotations <- db_3
     annotation_metadata <- attr(db_3, "annotation_metadata")
     metabolite_de <- .pn_prepare_metabolite_de(
@@ -343,6 +370,21 @@ pathwayNetworkPlots <- function(SpaMTP,
     stop("colour_palette must contain at least two colours.")
   }
 
+  measured_ids <- used_ids <- character()
+  if ("genes" %in% analyte_types) {
+    measured_ids <- .pathway_gene_ids(rownames(gene_matrix), gene_view$pathway_index)
+    used_ids <- .pathway_gene_ids(unique(gene_de$rampId), gene_view$pathway_index)
+  }
+  if ("metabolites" %in% analyte_types) {
+    measured_ids <- unique(c(measured_ids, unlist(annotated_metabolites, use.names = FALSE)))
+    used_ids <- unique(c(used_ids, metabolite_de$ramp_id))
+  }
+  pathway_coverage <- .pathway_coverage(gene_view$pathway_index, measured_ids, used_ids,
+    types = ifelse(analyte_types == "genes", "G", "C"))
+  selected_ids <- pathway_rows$pathwayRampId
+  if (is.null(selected_ids)) selected_ids <- pathway_coverage$pathwayRampId[
+    tolower(pathway_coverage$pathwayName) %in% tolower(pathway_rows$pathwayName)]
+  pathway_coverage <- pathway_coverage[pathway_coverage$pathwayRampId %in% selected_ids, , drop = FALSE]
   payload <- list(
     title = paste("SpaMTP pathway networks -", ident),
     pathways = pathway_names,
@@ -355,15 +397,20 @@ pathwayNetworkPlots <- function(SpaMTP,
     layout_mode = layout_mode,
     metadata = list(
       max_nodes = max_nodes,
+      effect_label = if (any(vapply(differential, function(d)
+        all(c("mean_auc", "mean_cohen") %in% names(d)), logical(1))))
+        "Regional effect (workflow units)" else "Log2 fold change",
       annotation = annotation_metadata,
       gene_mapping = attr(gene_de, "gene_mapping"),
+      pathway_index = gene_view$pathway_index$provenance,
+      pathway_coverage = pathway_coverage,
       annotation_score_threshold = annotation_score_threshold,
       annotation_score_floor = annotation_score_floor,
       annotation_score_ceiling = max(
         c(annotation_score_threshold, annotation_scores), na.rm = TRUE
       ),
       metabolite_detection = metabolite_detection,
-      annotation_controls = "metabolites" %in% analyte_types,
+      annotation_controls = "metabolites" %in% analyte_types && !identity_input,
       generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
     )
   )
@@ -374,5 +421,7 @@ pathwayNetworkPlots <- function(SpaMTP,
   full_path <- file.path(path, return_name)
   writeLines(html, full_path, useBytes = TRUE)
   message("Pathway network written to ", full_path)
+  attr(full_path, "pathway_coverage") <- pathway_coverage
+  attr(full_path, "pathway_index") <- gene_view$pathway_index$provenance
   invisible(full_path)
 }

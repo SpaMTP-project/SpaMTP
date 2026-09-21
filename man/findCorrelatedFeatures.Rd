@@ -13,7 +13,9 @@ findCorrelatedFeatures(
   ST.assay = NULL,
   SM.slot = "counts",
   ST.slot = "counts",
-  nfeatures = 10
+  nfeatures = 10,
+  covariates = NULL,
+  features = NULL
 )
 }
 \arguments{
@@ -36,6 +38,14 @@ experiment. Legacy \code{SPM} and \code{Spatial} also select the primary experim
 \item{ST.slot}{Assay containing transcriptomic values.}
 
 \item{nfeatures}{Maximum results per reference; NULL returns all features.}
+
+\item{covariates}{Optional colData fields to regress from both features before
+correlation, for example sample and annotated region. Raw correlations are
+also returned. This is a descriptive conditional association, not a causal
+or spatial significance test.}
+
+\item{features}{Optional named list of exact target IDs, with entries
+\code{metabolite} and/or \code{gene}. Selection does not change the reference vector.}
 }
 \value{
 A data frame with features, correlation, modality, mz, rank and,

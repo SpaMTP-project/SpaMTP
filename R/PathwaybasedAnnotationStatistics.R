@@ -27,7 +27,8 @@
 }
 
 .annotationStatisticsCandidates <- function(object, assay, source) {
-  features <- .featureMetadata(object, assay)
+  object <- .pathwayAnnotationObject(object, assay)
+  features <- .featureMetadata(object)
   current <- .storedData(object, "mz_annotation")
   compatible <- .storedData(object, "db_3")
   if (.annotation_has_current_schema(current$results) ||
@@ -205,6 +206,7 @@ calculateSingleAnnotationStatistics <- function(
 #' @param pathway.scores Whether pathway.assay already contains pathway scores.
 #' @return A data.frame preserving feature order and rowData, with ranked
 #'   annotation columns; or a named list when return.top=FALSE.
+#' @inheritParams createPathwayAssay
 #' @export
 #' @examples
 #' utils::str(formals(calculateAnnotationStatistics))
@@ -214,9 +216,13 @@ calculateAnnotationStatistics <- function(
     corr_theshold = 0, corr_weight = 1, n_weight = 1,
     database = NULL, database_version = "latest",
     database_source = c("auto", "spamtpdb"), database_local_dir = NULL,
-    pathway.scores = FALSE
+    pathway.scores = FALSE, pathway_index = NULL,
+    gene_mapping = c("auto", "hgnc", "ramp"), gene_reference = NULL, gene_index = NULL,
+    gene_reference_version = "latest", gene_reference_local_dir = NULL,
+    organism = "Homo sapiens", duplicate_genes = c("error", "mean", "sum")
 ) {
   source <- match.arg(database_source)
+  database <- .pathway_database(database, pathway_index)
   required <- c("source_df", "analytehaspathway", if (!pathway.scores) "pathway")
   resources <- .spamtp_db_bundle(required, database = database,
     version = database_version, source = source, local_dir = database_local_dir)
@@ -229,7 +235,11 @@ calculateAnnotationStatistics <- function(
                                   ".annotationPathways")), 1L)
     data <- createPathwayObject(data, assay = pathway.assay, slot = pathway.slot,
       new.assay = newName, database = resources, database_version = database_version,
-      database_source = source, database_local_dir = database_local_dir)
+      database_source = source, database_local_dir = database_local_dir,
+      pathway_index = pathway_index, gene_mapping = match.arg(gene_mapping),
+      gene_reference = gene_reference %||% database$gene_reference, gene_index = gene_index,
+      gene_reference_version = gene_reference_version, gene_reference_local_dir = gene_reference_local_dir,
+      organism = organism, duplicate_genes = match.arg(duplicate_genes))
     pathway.assay <- newName
     pathway.slot <- "pathwayScores"
   }
@@ -238,7 +248,14 @@ calculateAnnotationStatistics <- function(
   ids <- rownames(input$expression)
   result <- stats::setNames(lapply(ids, .scoreAnnotationFeature, input = input,
     threshold = corr_theshold, corrWeight = corr_weight, nWeight = n_weight), ids)
-  if (!return.top) return(result)
+  audit <- S4Vectors::metadata(.experimentForAssay(data, pathway.assay))$pathway_mapping
+  if (!is.null(pathway_index) && !is.null(audit) && !identical(audit$provenance, pathway_index$provenance)) {
+    stop("Stored pathway scores use a different pathway_index.", call. = FALSE)
+  }
+  if (!return.top) {
+    attr(result, "pathway_coverage") <- audit$coverage
+    return(result)
+  }
   empty <- data.frame(metabolite = NA_character_, ramp_id = NA_character_,
     n_sig_path = NA_integer_, max_cor = NA_real_, z_score = NA_real_,
     pval = NA_real_, pval_adj = NA_real_)
@@ -252,5 +269,6 @@ calculateAnnotationStatistics <- function(
   # A repeated call must not create duplicate output column names.
   for (column in names(top)) metadata[[column]] <- top[[column]]
   rownames(metadata) <- ids
+  attr(metadata, "pathway_coverage") <- audit$coverage
   metadata
 }

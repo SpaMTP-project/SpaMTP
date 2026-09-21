@@ -37,13 +37,15 @@ pathwayNetworkPlots(
   gene_index = NULL,
   gene_reference_version = "latest",
   gene_reference_local_dir = NULL,
-  organism = "Homo sapiens"
+  organism = "Homo sapiens",
+  pathway_index = NULL
 )
 }
 \arguments{
 \item{SpaMTP}{A SpatialExperiment with paired transcriptomics in altExp.
 Subset to one sample before exporting. Metabolomics must be annotated by
-\code{\link[=annotateSM]{annotateSM()}}.}
+\code{\link[=annotateSM]{annotateSM()}}, or supplied as explicit compound IDs from
+\code{\link[=createPathwayAssay]{createPathwayAssay()}}.}
 
 \item{ident}{Metadata column used to identify spatial clusters or regions.}
 
@@ -51,7 +53,9 @@ Subset to one sample before exporting. Metabolomics must be annotated by
 
 \item{DE.list}{One differential-expression data frame per requested analyte
 type. Data frames must contain \code{cluster}, \code{gene}, \code{avg_log2FC} (or
-\code{logFC}), and \code{p_val_adj} (or \code{FDR}). A named list is recommended.}
+\code{logFC}), and \code{p_val_adj} (or \code{FDR}). Descriptive native marker tables
+containing \code{mean_auc} and \code{mean_cohen} are also supported; their P values
+remain unavailable. A named list is recommended.}
 
 \item{selected_pathways}{Optional pathway names or source IDs. Matching is
 case-insensitive. When \code{NULL}, the most important pathways are selected by
@@ -146,6 +150,10 @@ records and ambiguous symbols are excluded and recorded in the audit.}
 \item{organism}{Must be \code{"Homo sapiens"}; this index is not a mouse-to-human
 orthology map. Use a separately curated species-specific database for other
 organisms.}
+
+\item{pathway_index}{A reusable index from buildPathwayIndex(). When supplied,
+its gene identities and memberships must match any explicit database or
+gene_index. Fingerprints prevent incompatible reuse.}
 }
 \value{
 Invisibly returns the generated HTML file path.

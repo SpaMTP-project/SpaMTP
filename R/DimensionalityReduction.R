@@ -14,6 +14,9 @@
 #' @param bin_method Character string defining the method to use for binning respective m/z peaks that fall within a bin. Options for this parameter can be one of "sum", "mean", "max" or "min". `bin_resolution` must be provided for this parameter to be implemented (default = "sum").
 #' @param reduction.name Character string indicating the name associated with the PCA results stored in the output Bioconductor experiment (default = "pca").
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#' @param features Optional exact feature identifiers. When supplied, all and
+#'   only these rows enter PCA; the scater top-500 default is bypassed.
+#' @param scale Scale features to unit variance before PCA.
 #'
 #'
 #' @return The input with PCA embeddings in reducedDim().
@@ -39,7 +42,7 @@ runMetabolicPCA <- function(SpaMTP,
                             resolution_units = "ppm",
                             bin_method = "sum",
                             reduction.name = "pca",
-                            verbose = TRUE)
+                            verbose = TRUE, features = NULL, scale = FALSE)
 {
   .requireExperiment(SpaMTP, "SingleCellExperiment")
   analysisData <- .experimentForAssay(SpaMTP, assay)
@@ -56,6 +59,12 @@ runMetabolicPCA <- function(SpaMTP,
     analysisData <- methods::as(analysisData, "SingleCellExperiment")
   }
   values <- .assayData(analysisData, layer = slot)
+  if (!is.null(features)) {
+    if (!is.character(features) || anyNA(features) || anyDuplicated(features) ||
+        length(features) < 2L || !all(features %in% rownames(values)))
+      stop("features must contain distinct, observed feature names.", call. = FALSE)
+    values <- values[features, , drop = FALSE]
+  }
   maximum <- min(dim(values)) - 1L
   if (maximum < 1L || any(!is.finite(values))) {
     stop("PCA requires finite values and at least two features and pixels.", call. = FALSE)
@@ -69,9 +78,11 @@ runMetabolicPCA <- function(SpaMTP,
     stop("variance_explained_threshold must be in (0, 1] when npcs is NULL.",
          call. = FALSE)
   }
+  components <- if (is.null(npcs)) maximum else min(npcs, maximum)
   analysisData <- scater::runPCA(
     analysisData, exprs_values = slot,
-    ncomponents = if (is.null(npcs)) maximum else min(npcs, maximum),
+    ncomponents = components, subset_row = features, scale = scale,
+    BSPARAM = if (components >= min(dim(values)) / 2) BiocSingular::ExactParam() else BiocSingular::IrlbaParam(),
     name = reduction.name)
   embedding <- SingleCellExperiment::reducedDim(analysisData, reduction.name)
   percentVar <- attr(embedding, "percentVar")
@@ -94,6 +105,9 @@ runMetabolicPCA <- function(SpaMTP,
       ggplot2::labs(x = "Principal component", y = "Cumulative variance explained"))
   }
   SingleCellExperiment::reducedDim(SpaMTP, reduction.name) <- embedding
+  S4Vectors::metadata(SpaMTP)$reduction_inputs[[reduction.name]] <- list(
+    assay = assay, layer = slot, features = rownames(attr(embedding, "rotation")),
+    scale = scale, method = "scater::runPCA")
   SpaMTP
 }
 
@@ -182,17 +196,17 @@ runSpatialGraphPCA <- function(data, n_components=50, assay = "main", slot = "sc
   graph <- 0.5 * (graph + t(graph))
 
 
-  graphL <- igraph::graph_from_adjacency_matrix(graph, mode = "undirected", weighted = TRUE)
-  graphL <- igraph::laplacian_matrix(graphL, normalization = "unnormalized")
-  graphL <- Matrix::as.matrix(graphL)
+  # Keep the Laplacian sparse: the previous conversion allocated an n-by-n
+  # dense matrix and made full-tissue analysis unnecessarily expensive.
+  graphL <- Matrix::Diagonal(x = Matrix::rowSums(graph)) - graph
 
 
   # Create identity matrix and add lambda * graphL
   n <- nrow(Expr)
 
-  G <- sparseMatrix(i = 1:n, j = 1:n, x = rep(1, n)) + (lambda * graphL)
+  G <- Matrix::Diagonal(n) + (lambda * graphL)
 
-  X <- solve(G, Expr)
+  X <- Matrix::solve(G, as.matrix(Expr))
 
 
   rownames(graph) <- colnames(graph) <- colnames(assayMatrix)
@@ -229,6 +243,10 @@ runSpatialGraphPCA <- function(data, n_components=50, assay = "main", slot = "sc
   loadings <- S4Vectors::metadata(data)$reductionLoadings %||% list()
   loadings[[reduction_name]] <- W
   S4Vectors::metadata(data)$reductionLoadings <- loadings
+  S4Vectors::metadata(data)$reduction_inputs[[reduction_name]] <- list(
+    assay = assay, layer = slot, features = rownames(assayMatrix),
+    observations = colnames(assayMatrix), lambda = lambda, neighbors = n_neighbors,
+    graph = graph_name, sample_separated = TRUE, method = "runSpatialGraphPCA")
 
 
   return(data)
@@ -297,13 +315,8 @@ kNeighborsGraph <- function(location, n_neighbors, platform, include_self = FALS
 
     # Create empty adjacency matrix
     n <- nrow(location)
-    adjacency <- matrix(0, nrow = n, ncol = n)
-
-    # Fill adjacency matrix with connections
-    for (i in 1:n) {
-      adjacency[i, knn_result$nn.index[i,]] <- 1
-    }
-    adjacency <- Matrix(adjacency, sparse = TRUE)
+    adjacency <- Matrix::sparseMatrix(i = rep(seq_len(n), each = n_neighbors),
+      j = as.vector(t(knn_result$nn.index)), x = 1, dims = c(n, n))
 
 
   }

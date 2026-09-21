@@ -100,6 +100,36 @@
   )
 }
 
+# Select the annotation store associated with an explicit modality. Current
+# annotateSM stores its assay name alongside the root-level candidate table.
+.pathwayAnnotationObject <- function(object, assay) {
+  selected <- .experimentForAssay(object, assay)
+  alternatives <- if (inherits(object, "SingleCellExperiment")) SingleCellExperiment::altExpNames(object) else character()
+  key <- if (length(assay) && assay %in% alternatives) assay else "main"
+  fields <- c("mz_annotation", "db_3")
+  store <- .storedData(object, "modality_annotations")[[key]]
+  if (!is.null(store)) {
+    # Clear missing fields too: main still carries the latest root-level store,
+    # which may belong to another modality.
+    for (name in fields) selected <- .setStoredData(selected, name, store[[name]])
+    return(selected)
+  }
+  if (key != "main" && any(vapply(fields, function(name)
+      !is.null(.storedData(selected, name)), logical(1))))
+    return(selected)
+  current <- .storedData(object, "mz_annotation")
+  declared <- current$metadata$assay %||% "main"
+  # Match annotateSM's modality keys. An extracted alternative experiment may
+  # retain its former assay label, but is now the primary experiment itself.
+  declared_key <- if (declared %in% alternatives) declared else "main"
+  # Unlabelled historical root stores belong to main, never an arbitrary altExp.
+  for (name in fields) {
+    value <- if (identical(key, declared_key)) .storedData(object, name) else NULL
+    selected <- .setStoredData(selected, name, value)
+  }
+  selected
+}
+
 .expand_annotation_column <- function(x, column) {
   if (!column %in% names(x)) {
     stop("Annotation result is missing required column: ", column)

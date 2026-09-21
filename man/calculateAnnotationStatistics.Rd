@@ -18,7 +18,15 @@ calculateAnnotationStatistics(
   database_version = "latest",
   database_source = c("auto", "spamtpdb"),
   database_local_dir = NULL,
-  pathway.scores = FALSE
+  pathway.scores = FALSE,
+  pathway_index = NULL,
+  gene_mapping = c("auto", "hgnc", "ramp"),
+  gene_reference = NULL,
+  gene_index = NULL,
+  gene_reference_version = "latest",
+  gene_reference_local_dir = NULL,
+  organism = "Homo sapiens",
+  duplicate_genes = c("error", "mean", "sum")
 )
 }
 \arguments{
@@ -47,6 +55,40 @@ remain as NA rows in top results and NULL entries when no table is possible.}
 see loadSpaMTPDatabase.}
 
 \item{pathway.scores}{Whether pathway.assay already contains pathway scores.}
+
+\item{pathway_index}{A reusable index from buildPathwayIndex(). When supplied,
+its gene identities and memberships must match any explicit database or
+gene_index. Fingerprints prevent incompatible reuse.}
+
+\item{gene_mapping}{\code{"auto"} uses HGNC identity harmonization for official
+SpaMTPdb resources and for custom bundles with \code{gene_reference} or
+\code{gene_index}. \code{"hgnc"} requires harmonization; \code{"ramp"} explicitly retains
+RaMP-only mapping for historical reproduction or a curated non-human
+database. Custom bundles without a reference use RaMP-only mapping in auto
+mode and never trigger a reference download.}
+
+\item{gene_reference}{HGNC reference data frame. \code{NULL} retrieves the pinned
+reference through \code{\link[SpaMTPdb:spaMTPdbGeneReference]{SpaMTPdb::spaMTPdbGeneReference()}}. Custom references
+require unique \code{hgnc_id} and \code{symbol}; optional fields are \code{status},
+\code{entrez_id}, \code{ensembl_gene_id}, \code{uniprot_ids}, \code{prev_symbol}, \code{alias_symbol}.}
+
+\item{gene_index}{Optional index built from the same source table by
+\code{\link[=buildGeneMappingIndex]{buildGeneMappingIndex()}}. Multiple RaMP records of a resolved HGNC gene
+have their pathway memberships united and count once. Conflicting RaMP
+records and ambiguous symbols are excluded and recorded in the audit.}
+
+\item{gene_reference_version}{Version in SpaMTPdb's separate HGNC registry.}
+
+\item{gene_reference_local_dir}{Local HGNC resource directory.}
+
+\item{organism}{Must be \code{"Homo sapiens"}; this index is not a mouse-to-human
+orthology map. Use a separately curated species-specific database for other
+organisms.}
+
+\item{duplicate_genes}{How to aggregate expression rows of one gene.
+The default errors for differing rows and deduplicates identical rows.
+Explicit mean or sum requires choosing an appropriate expression scale;
+sum is generally inappropriate for log-transformed expression.}
 }
 \value{
 A data.frame preserving feature order and rowData, with ranked

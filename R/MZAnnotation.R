@@ -145,6 +145,15 @@ annotateSM <- function(data, db = NULL, assay = "main", raw.mz.column = "raw_mz"
 
 
   if (save.intermediate){
+    alternatives <- if (inherits(data, "SingleCellExperiment")) SingleCellExperiment::altExpNames(data) else character()
+    stores <- .storedData(data, "modality_annotations") %||% list()
+    previous <- .storedData(data, "mz_annotation")
+    previous_legacy <- .storedData(data, "db_3")
+    if (!is.null(previous) || !is.null(previous_legacy)) {
+      previous_assay <- previous$metadata$assay %||% "main"
+      previous_key <- if (previous_assay %in% alternatives) previous_assay else "main"
+      stores[[previous_key]] <- list(mz_annotation = previous, db_3 = previous_legacy)
+    }
     effective_ppm <- ppm_error
     if (is.null(effective_ppm)) {
       inferred_ppm <- if (is.null(tof_resolution)) Inf else {
@@ -183,6 +192,9 @@ annotateSM <- function(data, db = NULL, assay = "main", raw.mz.column = "raw_mz"
     # Keep the historical location for packages and serialized objects that
     # still inspect it directly. New pathway code reads mz_annotation first.
     data <- .setStoredData(data, "db_3", db_3)
+    key <- if (assay %in% alternatives) assay else "main"
+    stores[[key]] <- list(mz_annotation = .storedData(data, "mz_annotation"), db_3 = db_3)
+    data <- .setStoredData(data, "modality_annotations", stores)
   }
 
   if (!(is.null(filepath))){
