@@ -24,8 +24,9 @@ mouseBrainPairing <- function(inputDir) {
     geometry
 }
 
-runMouseBrain <- function(inputDir, databaseDir, outputDir,
-                          case = c("fmp10", "dhb")) {
+runMouseBrain <- function(inputDir, databaseDir = NULL, outputDir,
+                          case = c("fmp10", "dhb"),
+                          offline = !is.null(databaseDir)) {
     case <- match.arg(case)
     if (length(outputDir) != 1L || is.na(outputDir) || !nzchar(outputDir) ||
         file.exists(outputDir)) stop("Supply a new output directory.")
@@ -40,11 +41,13 @@ runMouseBrain <- function(inputDir, databaseDir, outputDir,
     if (utils::packageVersion("SpaMTP") < "0.99.9") {
         stop("Use SpaMTP >= 0.99.9 for this recipe.")
     }
-    withr::local_options(list(SpaMTPdb.resource_dir = databaseDir))
+    if (!is.null(databaseDir)) {
+        withr::local_options(list(SpaMTPdb.resource_dir = databaseDir))
+    }
     db <- SpaMTP::loadSpaMTPDatabase(c("chem_props", "source_df",
         "analytehaspathway", "pathway", "ramp_db_metadata",
         "ramp_wikipathway", "ramp_reactome", "ramp_kegg", "ramp_hmdb"),
-        version = "3.0.7", local_dir = databaseDir, offline = TRUE)
+        version = "3.0.7", local_dir = databaseDir, offline = offline)
     index <- SpaMTP::buildPathwayIndex(db,
         gene_mapping = "ramp", organism = "Mus musculus")
     matrixName <- if (case == "fmp10") "FMP-10" else "DHB"

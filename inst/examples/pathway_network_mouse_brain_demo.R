@@ -114,8 +114,10 @@ mouseBrainNetworks <- function(object, database, outputDir,
     invisible(result)
 }
 
-runMouseBrainNetworkDemo <- function(nativeDir, databaseDir, outputDir,
-                                    ident = "RegionLoupe") {
+runMouseBrainNetworkDemo <- function(nativeDir = NULL, databaseDir = NULL,
+                                    outputDir, ident = "RegionLoupe",
+                                    offline = !is.null(nativeDir) &&
+                                        !is.null(databaseDir)) {
     if (file.exists(outputDir)) stop("Supply a new output directory.")
     for (package in c("SpaMTP", "SpaMTPData")) {
         if (!requireNamespace(package, quietly = TRUE)) {
@@ -126,13 +128,15 @@ runMouseBrainNetworkDemo <- function(nativeDir, databaseDir, outputDir,
         utils::packageVersion("SpaMTPData") < "0.99.5") {
         stop("Use SpaMTP >= 0.99.9 and SpaMTPData >= 0.99.5 for this example.")
     }
-    withr::local_options(list(SpaMTPdb.resource_dir = databaseDir))
+    if (!is.null(databaseDir)) {
+        withr::local_options(list(SpaMTPdb.resource_dir = databaseDir))
+    }
     object <- SpaMTPData::spaMTPData("mouse_brain_dhb_striatum",
-        version = "1.1.0", local_dir = nativeDir, offline = TRUE)
+        version = "1.1.0", local_dir = nativeDir, offline = offline)
     database <- SpaMTP::loadSpaMTPDatabase(c("chem_props", "source_df",
         "analytehaspathway", "pathway", "ramp_db_metadata",
         "ramp_wikipathway", "ramp_reactome", "ramp_kegg", "ramp_hmdb"),
-        version = "3.0.7", local_dir = databaseDir, offline = TRUE)
+        version = "3.0.7", local_dir = databaseDir, offline = offline)
     mouseBrainNetworks(object, database, outputDir, ident = ident)
 }
 

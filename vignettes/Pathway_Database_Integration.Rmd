@@ -7,6 +7,11 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(error = FALSE, cache = FALSE)
+library(SpaMTP)
+```
+
 ## Membership and topology are separate resources
 
 SpaMTP combines identifiers and pathway memberships from
@@ -88,11 +93,14 @@ collapsed when their corrupted labels became identical.
 
 Use SpaMTP's loader to obtain corrected graphs:
 
-```{r load-graphs, eval=FALSE}
-db <- loadSpaMTPDatabase("ramp_kegg", local_dir = "/path/to/SpaMTPdb-resources")
+```{r load-graphs, eval=TRUE}
+db <- loadSpaMTPDatabase("ramp_kegg", version = "3.0.7")
 cell_cycle <- db$ramp_kegg[["Cell cycle"]]
 table(cell_cycle$protEdges$source_reaction_type)
 attr(db$ramp_kegg, "spamtp_interaction_repair")
+stopifnot(nrow(cell_cycle$protEdges) == 1009L,
+  length(unique(cell_cycle$protEdges$source_reaction_type)) == 11L,
+  sum(cell_cycle$protEdges$source_reaction_type == "Process(inhibition)") == 286L)
 ```
 
 The correction is automatic in the database loader and network workflows,
@@ -145,3 +153,7 @@ For a future graph release, build from labelled source edges using the
 conversion utilities before running ID migration. Publish rebuilt data under
 a new resource version; do not overwrite the immutable 3.0.7 files or reuse
 this correction's fingerprints for a different snapshot.
+
+```{r session-info}
+sessionInfo()
+```

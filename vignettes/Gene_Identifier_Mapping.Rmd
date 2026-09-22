@@ -10,7 +10,8 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "##")
+knitr::opts_chunk$set(collapse = TRUE, comment = "##", error = FALSE,
+                     cache = FALSE)
 ```
 
 ## Reference ownership and reproducibility
@@ -35,16 +36,18 @@ checks therefore still apply after extracting RNA with `altExp()`.
 
 ## Build once, inspect before testing
 
-The following resource-loading examples are not evaluated while building this
-vignette. Local files and verified caches can be used with `offline = TRUE`.
+The following examples run during vignette builds, using the full published
+human-brain dataset. Pinned resources are downloaded if not already available
+locally or in a verified cache. Local files and verified caches can also be used
+with `offline = TRUE`.
 
-```{r reference, eval=FALSE}
+```{r reference, eval=TRUE}
 database <- loadSpaMTPDatabase(
   c("source_df", "analyte", "analytehaspathway", "pathway"),
-  version = "3.0.7", local_dir = "/path/to/RaMP/3.0.7", offline = TRUE
+  version = "3.0.7"
 )
 reference <- SpaMTPdb::spaMTPdbGeneReference(
-  version = "2026.7.7", local_dir = "/path/to/gene-reference", offline = TRUE
+  version = "2026.7.7"
 )
 index <- buildGeneMappingIndex(database$source_df, gene_reference = reference)
 mapping <- mapGeneIdentifiers(
@@ -82,7 +85,7 @@ that the gene has no biological function or pathway membership.
 
 ## Annotate experiment features without altering expression
 
-```{r experiment, eval=FALSE}
+```{r experiment, eval=TRUE}
 spe <- SpaMTPData::spaMTPData("human_brain_integrated", version = "1.1.0")
 SingleCellExperiment::altExpNames(spe)
 # Select the actual transcriptome altExp shown above. If identifiers live in
@@ -91,8 +94,12 @@ spe <- annotateGeneIdentifiers(
   spe, assay = "SPT", index = index, organism = "Homo sapiens"
 )
 rna <- SingleCellExperiment::altExp(spe, "SPT")
-SummarizedExperiment::rowData(rna)
-S4Vectors::metadata(rna)$gene_mapping
+head(SummarizedExperiment::rowData(rna))
+table(SummarizedExperiment::rowData(rna)$spamtp_gene_status)
+unresolved <- SummarizedExperiment::rowData(rna)$spamtp_gene_status != "mapped"
+SummarizedExperiment::rowData(rna)[unresolved,
+  c("spamtp_gene_symbol", "spamtp_gene_status", "spamtp_gene_ramp_ids")]
+stopifnot(ncol(rna) == ncol(spe), nrow(rna) == 339L)
 ```
 
 Mapping columns remain aligned with original features. Counts, feature names,
@@ -102,17 +109,30 @@ Resolve those features before differential analysis. Regional pathway and
 network workflows reject different differential statistics for the same gene
 within a cluster rather than selecting an arbitrary row.
 
+For these pinned inputs, 329 genes map and 10 produce an intentional unresolved
+identifier warning: two have conflicting RaMP records and eight are absent from
+RaMP. Their original expression remains in the object, but they are excluded
+from pathway testing. The table above exposes those exclusions rather than
+silently treating the entire 339-gene panel as mapped.
+
 ## Use the whole measured panel as the universe
 
-```{r enrichment, eval=FALSE}
+For a runnable foreground, we declare the measured genes AATK and BANK1 as
+genes of interest. This is an illustrative, predeclared query, **not** a list
+of statistically significant genes inferred from this single section.
+
+```{r enrichment, eval=TRUE}
+genes_of_interest <- c("AATK", "BANK1")
+measured_panel_genes <- rownames(rna)
+stopifnot(all(genes_of_interest %in% measured_panel_genes))
 result <- fishersPathwayAnalysis(
-  Analyte = list(genes = significant_genes),
+  Analyte = list(genes = genes_of_interest),
   universe = list(genes = measured_panel_genes),
   database = database, gene_index = index,
   min_path_size = 5, pval_cutoff = NULL
 )
-attr(result, "enrichment")$gene_mapping$inputs
-attr(result, "enrichment")$gene_mapping$groups
+head(attr(result, "enrichment")$gene_mapping$inputs)
+head(result)
 ```
 
 Foreground and universe use the same complete identity index. All RaMP records
@@ -179,7 +199,7 @@ and the same index for every entry point. This resource-dependent chunk is not
 run during package builds; the real-data validation uses all 339 RNA features
 and all 37,886 observations of human_brain_integrated 1.1.0.
 
-```{r human-pathway-closure, eval=FALSE}
+```{r human-pathway-closure, eval=TRUE}
 pathway_index <- buildPathwayIndex(database = database, gene_index = index)
 spe <- createPathwayAssay(spe, analyte_type = "genes", assay = "SPT",
   slot = "counts", new_assay = "gene_ids", pathway_index = pathway_index)
@@ -187,14 +207,16 @@ spe <- createPathwayObject(spe, assay = "gene_ids", new.assay = "gene_pathways",
   pathway_index = pathway_index, min_path_size = 5, max_path_size = 500)
 pathways <- SingleCellExperiment::altExp(spe, "gene_pathways")
 coverage <- S4Vectors::metadata(pathways)$pathway_mapping$coverage
-coverage[, c("pathwayRampId", "database_size", "database_raw_size",
-             "measured_size", "coverage_fraction", "excluded_conflict_count")]
-coverage$used_members
-coverage$excluded_conflict_records
+head(coverage[, c("pathwayRampId", "database_size", "database_raw_size",
+             "measured_size", "coverage_fraction", "excluded_conflict_count")])
+head(coverage$used_members)
+head(coverage$excluded_conflict_records)
 selected <- head(coverage$pathwayRampId[coverage$eligible], 2)
 plots <- plotPathwaysSpatially(selected, spe, assay = "SPT", slot = "counts",
   pathway_index = pathway_index)
 attr(plots, "pathway_coverage")
+for (plot in plots) print(plot)
+stopifnot(ncol(pathways) == ncol(spe), length(plots) == 2L)
 ```
 
 The original assays, feature names, coordinates and paired modalities are
@@ -211,3 +233,7 @@ per-row size columns also appear in the result. Pathway score objects put
 coverage in rowData and the complete audit in metadata. Named plots return
 coverage attributes and the exact plotted score vector. Unmeasured and
 conflict-only pathways stay in the complete audit even when no score is drawn.
+
+```{r session-info}
+sessionInfo()
+```

@@ -11,7 +11,8 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "##", fig.align = "center")
+knitr::opts_chunk$set(collapse = TRUE, comment = "##", fig.align = "center",
+                     error = FALSE, cache = FALSE)
 seuratBefore <- intersect(c("Seurat", "SeuratObject"), loadedNamespaces())
 ```
 
@@ -28,9 +29,10 @@ suggests SpaMTPData for demonstrations; there is no circular runtime dependency.
 Use SpaMTP >= 0.99.4, SpaMTPdb >= 0.99.3 and SpaMTPData >= 0.99.4 together.
 The package versions are not the same thing as RaMP or experiment-data versions.
 
-All evaluated examples below work without downloads. The experiment and small
-chemical table are explicitly synthetic teaching inputs, not a biological
-dataset or a replacement for the complete RaMP snapshot.
+The first experiment and small chemical table are explicitly synthetic teaching
+inputs. Later sections load the complete pinned RaMP resources and real brain
+datasets, downloading them when no verified local copy or cache is available.
+All R code blocks are evaluated when building this article.
 
 ```{r packages, message=FALSE}
 library(SpaMTP)
@@ -76,11 +78,11 @@ For a production analysis, `loadSpaMTPDatabase()` uses the same resource reader
 and retains database provenance. A staged official file must match its size and
 checksum; `offline = TRUE` can also reuse a verified download cache.
 
-```{r production-resources, eval=FALSE}
+```{r production-resources, eval=TRUE}
 database <- loadSpaMTPDatabase(
-  c("chem_props", "pathway"), version = "3.0.7",
-  local_dir = "/path/to/SpaMTPdb-resources/3.0.7", offline = TRUE
+  c("chem_props", "pathway"), version = "3.0.7"
 )
+stopifnot(nrow(database$chem_props) == 289754L)
 ```
 
 # Annotate without inventing a downloaded database
@@ -138,10 +140,12 @@ The one-time preparation recipe shipped by SpaMTPData creates a separate
 native RDS for each of the seven historical archives. The published files can
 now be retrieved directly; no Seurat conversion is needed when using them:
 
-```{r read-published-native, eval=FALSE}
+```{r read-published-native, eval=TRUE}
 native <- SpaMTPData::spaMTPData("mouse_brain_dhb_striatum", version = "1.1.0")
 native <- normalizeSMData(native, verbose = FALSE)
 SingleCellExperiment::altExpNames(native) # SPT
+stopifnot(identical(dim(native), c(2075L, 876L)),
+  identical(intersect(c("Seurat", "SeuratObject"), loadedNamespaces()), seuratBefore))
 ```
 
 The native files have their own checksum/provenance manifest and do not
@@ -151,12 +155,17 @@ as `logcounts`. Optical rasters, polygons and Seurat graphs/weights/reductions
 are omitted. Source annotations, including historical `db_3`, retain their
 original interpretation and are not upgraded to new scored annotations.
 
-To work with a historical archive instead, conversion remains explicit:
+To work with a historical archive instead, conversion remains explicit. Only
+this boundary example loads the suggested SeuratObject package; the preceding
+native analysis does not require it.
 
-```{r convert-archive, eval=FALSE}
+```{r convert-archive, eval=TRUE}
+stopifnot(requireNamespace("SeuratObject", quietly = TRUE))
 legacy <- SpaMTPData::spaMTPData("mouse_brain_fmp10",
-  version = "1.0.0", offline = TRUE)
-native <- seuratToSpatialExperiment(legacy, assay = "Spatial", image = "fov")
+  version = "1.0.0")
+converted_archive <- seuratToSpatialExperiment(legacy, assay = "Spatial", image = "fov")
+stopifnot(methods::is(converted_archive, "SpatialExperiment"),
+  identical(dim(converted_archive), c(1538L, 3005L)))
 ```
 
 Select coordinates, layers and images deliberately. Optical rasters, graphs

@@ -13,7 +13,9 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = FALSE,
   comment = "##",
-  fig.align = "center"
+  fig.align = "center",
+  error = FALSE,
+  cache = FALSE
 )
 options(width = 100)
 ```
@@ -564,31 +566,6 @@ threshold_summary <- data.frame(
 knitr::kable(threshold_summary, row.names = FALSE)
 ```
 
-For pathway analysis, the annotation threshold and differential-significance
-threshold answer different questions. Setting `pval_cutoff_mets = 1` allows
-non-DE metabolites to contribute, while `annotation_score_threshold` still
-controls which chemical candidates are eligible.
-
-```{r downstream-thresholds, eval=FALSE}
-regional_pathways <- findRegionalPathways(
-  object,
-  analyte_types = c("genes", "metabolites"),
-  ident = "region",
-  DE.list = differential_results,
-  pval_cutoff_mets = 1,
-  annotation_score_threshold = 0.05
-)
-
-pathwayNetworkPlots(
-  object,
-  ident = "region",
-  regpathway = regional_pathways,
-  DE.list = differential_results,
-  annotation_score_threshold = 0.05,
-  metabolite_detection = "annotated"
-)
-```
-
 # Production use with the complete RaMP table
 
 For one call, `annotateSM(db = NULL)` automatically resolves the current RaMP
@@ -607,11 +584,24 @@ instead of silently adding a long preprocessing delay; use
 `infer_structure = "always"`, `structure_workers`, or precompute with
 `annotateSMILESStructure()` when that cost is intentional.
 
-```{r production-pattern, eval=FALSE}
-chem_props <- loadSpaMTPDatabase("chem_props")$chem_props
+This section runs on all 2,075 measured mass features and 876 paired observations
+in the published DHB mouse-brain resource, with the complete RaMP chemical table.
+It is evaluated by default and downloads pinned resources if they are not
+available locally or in a verified cache. The average MS1 spectrum provides
+section-level context, not pixel-specific validation of candidate identities.
+
+```{r production-pattern, eval=TRUE}
+database <- loadSpaMTPDatabase(c("chem_props", "source_df", "analytehaspathway",
+  "pathway", "ramp_db_metadata", "ramp_wikipathway", "ramp_reactome",
+  "ramp_kegg", "ramp_hmdb"), version = "3.0.7")
+chem_props <- database$chem_props
+object <- SpaMTPData::spaMTPData("mouse_brain_dhb_striatum", version = "1.1.0")
+original_counts <- SummarizedExperiment::assay(object, "counts")
+ms1 <- data.frame(mz = SummarizedExperiment::rowData(object)$mz,
+                  intensity = Matrix::rowMeans(original_counts))
 ramp_positive_index <- buildMZAnnotationIndex(
   chem_props,
-  polarity = "positive"
+  polarity = "positive", maldi_matrix = "DHB"
 )
 
 object <- annotateSM(
@@ -619,11 +609,57 @@ object <- annotateSM(
   db = NULL,
   index = ramp_positive_index,
   assay = "main",
-  polarity = "positive",
+  raw.mz.column = "mz",
+  polarity = "positive", maldi_matrix = "DHB", ms1_spectrum = ms1,
   ppm_error = 5,
   min_score = 0,
   return.only.annotated = FALSE
 )
+stopifnot(identical(SummarizedExperiment::assay(object, "counts"), original_counts),
+          identical(dim(object), c(2075L, 876L)), nrow(chem_props) == 289754L)
+annotationInfo(object)
+```
+
+# Carry the annotation threshold into real pathway analysis
+
+Chemical eligibility and region characterization answer different questions.
+Select candidates at a declared score threshold, exclude ambiguous compound
+identities, and rank **all** retained identities by descriptive regional effects.
+No pixel-level DE P values are used for this single specimen. Mouse RNA remains
+in `altExp()` but is not converted to human HGNC genes. Network topology comes
+from human pathway resources; a compound match does not validate mouse-specific
+regulatory interactions.
+
+```{r downstream-thresholds, eval=TRUE}
+pathway_index <- buildPathwayIndex(database, gene_mapping = "ramp",
+                                 organism = "Mus musculus")
+object <- normalizeSMData(object, "LogNormalize", verbose = FALSE)
+object <- createPathwayAssay(object, assay = "main", slot = "logcounts",
+  new_assay = "compound", pathway_index = pathway_index, database = database,
+  organism = "Mus musculus", annotation_source = "current",
+  annotation_score_threshold = 0.05, metabolite_ambiguity = "exclude")
+markers <- findAllDEMs(object, ident = "RegionLoupe", assay = "compound",
+  slot = "logcounts", method = "markers", spatial_blocks = 0)
+ranks <- markers$expression
+for (region in colnames(ranks)) {
+  tab <- markers$DEMs[markers$DEMs$cluster == region, ]
+  ranks[, region] <- tab$logFC[match(rownames(ranks), tab$gene)]
+}
+set.seed(1234)
+regional_pathways <- findRegionalPathways(object, ident = "RegionLoupe",
+  ranks = list(metabolites = ranks), pathway_index = pathway_index,
+  min_path_size = 3, max_path_size = 100, organism = "Mus musculus")
+stopifnot(nrow(regional_pathways) > 0L)
+head(regional_pathways[, c("pathwayName", "Cluster_id", "NES", "padj")])
+network_directory <- tempfile("dhb-annotation-networks-")
+dir.create(network_directory)
+network_file <- pathwayNetworkPlots(object, ident = "RegionLoupe",
+  regpathway = regional_pathways, DE.list = list(metabolites = markers$DEMs),
+  SM_assay = "compound", SM_slot = "logcounts", analyte_types = "metabolites",
+  database = database, pathway_index = pathway_index, organism = "Mus musculus",
+  annotation_score_threshold = 0.05, metabolite_detection = "annotated",
+  path = network_directory, image = NULL, top_n_pathways = 4, max_nodes = 350)
+stopifnot(file.exists(network_file))
 ```
 
 # Interpretation and limitations

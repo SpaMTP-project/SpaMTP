@@ -45,7 +45,10 @@ mouseBrainSpatialConfig <- function(config = NULL) {
     config
 }
 
-prepareMouseBrain <- function(nativeDir, outputDir, spatialConfig = NULL) {
+# NULL directories use public readers (verified local files, cache or download).
+# Supplying a directory retains the offline command-line recipe's default.
+prepareMouseBrain <- function(nativeDir = NULL, outputDir, spatialConfig = NULL,
+                              offline = !is.null(nativeDir)) {
     if (length(outputDir) != 1L || is.na(outputDir) || !nzchar(outputDir) ||
         file.exists(outputDir)) {
         stop("Supply a new output directory; existing paths are not overwritten.")
@@ -64,7 +67,7 @@ prepareMouseBrain <- function(nativeDir, outputDir, spatialConfig = NULL) {
         dhb = "mouse_brain_dhb_striatum")
     objects <- lapply(resources, function(resource) {
         x <- SpaMTPData::spaMTPData(resource, version = "1.1.0",
-            local_dir = nativeDir, offline = TRUE)
+            local_dir = nativeDir, offline = offline)
         if (!methods::is(x, "SpatialExperiment") ||
             length(unique(x$sample_id)) != 1L) {
             stop("Expected a single-sample native resource: ", resource)

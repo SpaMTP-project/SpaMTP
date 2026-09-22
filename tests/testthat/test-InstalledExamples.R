@@ -131,6 +131,14 @@ test_that("native preparation preserves paired data and embeds optional optical 
     expect_length(seen, 3L)
     expect_true(all(vapply(seen, function(x) identical(x,
         list(version = "1.1.0", offline = TRUE)), logical(1))))
+    # NULL uses the public reader's configured local/cache/download resolution.
+    # An explicit offline flag still forbids downloading with no directory.
+    prepare$prepareMouseBrain(outputDir = file.path(parent, "online"))
+    expect_true(all(vapply(seen, function(x) identical(x,
+        list(version = "1.1.0", offline = FALSE)), logical(1))))
+    prepare$prepareMouseBrain(outputDir = file.path(parent, "cached"), offline = TRUE)
+    expect_true(all(vapply(seen, function(x) identical(x,
+        list(version = "1.1.0", offline = TRUE)), logical(1))))
     visium <- readRDS(file.path(output, "visium.rds"))
     expect_identical(SummarizedExperiment::assays(visium), SummarizedExperiment::assays(object))
     expect_identical(SingleCellExperiment::altExp(visium, "transcriptome"),
@@ -147,6 +155,50 @@ test_that("native preparation preserves paired data and embeds optional optical 
     unlink(image)
     expect_true(length(SpatialExperiment::imgRaster(visium)) > 0L)
     expect_equal(nrow(SpatialExperiment::imgData(object)), 0L)
+})
+
+test_that("workflow readers preserve configured resources and explicit offline mode", {
+    skip_if_not_installed("SpaMTPData", "0.99.5")
+    run <- installedExampleEnvironment("workflows", "run_mouse_brain.R")
+    demo <- installedExampleEnvironment("examples", "pathway_network_mouse_brain_demo.R")
+    parent <- withr::local_tempdir()
+    saveRDS(nativeFixture(), file.path(parent, "dhb.rds"))
+    withr::local_options(list(SpaMTPdb.resource_dir = "configured-resources"))
+    calls <- list()
+    testthat::local_mocked_bindings(loadSpaMTPDatabase = function(resources,
+            version, local_dir, offline) {
+        calls$db <<- list(version = version, local_dir = local_dir,
+            offline = offline, configured = getOption("SpaMTPdb.resource_dir"))
+        stop("reader captured")
+    }, .package = "SpaMTP")
+    testthat::local_mocked_bindings(spaMTPData = function(resource, version,
+            local_dir, offline) {
+        calls$data <<- list(version = version, local_dir = local_dir, offline = offline)
+        nativeFixture()
+    }, .package = "SpaMTPData")
+    expect_error(run$runMouseBrain(parent, outputDir = tempfile(), case = "dhb"),
+        "reader captured")
+    expect_identical(calls$db, list(version = "3.0.7", local_dir = NULL,
+        offline = FALSE, configured = "configured-resources"))
+    expect_error(run$runMouseBrain(parent, "explicit-resources", tempfile(), "dhb"),
+        "reader captured")
+    expect_identical(calls$db, list(version = "3.0.7", local_dir = "explicit-resources",
+        offline = TRUE, configured = "explicit-resources"))
+    expect_identical(getOption("SpaMTPdb.resource_dir"), "configured-resources")
+    expect_error(demo$runMouseBrainNetworkDemo(outputDir = tempfile()), "reader captured")
+    expect_identical(calls$data, list(version = "1.1.0", local_dir = NULL, offline = FALSE))
+    expect_false(calls$db$offline)
+    expect_identical(calls$db$configured, "configured-resources")
+    expect_error(demo$runMouseBrainNetworkDemo(outputDir = tempfile(), offline = TRUE),
+        "reader captured")
+    expect_true(calls$data$offline)
+    expect_true(calls$db$offline)
+    expect_error(demo$runMouseBrainNetworkDemo("native", "database", tempfile()),
+        "reader captured")
+    expect_identical(calls$data$local_dir, "native")
+    expect_identical(calls$db$local_dir, "database")
+    expect_true(calls$data$offline)
+    expect_true(calls$db$offline)
 })
 
 test_that("the installed network demo uses native effects and preserves paired RNA", {

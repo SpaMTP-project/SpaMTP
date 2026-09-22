@@ -11,7 +11,8 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "##", fig.width = 9, fig.height = 5)
+knitr::opts_chunk$set(collapse = TRUE, comment = "##", fig.width = 9,
+                     fig.height = 5, error = FALSE, cache = FALSE)
 library(SpaMTP)
 ```
 
@@ -35,10 +36,12 @@ features; then connect measured identities to pathways and networks.
 | Which members support a pathway? | `buildPathwayIndex()`, `createPathwayAssay()`, `findRegionalPathways()` | Measured coverage, ambiguity exclusions, complete ranks and leading edges |
 | Are pathway members coordinated and where are they? | `runRAMPGeseca()`, `plotRegionalPathways()`, `pathwayNetworkPlots()` | The same identity assay and membership index in every downstream view |
 
-The evaluated examples below are **synthetic teaching data**, not biological
-findings. The installed `workflows/prepare_mouse_brain.R` and
-`workflows/run_mouse_brain.R` scripts reconstruct real FMP10/Visium and DHB/Visium
-analyses from registered SpaMTPData and SpaMTPdb resources.
+The first examples use **synthetic teaching data**, not biological findings.
+Later sections execute the complete registered human-brain, FMP10/Visium and
+DHB/Visium inputs, without downsampling observations for analysis. Building this
+article downloads versioned resources when no verified cache is available and
+can take tens of minutes. The installed `workflows/prepare_mouse_brain.R` and
+`workflows/run_mouse_brain.R` scripts also support offline command-line use.
 
 # Supply modalities and study design explicitly
 
@@ -132,12 +135,27 @@ maps and interactive explorer use the same ranked feature identifiers.
 
 # Keep biological-replicate inference separate
 
-```{r replicate-design, eval=FALSE}
-# Use only when the metadata identifies independent specimens and conditions.
-replicate_de <- findAllDEMs(real_data, ident = "condition", assay = "main",
+The published brain sections do not provide independent biological replicates.
+This design example therefore explicitly simulates four paired patients, each
+with three observations per condition; it is not an analysis of the real sections.
+
+```{r replicate-design, eval=TRUE}
+design <- expand.grid(pixel = seq_len(3), condition = c("control", "treated"),
+                      patient_id = paste0("simulated_patient", seq_len(4)))
+set.seed(1234)
+expression <- matrix(rnorm(6 * nrow(design), mean = 5, sd = 0.3), nrow = 6,
+    dimnames = list(paste0("feature", seq_len(6)),
+                    paste0("observation", seq_len(nrow(design)))))
+expression[1:2, design$condition == "treated"] <-
+    expression[1:2, design$condition == "treated"] + 1.2
+replicate_example <- SingleCellExperiment::SingleCellExperiment(
+    assays = list(logcounts = expression), colData = S4Vectors::DataFrame(design))
+replicate_de <- findAllDEMs(replicate_example, ident = "condition", assay = "main",
     slot = "logcounts", method = "replicate", replicate = "patient_id",
     contrasts = list(treatment_control = list(
         numerator = "treated", denominator = "control", paired = TRUE)))
+stopifnot(identical(replicate_de$tests$treatment_control$status, "completed"))
+head(replicate_de$tests$treatment_control$table)
 ```
 
 This mode fits limma to equally weighted biological-replicate means of the selected
@@ -172,21 +190,35 @@ native `plot3DFeature()` views of the same selected pairs.
 
 # Map identities before pathway statistics
 
-```{r pathway-chain, eval=FALSE}
-# Pin a compatible organism-specific index and database resources.
+Here the complete human-brain resource supplies a real measured panel and its
+archived `cout_labels` cell labels. These are descriptive groups from a single
+section, not independent replicates or newly validated anatomical boundaries.
+
+```{r pathway-chain, eval=TRUE}
+database <- loadSpaMTPDatabase(
+    c("source_df", "analyte", "analytehaspathway", "pathway"), version = "3.0.7")
+gene_reference <- SpaMTPdb::spaMTPdbGeneReference(version = "2026.7.7")
+gene_index <- buildGeneMappingIndex(database$source_df,
+                                  gene_reference = gene_reference)
+index <- buildPathwayIndex(database, gene_index = gene_index)
+real_data <- SpaMTPData::spaMTPData("human_brain_integrated", version = "1.1.0")
+real_data <- normalizeSMData(real_data, "LogNormalize", assay = "SPT", verbose = FALSE)
 identity <- createPathwayAssay(real_data, analyte_type = "genes",
-    assay = "RNA", slot = "logcounts", new_assay = "gene_ids",
+    assay = "SPT", slot = "logcounts", new_assay = "gene_ids",
     pathway_index = index, organism = "Homo sapiens")
-identity_markers <- findAllDEMs(identity, ident = "region", assay = "gene_ids",
-    slot = "logcounts", method = "markers")
+identity_markers <- findAllDEMs(identity, ident = "cout_labels", assay = "gene_ids",
+    slot = "logcounts", method = "markers", spatial_blocks = 0)
 # Build a feature-by-region matrix of the complete identity-level effects.
 ranks <- identity_markers$expression
 for (region in colnames(ranks)) {
     tab <- identity_markers$DEMs[identity_markers$DEMs$cluster == region, ]
     ranks[, region] <- tab$logFC[match(rownames(ranks), tab$gene)]
 }
-regional <- findRegionalPathways(identity, ident = "region",
-    ranks = list(genes = ranks), pathway_index = index)
+set.seed(1234)
+regional <- findRegionalPathways(identity, ident = "cout_labels",
+    ranks = list(genes = ranks), pathway_index = index,
+    min_path_size = 5, max_path_size = 500)
+stopifnot(nrow(regional) > 0, ncol(identity) == ncol(real_data))
 plotRegionalPathways(regional, database = database)
 ```
 
@@ -213,15 +245,18 @@ or orthology reference is supplied.
 
 # Run the real mouse-brain reference recipes
 
-```{r mouse-recipes, eval=FALSE}
+```{r mouse-recipes, eval=TRUE}
 prepare <- system.file("workflows", "prepare_mouse_brain.R", package = "SpaMTP")
 run <- system.file("workflows", "run_mouse_brain.R", package = "SpaMTP")
-# Rscript prepare NATIVE_1.1.0_DIR NEW_INPUT_DIR [SPATIAL_CONFIG.json]
-# Rscript run NEW_INPUT_DIR SPAMTPDB_3.0.7_DIR NEW_OUTPUT_DIR fmp10
-# Rscript run NEW_INPUT_DIR SPAMTPDB_3.0.7_DIR NEW_OUTPUT_DIR dhb
+source(prepare)
+source(run)
+input_directory <- tempfile("mouse-brain-inputs-")
 ```
 
-Preparation reads only the pinned native SpaMTPData 1.1.0 resources, offline.
+Preparation reads only the pinned native SpaMTPData 1.1.0 resources.
+With `nativeDir = NULL`, the public reader resolves verified local files, its
+cache or the published download. Supplying a directory selects offline mode by
+default; `offline = TRUE` can also require a previously populated cache.
 It does not load Seurat or deserialize historical Seurat objects. H&E is optional:
 the published native resources contain expression and coordinates but omit
 optical rasters. Independent image files can be attached with `addSpatialImage()`;
@@ -234,19 +269,63 @@ but the FMP10 runner stops with an explicit geometry requirement. The optional
 JSON configuration accepts `source`, `target_radius` and `images`. Image paths
 are resolved relative to the R process working directory, not the JSON file.
 
-```{r mouse-spatial-config, eval=FALSE}
-# Set these values from the original acquisition metadata, not fitted to a plot.
+For this exact registered pair, the small bundled scale-factor JSON retains the
+values from the original Space Ranger `outs/spatial/scalefactors_json.json`
+for V11L12-109_B1, from [Vicari et al.](https://doi.org/10.17632/w7nw4km7xd.1).
+Its original file MD5 is `412630d2d6be8c828bcf13116c64c315`.
+All 3,120 Visium barcodes and both coordinates match the original tissue-position
+table exactly. The native convention is `x = pxl_row_in_fullres` and
+`y = pxl_col_in_fullres`; swapping these axes does not change the isotropic
+radius. No H&E raster is attached here. Do not reuse this radius for another
+sample or attach an image without checking axis orientation and scale.
+
+```{r mouse-spatial-config, eval=TRUE}
+scales <- jsonlite::read_json(system.file("extdata",
+    "mouse_brain_scalefactors.json", package = "SpaMTP"))
 config <- list(
-    source = "Accession and acquisition metadata used for these image scales",
-    target_radius = spotDiameterFullres / 2,
-    images = list(mouse_brain_visium = list(
-        path = "tissue_lowres_image.png", scale_factor = lowresScaleFactor))
+    source = paste("V11L12-109_B1 Space Ranger scalefactors_json.json;",
+                   "https://doi.org/10.17632/w7nw4km7xd.1"),
+    target_radius = scales$spot_diameter_fullres / 2
 )
-jsonlite::write_json(config, "spatial-config.json", auto_unbox = TRUE,
+config_file <- tempfile(fileext = ".json")
+jsonlite::write_json(config, config_file, auto_unbox = TRUE,
                     pretty = TRUE, digits = NA)
-# source(prepare) defines prepareMouseBrain() without running it.
-source(prepare)
-prepareMouseBrain("native-resources", "new-inputs", "spatial-config.json")
+pairing <- prepareMouseBrain(outputDir = input_directory,
+                            spatialConfig = config_file)
+stopifnot(pairing$target_radius == 188.471)
+pairing[c("coordinate_units", "pixel_width", "target_radius")]
+```
+
+The following calls execute both full analyses and render their reports. Output
+directories are new temporary paths, so rebuilding never overwrites a previous
+analysis. To retain reports across R sessions, choose new permanent paths.
+
+```{r mouse-full-workflows, eval=TRUE}
+mouse_outputs <- setNames(lapply(c("dhb", "fmp10"), function(case) {
+    output <- tempfile(paste0("mouse-brain-", case, "-"))
+    result <- runMouseBrain(input_directory, outputDir = output, case = case)
+    stopifnot(file.exists(result$report),
+              file.exists(file.path(output, "analysis.rds")))
+    list(directory = output, report = result$report,
+         metrics = result$structure$metrics)
+}), c("dhb", "fmp10"))
+mouse_outputs$dhb$metrics
+mouse_outputs$fmp10$metrics
+```
+
+These panels are taken from the reports just generated, not from saved reference
+figures. They compare spatial structure for both full real datasets. Spatial
+smoothing alone is not evidence of improved biological recovery.
+
+```{r mouse-spatial-figures, out.width="100%", fig.cap=c("DHB / Visium: all retained observations.", "FMP10 / Visium: all retained, overlap-mapped observations.")}
+spatial_figures <- vapply(mouse_outputs, function(output) {
+    directory <- dirname(output$report)
+    figures <- read.csv(file.path(directory, "figure_index.csv"))
+    selected <- figures$png[figures$name == "structure_spatial"]
+    stopifnot(length(selected) == 1L)
+    file.path(directory, selected)
+}, character(1))
+knitr::include_graphics(unname(spatial_figures))
 ```
 
 Pairing is documented for these registered source specimens; arbitrary datasets
@@ -258,12 +337,16 @@ mouse RNA is retained without human-HGNC or implicit orthology conversion.
 
 The installed network-only demo is another native entry point:
 
-```{r mouse-network-demo, eval=FALSE}
+```{r mouse-network-demo, eval=TRUE}
 demo <- system.file("examples", "pathway_network_mouse_brain_demo.R",
                     package = "SpaMTP")
 source(demo)
-networks <- runMouseBrainNetworkDemo("native-resources", "database-resources",
-                                    "new-network-output", ident = "RegionLoupe")
+network_directory <- tempfile("mouse-brain-networks-")
+networks <- runMouseBrainNetworkDemo(outputDir = network_directory,
+                                    ident = "RegionLoupe")
+stopifnot(file.exists(file.path(network_directory, "network_analysis.rds")))
+networks$status
+length(unlist(networks$networks))
 ```
 
 It uses `findAllDEMs(method="markers")` for descriptive regional effects,
@@ -276,8 +359,9 @@ No eligible pathways is reported explicitly rather than relaxing the filters.
 
 # Render and retain a reviewable analysis
 
-```{r report, eval=FALSE}
-report <- renderSpaMTPReport(fit, "new_report_directory")
+```{r report, eval=TRUE}
+report <- renderSpaMTPReport(fit, tempfile("teaching-report-"))
+stopifnot(file.exists(report))
 ```
 
 Reports follow the analytical sequence above. They include a linked region/DE
@@ -291,3 +375,7 @@ by each stage, source and database provenance, and file checksums.
 
 For methods, see the [Bioconductor marker-scoring documentation](https://bioconductor.org/books/release/OSCA.basic/marker-detection.html)
 and the [GraphPCA paper](https://doi.org/10.1186/s13059-024-03429-x).
+
+```{r session-info}
+sessionInfo()
+```

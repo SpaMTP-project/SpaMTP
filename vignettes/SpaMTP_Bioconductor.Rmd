@@ -14,7 +14,9 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "##",
-  fig.align = "center"
+  fig.align = "center",
+  error = FALSE,
+  cache = FALSE
 )
 ```
 
@@ -38,7 +40,8 @@ container-internal reads and writes, and the
 [indexed annotation pipeline](Metabolite_Annotation_Pipeline.html) for the
 complete native annotation tutorial.
 The [companion workflow](SpaMTP_Companion_Workflow.html) demonstrates how
-SpaMTPData, SpaMTPdb and SpaMTP work together without downloads or Seurat.
+SpaMTPData, SpaMTPdb and SpaMTP work together on published native resources;
+only its explicitly labelled historical conversion uses SeuratObject.
 
 ```{r load-package, message=FALSE}
 library(SpaMTP)
@@ -59,10 +62,31 @@ The container depends on the data's processing stage:
 Raw imzML should be read and processed in Cardinal without materialising the
 spectra. Once features share a common axis, conversion is explicit:
 
-```{r cardinal-workflow, eval=FALSE}
-raw <- Cardinal::readImzML("section.imzML", memory = FALSE, as = "MSImagingArrays")
-raw <- normalizeSMData(raw) # Cardinal queues TIC processing.
-spe <- binSpaMTP(raw, resolution = 0.01, units = "mz")
+For a self-contained file-I/O example, first write two **synthetic** unequal-axis
+spectra to a temporary imzML/ibd pair. These are not a biological acquisition.
+The same reader accepts a real imzML path; do not discard its backing ibd file
+until file-backed processing has finished.
+
+```{r cardinal-workflow, eval=TRUE}
+binned_raw <- local({
+  directory <- tempfile("imzml-example-")
+  dir.create(directory)
+  on.exit(unlink(directory, recursive = TRUE))
+  input <- Cardinal::MSImagingArrays(
+    centroided = TRUE, continuous = FALSE,
+    spectraData = list(intensity = list(c(1, 2, 3), c(4, 5, 6, 7)),
+                      mz = list(c(100, 101, 102), c(100, 100.25, 101, 104))),
+    pixelData = Cardinal::PositionDataFrame(
+      coord = data.frame(x = c(1, 2), y = c(1, 1)),
+      run = factor(c("section", "section"))))
+  path <- file.path(directory, "section.imzML")
+  Cardinal::writeImzML(input, path, bundle = FALSE, verbose = FALSE)
+  raw <- Cardinal::readImzML(path, memory = FALSE, as = "MSImagingArrays")
+  raw <- normalizeSMData(raw) # Cardinal queues TIC processing.
+  binSpaMTP(raw, resolution = 0.01, units = "mz")
+})
+stopifnot(methods::is(binned_raw, "SpatialExperiment"), ncol(binned_raw) == 2L,
+  max(SummarizedExperiment::rowData(binned_raw)$mz) >= 104)
 ```
 
 The S4 binning method executes Cardinal's queued processing and obtains a
@@ -74,9 +98,11 @@ to bin first; no resolution is guessed during conversion.
 The reverse coercion is also registered, so either the SpaMTP generic or the
 standard S4 coercion can be used:
 
-```{r cardinal-coercion, eval=FALSE}
-cardinal <- asCardinal(spe)
-cardinal <- methods::as(spe, "MSImagingExperiment")
+```{r cardinal-coercion, eval=TRUE}
+cardinal <- asCardinal(binned_raw)
+cardinal <- methods::as(binned_raw, "MSImagingExperiment")
+stopifnot(methods::is(cardinal, "MSImagingExperiment"),
+          identical(dim(cardinal), dim(binned_raw)))
 ```
 
 # A binned MSI workflow

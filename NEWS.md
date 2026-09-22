@@ -1,5 +1,13 @@
 # SpaMTP 0.99.9
 
+* All vignette R chunks now execute by default, including full published
+  human-brain, FMP10/Visium and DHB/Visium analyses. Resource versions are pinned;
+  downloads and long builds are expected when verified caches are absent.
+  Original Space Ranger scale factors supply the registered FMP10 pair's spot
+  geometry. Synthetic file-I/O and replicate-design examples remain labelled.
+  Installed mouse-brain recipes can resolve public resources when no local
+  directory is supplied, while explicit directories retain offline defaults.
+
 * Annotation statistics now select the requested MSI modality's candidate store
   for both single-feature and batch ranking, without borrowing another modality's
   latest root-level annotations. Historical and assay-local stores remain usable.

@@ -10,7 +10,8 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "##", fig.align = "center")
+knitr::opts_chunk$set(collapse = TRUE, comment = "##", fig.align = "center",
+                     error = FALSE, cache = FALSE)
 ```
 
 # One container, public accessors
