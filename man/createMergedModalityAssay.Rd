@@ -2,7 +2,7 @@
 % Please edit documentation in R/MultiOmicAnalysis.R
 \name{createMergedModalityAssay}
 \alias{createMergedModalityAssay}
-\title{Create a singular multiomics assay by merging data from multiple assays.}
+\title{Combine paired modalities in a scaled alternative experiment}
 \usage{
 createMergedModalityAssay(
   SpaMTP,
@@ -13,29 +13,43 @@ createMergedModalityAssay(
 )
 }
 \arguments{
-\item{SpaMTP}{A Bioconductor experiment that contains atleast two assays to be merged.}
+\item{SpaMTP}{A SpatialExperiment containing at least two paired modalities.}
 
-\item{assays.to.merge}{At least two distinct modality names: main and/or altExp names.}
+\item{assays.to.merge}{At least two distinct modality names: \code{"main"} and/or
+names in \code{SingleCellExperiment::altExpNames(SpaMTP)}. Multiple aliases for
+the same primary experiment are not distinct modalities. See \link{experimentAccess}.}
 
-\item{new.assay}{A character string specifying the name of the new assay to be created (default = "merged").}
+\item{new.assay}{Name of the output alternative experiment, not an expression
+matrix (default = \code{"merged"}).}
 
 \item{return.original}{TRUE adds an altExp; FALSE returns only the merged feature space.}
 
-\item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+\item{verbose}{Reserved compatibility argument; no progress messages are emitted.}
 }
 \value{
-A Bioconductor experiment containing a new assay with the merged scaled data values.
+If \code{return.original = TRUE}, the input SpatialExperiment with
+\code{altExp(SpaMTP, new.assay)} containing a \code{scaled} assay. Otherwise a new
+SpatialExperiment with merged rows, the same pixels and a \code{scaled} assay.
 }
 \description{
 Combines selected modalities as a scaled alternative experiment.
 Useful for integrating multiple modalities (e.g. transcriptomics, proteomics, metabolomics) that have already been scaled.
 }
 \details{
-Uses an existing scaled assay when available; otherwise centres and scales
-logcounts, normcounts or counts across pixels. Constant features become zero.
+Prefers the native \code{scaled} assay, then the legacy \code{scale.data} assay;
+otherwise centres and scales \code{logcounts}, \code{normcounts} or \code{counts} across
+pixels. Constant features become zero.
 The merged values are stored as scaled, never relabelled as counts.
 }
 \examples{
-utils::str(formals(createMergedModalityAssay))
-# merged_obj <- createMergedModalityAssay(SpaMTP = spamtp_obj, assays.to.merge = c("SPM", "SPT"),new.assay = "merged")
+x <- SpatialExperiment::SpatialExperiment(
+    assays = list(counts = rbind(a = 1:4, b = 4:1)),
+    spatialCoords = cbind(x = 1:4, y = 0),
+    colData = S4Vectors::DataFrame(row.names = paste0("p", 1:4)))
+rna <- matrix(c(1, 3, 2, 4), nrow = 1,
+    dimnames = list("gene1", colnames(x)))
+x <- addTranscriptome(x, rna)
+x <- createMergedModalityAssay(x, c("main", "transcriptome"))
+merged <- SingleCellExperiment::altExp(x, "merged")
+SummarizedExperiment::assay(merged, "scaled")
 }

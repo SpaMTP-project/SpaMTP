@@ -146,6 +146,7 @@ spectralBinning <- function(matrix, ref, index, method = c("sum", "mean", "max",
 #' @param units Resolution units, either `"ppm"` or `"mz"`.
 #' @param assay Primary MSI experiment name; alternative modalities cannot be binned.
 #' @param slot Matrix layer or SpatialExperiment assay to bin.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param method Aggregation method.
 #' @param return.only.mtx Return only the binned matrix.
 #'

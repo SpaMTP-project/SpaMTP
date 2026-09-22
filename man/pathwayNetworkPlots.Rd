@@ -63,15 +63,17 @@ summed absolute NES.}
 
 \item{path}{Output directory for the generated HTML file.}
 
-\item{SM_slot}{Layer containing spatial-metabolomics values.}
+\item{SM_slot}{Expression assay name within the \code{SM_assay} experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
-\item{ST_slot}{Layer containing spatial-transcriptomics values.}
+\item{ST_slot}{Expression assay name within the \code{ST_assay} experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{colour_palette}{Colours used for the spatial abundance raster.}
 
-\item{SM_assay}{Spatial-metabolomics assay name.}
+\item{SM_assay}{Primary (\code{"main"}) or alternative experiment containing MSI.}
 
-\item{ST_assay}{Spatial-transcriptomics assay name.}
+\item{ST_assay}{Paired transcriptome alternative experiment name.}
 
 \item{analyte_types}{One or both of \code{"genes"} and \code{"metabolites"}.}
 

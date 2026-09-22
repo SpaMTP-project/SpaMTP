@@ -67,7 +67,8 @@ binSpaMTP(
 
 \item{assay}{Primary MSI experiment name; alternative modalities cannot be binned.}
 
-\item{slot}{Matrix layer or SpatialExperiment assay to bin.}
+\item{slot}{Matrix layer or SpatialExperiment assay to bin.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{method}{Aggregation method.}
 

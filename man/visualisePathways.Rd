@@ -25,9 +25,12 @@ visualisePathways(
 
 \item{pathway_df}{Dataframe containing the pathway enrichment results (output from SpaMTP::fishersPathwayAnalysis function).}
 
-\item{assay}{Character string defining the SpaMTP assay that contains m/z values (default = "SPM").}
+\item{assay}{Primary (\code{"main"}) or alternative experiment name. The default
+\code{"SPM"} is a compatibility alias for the primary experiment.}
 
-\item{slot}{Character string defining the assay slot contain the intensity values (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"counts"}), read with \code{SummarizedExperiment::assay()}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{min_n}{Integer value specifying the minimum number of analytes required to be present in a pathway (default = 3).}
 
@@ -56,5 +59,4 @@ Displays the pathway analysis results form running the 'fishersPathwayAnalysis()
 }
 \examples{
 utils::str(formals(visualisePathways))
-#SpaMTP:::visualisePathways(SpaMTP =seurat,pathway_df = pathway_df,p_val_threshold = 0.1,assay = "Spatial",slot = "counts")
 }

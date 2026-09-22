@@ -17,8 +17,10 @@ addSSCAnnotation(data, data_ssc, resolution)
 A Cardinal Object containing the raw m/z counts and the relative ssc segmentation annotations per pixel.
 }
 \description{
-Add Spatial Shrunked Centroid (ssc) results from a non-intensity based Cardinal Object into the pixelData slot of a provided Cardinal Object containing intensity values for each m/z (e.g. MSImagingExperiment).
-This function is additional functionality that can only be run on \code{Cardinal} Objects ONLY.
+Adds spatial shrunken centroid (SSC) labels to
+\code{Cardinal::pixelData(data)[["ssc"]]} through its public replacement accessor.
+This function accepts Cardinal containers only; it does not modify S4 slots
+directly or require Seurat.
 }
 \examples{
 utils::str(formals(addSSCAnnotation))

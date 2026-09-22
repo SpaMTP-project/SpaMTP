@@ -4,7 +4,7 @@
 \alias{multiOmicIntegration}
 \alias{multiOmicIntegration,SpatialExperiment-method}
 \alias{multiOmicIntegration,ANY-method}
-\title{Mult-Omic data integration}
+\title{Integrate paired modalities using native PCA embeddings}
 \usage{
 multiOmicIntegration(
   multiomic.data,
@@ -37,7 +37,8 @@ multiOmicIntegration(
 )
 }
 \arguments{
-\item{multiomic.data}{SpaMTP dataset contain Spatial Transcriptomics and Metabolomic datasets in two different assays}
+\item{multiomic.data}{A SpatialExperiment with a primary modality and paired
+alternative experiments in \code{SingleCellExperiment::altExps()}.}
 
 \item{reduction.list}{Reduction names for the primary MSI and alternative
 modalities (default = list("spm.pca", "spt.pca")).}
@@ -46,10 +47,10 @@ modalities (default = list("spm.pca", "spt.pca")).}
 
 \item{return.intermediate}{Retain per-modality PCA results in reducedDims().}
 
-\item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
+\item{verbose}{Show progress messages (default = FALSE).}
 
 \item{modalities}{Primary experiment (\code{"main"}) followed by alternative
-experiments to integrate. Derived pathway and merged assays are not
+experiments to integrate. Derived pathway and merged experiments are not
 included automatically.}
 
 \item{...}{Additional arguments passed to scater::runPCA().}

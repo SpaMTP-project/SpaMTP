@@ -19,9 +19,10 @@ findSpatiallyVariableMetabolites(
 \arguments{
 \item{object}{A SpatialExperiment or aligned MSImagingExperiment.}
 
-\item{assay}{Assay name or primary/alternative experiment to analyse.}
+\item{assay}{Primary (\code{"main"}) or alternative experiment to analyse.}
 
-\item{slot}{Assay containing expression values.}
+\item{slot}{Assay containing expression values.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{image}{Retained for compatibility; coordinates use spatialCoords.}
 

@@ -13,9 +13,11 @@ runPooling(data.filt, idents, n, assay, slot, seed = 1234, verbose = TRUE)
 
 \item{n}{An integer defining the amount of pseudo-replicates to generate for each sample (default = 3).}
 
-\item{assay}{Character string defining the assay where the mz count data and annotations are stored (default = "Spatial").}
+\item{assay}{Primary (\code{"main"}) or alternative experiment name.}
 
-\item{slot}{Character string defining the assay storage slot to pull the relative mz intensity values from (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment. Values
+must be finite and non-negative for technical pooling.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{seed}{Numeric value used to set the seed for reproducible randomisation (default = 1234).}
 

@@ -30,7 +30,8 @@ mzRidgePlot(
 
 \item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Expression assay name within the selected experiment.}
+\item{slot}{Expression assay name within the selected experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{title}{Character string of the plot title (default = "RidgePlot").}
 

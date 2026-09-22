@@ -17,11 +17,14 @@ getKmeanClusters(
 )
 }
 \arguments{
-\item{data}{A Bioconductor experiment containing the results from \code{runSpatialGraphPCA()}.}
+\item{data}{A SingleCellExperiment, including SpatialExperiment, containing
+an embedding such as the result of \code{runSpatialGraphPCA()}.}
 
-\item{reduction}{Character string stating the name of the reduction slot to use (default = "SpatialPCA").}
+\item{reduction}{Name in \code{SingleCellExperiment::reducedDimNames(data)}
+(default = \code{"SpatialPCA"}).}
 
-\item{cluster.name}{Character string of the name of the metadata column to store the cluster labels (default = "spatial_clusters").}
+\item{cluster.name}{Column name in \code{SummarizedExperiment::colData(data)}
+for cluster labels (default = \code{"spatial_clusters"}).}
 
 \item{clusters}{Integer defining the number of clusters to form (default = 8).}
 
@@ -36,10 +39,12 @@ getKmeanClusters(
 \item{seed}{Integer of the random seed to use for reproducibility (default = 888).}
 }
 \value{
-A Bioconductor experiment with a new metadata column containing the K-means cluster assignments.
+The input container with cluster assignments in
+\code{SummarizedExperiment::colData(data)[[cluster.name]]}.
 }
 \description{
-This function runs K-means clustering on a specified reduction in a Bioconductor experiment and adds the cluster assignments to the object metadata.
+Runs K-means on an embedding read through \code{SingleCellExperiment::reducedDim()}
+and writes pixel cluster labels to \code{SummarizedExperiment::colData()}.
 }
 \examples{
 utils::str(formals(getKmeanClusters))

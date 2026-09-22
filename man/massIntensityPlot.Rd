@@ -38,7 +38,8 @@ exclusive with group.by.}
 
 \item{assay}{Primary or alternative experiment.}
 
-\item{slot}{Expression assay.}
+\item{slot}{Expression assay.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{label.annotations}{Display annotations instead of m/z labels.}
 

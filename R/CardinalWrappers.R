@@ -3,8 +3,10 @@
 
 #' Adds Cardinal ssc segmentation annotation to m/z count data object
 #'
-#' Add Spatial Shrunked Centroid (ssc) results from a non-intensity based Cardinal Object into the pixelData slot of a provided Cardinal Object containing intensity values for each m/z (e.g. MSImagingExperiment).
-#' This function is additional functionality that can only be run on `Cardinal` Objects ONLY.
+#' Adds spatial shrunken centroid (SSC) labels to
+#' `Cardinal::pixelData(data)[["ssc"]]` through its public replacement accessor.
+#' This function accepts Cardinal containers only; it does not modify S4 slots
+#' directly or require Seurat.
 #'
 #' @param data A Cardinal Object containing the raw/binned m/z count data.
 #' @param data_ssc A Cardinal Object containing the ssc segmentation results. Note: Cardinal's spatialShrunkenCentroids() must be run to generate this object.

@@ -37,9 +37,11 @@ calculateAnnotationStatistics(
 \item{pathway.assay}{Alternative experiment of RaMP analytes, or pathway
 scores when pathway.scores=TRUE.}
 
-\item{mz.slot}{Expression assay in the MSI experiment.}
+\item{mz.slot}{Expression assay in the MSI experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
-\item{pathway.slot}{Input expression assay in pathway.assay.}
+\item{pathway.slot}{Input expression assay in pathway.assay.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{return.top}{Return one best evaluable candidate per feature; FALSE
 returns a named list of all candidate tables. Features without a score

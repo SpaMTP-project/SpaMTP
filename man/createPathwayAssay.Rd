@@ -2,7 +2,7 @@
 % Please edit documentation in R/PathwayAnalysis.R
 \name{createPathwayAssay}
 \alias{createPathwayAssay}
-\title{Create a Pathway Assay from Gene or Metabolite Data}
+\title{Create a RaMP identity alternative experiment}
 \usage{
 createPathwayAssay(
   SpaMTP,
@@ -30,15 +30,20 @@ createPathwayAssay(
 )
 }
 \arguments{
-\item{SpaMTP}{A Bioconductor experiment containing either spatial metabolic or transcriptomic data}
+\item{SpaMTP}{A SingleCellExperiment, including SpatialExperiment, containing
+metabolomic or transcriptomic expression.}
 
 \item{analyte_type}{Character string specifying the type of analytes to process.Must be either "genes" or "metabolites" (default = "metabolites").}
 
-\item{assay}{Character string specifying the name of the assay to use as source data (default = "Spatial").}
+\item{assay}{Primary (\code{"main"}) or alternative experiment name. The default
+\code{"Spatial"} is a compatibility alias for the primary experiment.}
 
-\item{slot}{Character string specifying which slot in the assay to use as source data (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"counts"}), read with \code{SummarizedExperiment::assay()}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
-\item{new_assay}{Character string specifying the name of the new assay to create (default = "pathway").}
+\item{new_assay}{Name for the identity-level \code{altExp()} (default =
+\code{"pathway"} for compatibility); this is not an expression assay name.}
 
 \item{annotation_score_threshold}{Minimum indexed annotation score used to
 map m/z features to RaMP compounds (default = 0.05).}
@@ -101,10 +106,16 @@ The workflow explicitly defaults to exclude. Candidate pairs, excluded
 features and exact aggregation weights are retained in metadata.}
 }
 \value{
-A SpaMTP object with a new assay added, containing respective gene/metabolite data formatted based on RAMP_db IDs.
+The input container with a new
+\code{SingleCellExperiment::altExp(SpaMTP, new_assay)}. Its expression assay
+retains the name supplied in \code{slot}, and its \code{rowData()} describes the
+RaMP identities and original measured features.
 }
 \description{
-This function creates a new assay within the provided Bioconductor experiment which contains features (either genes or metabolites) labeled by their respective RAMP ID. This assay can be used for running feature set co-regulation analysis (based on GSCA; \doi{10.1093/bioinformatics/btp502}).
+Maps genes or mass features to RaMP identities in a new \code{altExp()}.
+Rows are gene/compound identities, not pathway scores. Use this identity
+expression for enrichment or co-regulation analysis, or call
+\code{\link[=createPathwayObject]{createPathwayObject()}} to construct pathway-level scores.
 }
 \details{
 Gene expression uses the shared HGNC identity index. Non-conflicting

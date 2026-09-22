@@ -73,8 +73,10 @@ addGesecaScores <- function(pathways, object, assay = "main", slot = "logcounts"
 #' @param pathway Character vector of feature IDs in one pathway.
 #' @param object A SpatialExperiment with reducedDims.
 #' @param title Optional plot title.
-#' @param assay Primary or alternative experiment, or an assay name.
-#' @param slot Assay containing expression values; defaults to logcounts.
+#' @param assay Primary (`"main"`) or alternative experiment name.
+#' @param slot Expression assay name within the selected experiment
+#'   (default = `"logcounts"`), read with `SummarizedExperiment::assay()`.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param reduction Name in reducedDimNames(object). NULL prefers UMAP, TSNE,
 #'   then PCA, otherwise the first available reduction.
 #' @param colors Gradient colours.
@@ -122,8 +124,8 @@ plotSinglePathway <- function(pathway, object, title = NULL, assay = "main",
 
 #' Plot named pathways on a dimensionality reduction
 #' @param pathways Character vector of pathwayRampId values or unambiguous database pathway names.
-#' @inheritParams createPathwayAssay
 #' @inheritParams plotSinglePathway
+#' @inheritParams createPathwayAssay
 #' @param database Optional named list of database tables.
 #' @param database_version Database version.
 #' @param database_source Database source, auto or spamtpdb.

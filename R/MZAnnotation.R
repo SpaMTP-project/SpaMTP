@@ -470,12 +470,14 @@ annotateTable <- function(mz_df, db = NULL, ppm_error = NULL, adducts = NULL,
 #' Used to subset dataset to only include annotations that have n number of entries.
 #' For example some peaks can have multiple annotations. Peaks which have above n number of annotations assigned will be removed from Bioconductor experiment.
 #'
-#' @param obj Bioconductor experiment needing annotation refinement. The selected assay
-#'   must contain annotations in its feature metadata.
-#' @param assay Character string defining the Bioconductor experiment assay where the annotation data is stored (default = "Spatial").
+#' @param obj A SummarizedExperiment, including SingleCellExperiment or
+#'   SpatialExperiment. The selected experiment must have annotations in `rowData()`.
+#' @param assay Primary (`"main"`) or alternative experiment whose `rowData()`
+#'   contains the annotations (default = `"main"`).
 #' @param n Integer defining the number of entries an annotation can have assigned. Any higher counts will be removed (default = 1).
 #'
-#' @return Refined Bioconductor experiment that only contains annotated mz values that have n number of annotations assigned (per mz value)
+#' @return The input container with the selected experiment restricted to
+#'   features having at most `n` annotations. Pixel columns are unchanged.
 #' @export
 #'
 #' @examples

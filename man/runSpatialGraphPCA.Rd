@@ -22,13 +22,15 @@ runSpatialGraphPCA(
 )
 }
 \arguments{
-\item{data}{A Bioconductor experiment containing spatial data (feature data and spatial coordinates).}
+\item{data}{A SpatialExperiment or aligned Cardinal MSImagingExperiment.}
 
 \item{n_components}{Integer specifying the number of principal components to compute (default = 50).}
 
 \item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Character string defining the name of the slot to extract scaled data from (default = "scaled").}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"scaled"}), read with \code{SummarizedExperiment::assay()}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{image}{Reserved; must be NULL. Subset pixels before running graph PCA.}
 
@@ -44,14 +46,18 @@ runSpatialGraphPCA(
 
 \item{fast}{Boolean logical value stating whether to use fast approximate eigendecomposition via \code{RSpectra::eigs_sym()}. For large datasets this is recommended (default =TRUE).}
 
-\item{graph_name}{Character string used to store the computed spatial graph (default ="SpatialKNN").}
+\item{graph_name}{Name for pixel edges in \code{SingleCellExperiment::colPair()}
+and the graph matrix in \code{S4Vectors::metadata(data)$spatialGraphs}
+(default = \code{"SpatialKNN"}).}
 
-\item{reduction_name}{Character string used to store the dimensionality reduction (default ="SpatialPCA").}
+\item{reduction_name}{Name for the parent object's
+\code{SingleCellExperiment::reducedDim()} (default = \code{"SpatialPCA"}).}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 }
 \value{
-A Bioconductor experiment with a new graph and spatially-aware PCA reduction.
+A SpatialExperiment with a new \code{colPair()} graph and \code{reducedDim()}
+embedding. Expression assays are preserved.
 }
 \description{
 Computes a graph-regularised PCA using spatial coordinates and scaled expression data. A k-nearest neighbour (k-NN) graph is computed using spatial locations and used to regularise the PCA decomposition via a graph Laplacian. The result is stored in reducedDim(), with spatial edges in colPairs().

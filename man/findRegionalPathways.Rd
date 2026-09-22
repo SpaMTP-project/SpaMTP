@@ -49,9 +49,13 @@ findRegionalPathways(
 
 \item{ST_assay}{Paired transcriptome altExp name (default = "transcriptome").}
 
-\item{SM_slot}{The slot name containing the SM assay matrix data (default = "counts").}
+\item{SM_slot}{Expression assay name within the metabolomics experiment
+selected by \code{SM_assay} (default = \code{"counts"}).
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
-\item{ST_slot}{The slot name containing the ST assay matrix data (default = "counts").}
+\item{ST_slot}{Expression assay name within the transcriptomics experiment
+selected by \code{ST_assay} (default = \code{"counts"}).
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{min_path_size}{The min number of metabolites in a specific pathway (default = 5).}
 
@@ -123,7 +127,9 @@ or none. Pathways can still be dominated by the more densely measured modality.}
 \item{nPermSimple}{Preliminary permutations for the ranks interface.}
 }
 \value{
-A SpaMTP object with set enrichment on given analyte types.
+A data frame of regional pathway enrichment results, not a modified
+experiment. The complete-ranks interface also attaches the ranks, pathway
+coverage, mapping and multiple-testing provenance as attributes.
 }
 \description{
 This the function used to compute the gene/metabolites set enrichment for multi-omics spatial data
@@ -138,5 +144,4 @@ arbitrary statistic.
 }
 \examples{
 utils::str(formals(findRegionalPathways))
-# SpaMTP = findRegionalPathways(SpaMTP, polarity = "positive")
 }

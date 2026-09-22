@@ -1,16 +1,21 @@
 
 #### SpaMTP Saving Data Objects ########################################################################################################################################################################################
 
-#' Saves SpaMTP Object
+#' Export an experiment's expression matrix and metadata
 #'
 #' This function saves a Bioconductor experiment into a standard single-cell/spatial file format.
 #' This includes a filtered_feature_bc_matrix folder containing files storing the features, barcode/pixels and intensity matrix.
-#' Metadata and sapatial files (such as scale factors and hires/lowres images) are also stored.
+#' Pixel metadata are also stored. Feature annotations and spatial image files
+#' are optional exports; the export does not preserve every alternative
+#' experiment or analysis result. Use `saveRDS()` for an entire R container.
 #'
-#' @param data A Spatial Metabolomic Bioconductor experiment being saved.
+#' @param data A SummarizedExperiment, including SingleCellExperiment or
+#'   SpatialExperiment. Image export requires SpatialExperiment.
 #' @param outdir Character string of the directory to save the mtx.mtx, barcode.tsv, features.tsv, barcode_metadata.csv and feature_metadata.csv in.
 #' @param assay Character string defining the primary or alternative experiment that contains the m/z count data (default = "Spatial").
-#' @param slot Character string defining the primary or alternative experiment slot that contains the m/z values directly (default = "counts").
+#' @param slot Expression assay name within the selected experiment
+#'   (default = `"counts"`), read with `SummarizedExperiment::assay()`.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param image Image ID identifying exactly one imgData row; NULL omits image export.
 #' @param annotations Boolean values defining if the Bioconductor experiment contains annotations to be saved (default = FALSE).
 #' @param generate.h5 Boolean value indicating whether to generate a filtered_feature_bc_matrix.h5 file. Often used by data loading functions (e.g. scanpy.load_visium). If `FALSE`, only a filtered_feature_bc_matrix folder will be generated (default = TRUE).
@@ -38,7 +43,8 @@ saveSpaMTPData <- function(data, outdir, assay = "Spatial", slot = "counts", ima
     verbose_message(message_text = paste0("Directory already exists, storing output here: ", outdir), verbose = verbose)
   }
 
-  verbose_message(message_text = paste0("Writing ", slot," slot to matrix.mtx, barcode.tsv, genes.tsv"), verbose = verbose)
+  verbose_message(message_text = paste0("Writing expression assay ", slot,
+    " to filtered_feature_bc_matrix"), verbose = verbose)
   assayMatrix <- .assayData(data, assay, slot)
   if (!inherits(assayMatrix, "sparseMatrix")) {
     assayMatrix <- Matrix::Matrix(assayMatrix, sparse = TRUE)

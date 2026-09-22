@@ -29,9 +29,11 @@ calculateSingleAnnotationStatistics(
 
 \item{pathway.assay}{Alternative experiment containing pathway-level scores.}
 
-\item{mz.slot}{Expression assay in the MSI experiment.}
+\item{mz.slot}{Expression assay in the MSI experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
-\item{pathway.slot}{Expression assay in the pathway experiment.}
+\item{pathway.slot}{Expression assay in the pathway experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{corr_theshold}{Minimum signed pathway correlation (legacy spelling).}
 

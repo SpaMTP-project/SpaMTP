@@ -20,10 +20,12 @@
 #'   case-insensitive. When `NULL`, the most important pathways are selected by
 #'   summed absolute NES.
 #' @param path Output directory for the generated HTML file.
-#' @param SM_assay Spatial-metabolomics assay name.
-#' @param ST_assay Spatial-transcriptomics assay name.
-#' @param SM_slot Layer containing spatial-metabolomics values.
-#' @param ST_slot Layer containing spatial-transcriptomics values.
+#' @param SM_assay Primary (`"main"`) or alternative experiment containing MSI.
+#' @param ST_assay Paired transcriptome alternative experiment name.
+#' @param SM_slot Expression assay name within the `SM_assay` experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
+#' @param ST_slot Expression assay name within the `ST_assay` experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param colour_palette Colours used for the spatial abundance raster.
 #' @param analyte_types One or both of `"genes"` and `"metabolites"`.
 #' @param annotation_source Metabolite annotation provenance. The default,

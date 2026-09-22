@@ -14,8 +14,10 @@
 #' @param data.filt A Bioconductor experiment containing count values for pooling.
 #' @param idents A character string defining the idents column to pool the data against.
 #' @param n An integer defining the amount of pseudo-replicates to generate for each sample (default = 3).
-#' @param assay Character string defining the assay where the mz count data and annotations are stored (default = "Spatial").
-#' @param slot Character string defining the assay storage slot to pull the relative mz intensity values from (default = "counts").
+#' @param assay Primary (`"main"`) or alternative experiment name.
+#' @param slot Expression assay name within the selected experiment. Values
+#'   must be finite and non-negative for technical pooling.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #' @param seed Numeric value used to set the seed for reproducible randomisation (default = 1234).
 #'
@@ -81,20 +83,29 @@ runPooling <- function(data.filt, idents, n, assay, slot, seed = 1234, verbose =
 
 
 
-#' Runs EdgeR analysis for pooled data
+#' Run limma contrasts on log-transformed technical pools
 #'
 #' Worker function for calculating differentially abundant metabolites per pooling group.
-#' This function is used by by `findAllDEMs()`.
+#' Used by the compatibility `method = "technical"` branch of [findAllDEMs()].
+#' Fits limma to `log2(counts(pooled_data) + 1)` and uses `limma::treat()`;
+#' an edgeR DGEList stores the values and results, but no edgeR count-model
+#' test or voom transformation is performed. Technical pools are not independent
+#' biological replicates.
 #'
 #' @param pooled_data A SingleCellExperiment object which contains the pooled pseudo-replicate data.
-#' @param data A Bioconductor experiment containing the merged Xenium data being analysed (this is subset).
-#' @param ident A character string defining the ident column to perform differential expression analysis against.
-#' @param output_dir A character string defining the ident column to perform differential expression analysis against.
+#' @param data The original SummarizedExperiment, including SingleCellExperiment
+#'   or SpatialExperiment, supplying pixel groups and feature annotations.
+#' @param ident Column in `colData(data)` and `colData(pooled_data)` defining groups.
+#' @param output_dir Existing directory for output CSV tables, or NULL to omit
+#'   file output.
 #' @param run_name A character string defining the title of this DE analysis (will be used when saving DEMs to .csv file).
 #' @param n An integer that defines the number of pseudo-replicates per sample (default = 3).
-#' @param logFC_threshold A numeric value indicating the logFC threshold to use for defining significant genes (default = 1.2).
-#' @param annotation.column Character string defining the column where annotation information is stored in the assay metadata. This requires annotateSM() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").
-#' @param assay A character string defining the assay where the mz count data and annotations are stored (default = "Spatial").
+#' @param logFC_threshold Fold-change threshold passed as
+#'   `log2(logFC_threshold)` to `limma::treat()` (default = 1.2).
+#' @param annotation.column Column in the selected experiment's `rowData()`
+#'   containing feature annotations, or NULL to omit annotations.
+#' @param assay Primary (`"main"`) or alternative experiment name in `data`.
+#'   Pooled expression is always read from `counts(pooled_data)`.
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #' @param return.individual Boolean value defining whether to return a list of individual edgeR objects for each designated ident. If FALSE, one merged edgeR object will be returned (default = FALSE).
 #'
@@ -229,16 +240,28 @@ runDE <- function(pooled_data, data, ident, output_dir, run_name, n, logFC_thres
 
 #' Finds differentially expressed m/z values/metabolites between all comparison groups.
 #'
-#' @param data A Bioconductor experiment containing mz values for differential expression analysis.
-#' @param ident A character string defining the metadata column or groups to compare mz values between.
+#' @param data A SingleCellExperiment, including SpatialExperiment, for
+#'   `markers` or `replicate` mode. Technical pooling also accepts a plain
+#'   SummarizedExperiment.
+#' @param ident Column name in `SummarizedExperiment::colData(data)` defining
+#'   the groups to compare. Technical mode requires this column to be a factor.
 #' @param n An integer that defines the number of pseudo-replicates (pools) per sample (default = 3).
-#' @param logFC_threshold A numeric value indicating the logFC threshold to use for defining significant genes (default = 1.2).
+#' @param logFC_threshold Technical-mode fold-change threshold, passed as
+#'   `log2(logFC_threshold)` to `limma::treat()` (default = 1.2).
+#'   Not used to filter marker or biological-replicate results.
 #' @param DE_output_dir A character string defining the directory path for all output files to be stored. This path must a new directory. Else, set to NULL as default.
 #' @param run_name A character string defining the title of this DE analysis that will be used when saving DEMs to .csv file (default = 'findAllDEMs').
-#' @param annotation.column Character string defining the column where annotation information is stored in the assay metadata. This requires annotateSM() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").
-#' @param assay A character string defining the assay where the mz count data and annotations are stored (default = "Spatial").
-#' @param slot Character string defining the assay storage slot to pull the relative mz intensity values from. Note: EdgeR requires raw counts, all values must be positive (default = "counts").
-#' @param return.individual Boolean value defining whether to return a list of individual edgeR objects for each designated ident. If FALSE, one merged edgeR object will be returned (default = FALSE).
+#' @param annotation.column Optional column in the selected experiment's
+#'   `rowData()`, such as `"all_IsomerNames"` from `annotateSM()` (default NULL).
+#' @param assay Primary (`"main"`) or alternative experiment name. The default
+#'   `"Spatial"` is a compatibility alias for the primary experiment.
+#' @param slot Expression assay name within the selected experiment
+#'   (default = `"counts"`). Choose the value scale for the analysis: technical
+#'   pooling mode requires finite non-negative unlogged values; marker and
+#'   replicate modes use the supplied values directly, commonly `"logcounts"`.
+#'   See [experimentAccess] for the experiment/matrix distinction.
+#' @param return.individual In technical mode, return one result per group
+#'   instead of a merged result. Unsupported in marker/replicate modes.
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #' @param seed Numeric value used to set the seed for reproducible randomisation (default = 1234).
 #'
@@ -246,6 +269,8 @@ runDE <- function(pooled_data, data, ident, output_dir, run_name, n, logFC_thres
 #'   values; `replicate` fits configured contrasts on biological-replicate means.
 #'   The historical `technical` mode is retained for compatibility, but random
 #'   pools are technical subdivisions and cannot establish biological replication.
+#'   The compatibility default is `"technical"`; choose `"markers"` or
+#'   `"replicate"` explicitly for the corresponding native analysis.
 #' @param replicate Complete colData field identifying biological replicates.
 #' @param contrasts Named list of numerator, denominator and paired settings,
 #'   required for replicate inference. At least three replicates per arm or
@@ -254,7 +279,13 @@ runDE <- function(pooled_data, data, ident, output_dir, run_name, n, logFC_thres
 #' @param spatial_blocks Number of spatial blocks per sample for a leave-one-block
 #'   sensitivity analysis of marker effects, or zero to disable. Blocks use
 #'   coordinates only. They are not biological replicates or confidence intervals.
-#' @returns Returns an list() contains the EdgeR DE results. Pseudo-bulk counts are stored in $counts and DEMs are in $DEMs.
+#' @returns A result list, not a modified experiment. Technical mode returns
+#'   pooled values in `counts` and differential results in `DEMs` (or a list
+#'   per group when `return.individual = TRUE`). Marker mode returns `DEMs`,
+#'   `scores`, `expression`, group eligibility and provenance. Replicate mode
+#'   returns `group_means` and named `tests` with status and, when eligible,
+#'   limma tables and the biological-replicate design. Marker mode may return
+#'   `status = "skipped"` with a reason when too few groups are eligible.
 #' @export
 #'
 #' @examples

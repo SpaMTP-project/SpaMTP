@@ -33,9 +33,11 @@ features indexed by gene identifiers or RaMP IDs.}
 \item{assay}{Primary or alternative experiment to score.}
 
 \item{slot}{Expression assay. If omitted for a Bioconductor container,
-prefers logcounts, normcounts, then counts in the selected experiment.}
+prefers logcounts, normcounts, then counts in the selected experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
-\item{new.assay}{Character. Name of the new assay where pathway scores will be stored (defaults = "pathway").}
+\item{new.assay}{Name for the pathway-level \code{altExp()} (default = \code{"pathway"}).
+Scores are stored in that experiment's \code{pathwayScores} expression assay.}
 
 \item{remove.nans}{Remove pathways without matched analytes (default TRUE).}
 

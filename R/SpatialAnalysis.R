@@ -7,11 +7,13 @@
 #' @param gene Exact feature name in ST.assay.
 #' @param ident A colData column defining groups. Supply exactly one of mz,
 #'   gene and ident. Groups are compared with binary membership vectors.
-#' @param SM.assay Primary assay or modality; `main` selects the primary
+#' @param SM.assay MSI experiment name; `main` selects the primary
 #'   experiment. Legacy `SPM` and `Spatial` also select the primary experiment.
 #' @param ST.assay Alternative experiment name, or NULL for metabolites only.
 #' @param SM.slot Assay containing metabolite values.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param ST.slot Assay containing transcriptomic values.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param nfeatures Maximum results per reference; NULL returns all features.
 #' @param covariates Optional colData fields to regress from both features before
 #'   correlation, for example sample and annotated region. Raw correlations are
@@ -145,8 +147,9 @@ findCorrelatedFeatures <- function(
 #' diagonal, row-standardized by ape. Samples are analysed separately.
 #' Constant features return NA.
 #' @param object A SpatialExperiment or aligned MSImagingExperiment.
-#' @param assay Assay name or primary/alternative experiment to analyse.
+#' @param assay Primary (`"main"`) or alternative experiment to analyse.
 #' @param slot Assay containing expression values.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param image Retained for compatibility; coordinates use spatialCoords.
 #' @param nfeatures Maximum variable features selected.
 #' @param max_spots Maximum pixels for the dense distance matrix; NULL uses all.

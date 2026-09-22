@@ -25,25 +25,37 @@ findAllDEMs(
 )
 }
 \arguments{
-\item{data}{A Bioconductor experiment containing mz values for differential expression analysis.}
+\item{data}{A SingleCellExperiment, including SpatialExperiment, for
+\code{markers} or \code{replicate} mode. Technical pooling also accepts a plain
+SummarizedExperiment.}
 
-\item{ident}{A character string defining the metadata column or groups to compare mz values between.}
+\item{ident}{Column name in \code{SummarizedExperiment::colData(data)} defining
+the groups to compare. Technical mode requires this column to be a factor.}
 
 \item{n}{An integer that defines the number of pseudo-replicates (pools) per sample (default = 3).}
 
-\item{logFC_threshold}{A numeric value indicating the logFC threshold to use for defining significant genes (default = 1.2).}
+\item{logFC_threshold}{Technical-mode fold-change threshold, passed as
+\code{log2(logFC_threshold)} to \code{limma::treat()} (default = 1.2).
+Not used to filter marker or biological-replicate results.}
 
 \item{DE_output_dir}{A character string defining the directory path for all output files to be stored. This path must a new directory. Else, set to NULL as default.}
 
 \item{run_name}{A character string defining the title of this DE analysis that will be used when saving DEMs to .csv file (default = 'findAllDEMs').}
 
-\item{annotation.column}{Character string defining the column where annotation information is stored in the assay metadata. This requires annotateSM() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").}
+\item{annotation.column}{Optional column in the selected experiment's
+\code{rowData()}, such as \code{"all_IsomerNames"} from \code{annotateSM()} (default NULL).}
 
-\item{assay}{A character string defining the assay where the mz count data and annotations are stored (default = "Spatial").}
+\item{assay}{Primary (\code{"main"}) or alternative experiment name. The default
+\code{"Spatial"} is a compatibility alias for the primary experiment.}
 
-\item{slot}{Character string defining the assay storage slot to pull the relative mz intensity values from. Note: EdgeR requires raw counts, all values must be positive (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"counts"}). Choose the value scale for the analysis: technical
+pooling mode requires finite non-negative unlogged values; marker and
+replicate modes use the supplied values directly, commonly \code{"logcounts"}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
-\item{return.individual}{Boolean value defining whether to return a list of individual edgeR objects for each designated ident. If FALSE, one merged edgeR object will be returned (default = FALSE).}
+\item{return.individual}{In technical mode, return one result per group
+instead of a merged result. Unsupported in marker/replicate modes.}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 
@@ -52,7 +64,9 @@ findAllDEMs(
 \item{method}{\code{markers} uses scran effect-size summaries without pixel P
 values; \code{replicate} fits configured contrasts on biological-replicate means.
 The historical \code{technical} mode is retained for compatibility, but random
-pools are technical subdivisions and cannot establish biological replication.}
+pools are technical subdivisions and cannot establish biological replication.
+The compatibility default is \code{"technical"}; choose \code{"markers"} or
+\code{"replicate"} explicitly for the corresponding native analysis.}
 
 \item{replicate}{Complete colData field identifying biological replicates.}
 
@@ -67,7 +81,13 @@ sensitivity analysis of marker effects, or zero to disable. Blocks use
 coordinates only. They are not biological replicates or confidence intervals.}
 }
 \value{
-Returns an list() contains the EdgeR DE results. Pseudo-bulk counts are stored in $counts and DEMs are in $DEMs.
+A result list, not a modified experiment. Technical mode returns
+pooled values in \code{counts} and differential results in \code{DEMs} (or a list
+per group when \code{return.individual = TRUE}). Marker mode returns \code{DEMs},
+\code{scores}, \code{expression}, group eligibility and provenance. Replicate mode
+returns \code{group_means} and named \code{tests} with status and, when eligible,
+limma tables and the biological-replicate design. Marker mode may return
+\code{status = "skipped"} with a reason when too few groups are eligible.
 }
 \description{
 Finds differentially expressed m/z values/metabolites between all comparison groups.

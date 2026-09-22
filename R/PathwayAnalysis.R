@@ -280,8 +280,12 @@ fishersPathwayAnalysis <- function(Analyte,
 #' @param analyte_types Vector of character strings defining which analyte types to use. Options can be c("genes"), c("metabolites") or both (default = c("genes", "metabolites")).
 #' @param SM_assay Primary MSI experiment name (default = "main").
 #' @param ST_assay Paired transcriptome altExp name (default = "transcriptome").
-#' @param SM_slot The slot name containing the SM assay matrix data (default = "counts").
-#' @param ST_slot The slot name containing the ST assay matrix data (default = "counts").
+#' @param SM_slot Expression assay name within the metabolomics experiment
+#'   selected by `SM_assay` (default = `"counts"`).
+#'   See [experimentAccess] for the experiment/matrix distinction.
+#' @param ST_slot Expression assay name within the transcriptomics experiment
+#'   selected by `ST_assay` (default = `"counts"`).
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param min_path_size The min number of metabolites in a specific pathway (default = 5).
 #' @param max_path_size The max number of metabolites in a specific pathway (default = 500).
 #' @param pval_cutoff_mets Adjusted p-value cutoff used when constructing
@@ -302,14 +306,15 @@ fishersPathwayAnalysis <- function(Analyte,
 #' @param database_source Database source; see [loadSpaMTPDatabase()].
 #' @param database_local_dir Optional staged SpaMTPdb resource directory.
 #'
-#' @return A SpaMTP object with set enrichment on given analyte types.
+#' @return A data frame of regional pathway enrichment results, not a modified
+#'   experiment. The complete-ranks interface also attaches the ranks, pathway
+#'   coverage, mapping and multiple-testing provenance as attributes.
 #' @export
 #'
 #' @importFrom rlang %||%
 #'
 #' @examples
 #' utils::str(formals(findRegionalPathways))
-#' # SpaMTP = findRegionalPathways(SpaMTP, polarity = "positive")
 #' @inheritParams fishersPathwayAnalysis
 #' @details Gene mapping uses the same identity index as
 #'   [fishersPathwayAnalysis()]. Multiple RaMP records of a gene have their
@@ -710,15 +715,23 @@ runRAMPGeseca <- function(E,
 }
 
 
-#' Create a Pathway Assay from Gene or Metabolite Data
+#' Create a RaMP identity alternative experiment
 #'
-#' This function creates a new assay within the provided Bioconductor experiment which contains features (either genes or metabolites) labeled by their respective RAMP ID. This assay can be used for running feature set co-regulation analysis (based on GSCA; \doi{10.1093/bioinformatics/btp502}).
+#' Maps genes or mass features to RaMP identities in a new `altExp()`.
+#' Rows are gene/compound identities, not pathway scores. Use this identity
+#' expression for enrichment or co-regulation analysis, or call
+#' [createPathwayObject()] to construct pathway-level scores.
 #'
-#' @param SpaMTP A Bioconductor experiment containing either spatial metabolic or transcriptomic data
+#' @param SpaMTP A SingleCellExperiment, including SpatialExperiment, containing
+#'   metabolomic or transcriptomic expression.
 #' @param analyte_type Character string specifying the type of analytes to process.Must be either "genes" or "metabolites" (default = "metabolites").
-#' @param assay Character string specifying the name of the assay to use as source data (default = "Spatial").
-#' @param slot Character string specifying which slot in the assay to use as source data (default = "counts").
-#' @param new_assay Character string specifying the name of the new assay to create (default = "pathway").
+#' @param assay Primary (`"main"`) or alternative experiment name. The default
+#'   `"Spatial"` is a compatibility alias for the primary experiment.
+#' @param slot Expression assay name within the selected experiment
+#'   (default = `"counts"`), read with `SummarizedExperiment::assay()`.
+#'   See [experimentAccess] for the experiment/matrix distinction.
+#' @param new_assay Name for the identity-level `altExp()` (default =
+#'   `"pathway"` for compatibility); this is not an expression assay name.
 #' @param annotation_score_threshold Minimum indexed annotation score used to
 #'   map m/z features to RaMP compounds (default = 0.05).
 #' @param annotation_source Metabolite annotation provenance. `"current"`
@@ -745,7 +758,10 @@ runRAMPGeseca <- function(E,
 #'   is preserved for genes, including logcounts. Inputs, member coverage,
 #'   duplicate handling and index provenance are stored in
 #'   metadata(altExp(x, new_assay))$pathway_mapping.
-#' @return A SpaMTP object with a new assay added, containing respective gene/metabolite data formatted based on RAMP_db IDs.
+#' @return The input container with a new
+#'   `SingleCellExperiment::altExp(SpaMTP, new_assay)`. Its expression assay
+#'   retains the name supplied in `slot`, and its `rowData()` describes the
+#'   RaMP identities and original measured features.
 #' @export
 #'
 #' @importFrom dplyr mutate group_by summarise ungroup
@@ -881,7 +897,9 @@ createPathwayAssay <- function(SpaMTP, analyte_type = "metabolites", assay = "Sp
 #' @param assay Primary or alternative experiment to score.
 #' @param slot Expression assay. If omitted for a Bioconductor container,
 #'   prefers logcounts, normcounts, then counts in the selected experiment.
-#' @param new.assay Character. Name of the new assay where pathway scores will be stored (defaults = "pathway").
+#'   See [experimentAccess] for the experiment/matrix distinction.
+#' @param new.assay Name for the pathway-level `altExp()` (default = `"pathway"`).
+#'   Scores are stored in that experiment's `pathwayScores` expression assay.
 #' @param remove.nans Remove pathways without matched analytes (default TRUE).
 #' @param database Optional named list of database resources, normally created
 #'   by [loadSpaMTPDatabase()].

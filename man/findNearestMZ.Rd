@@ -7,16 +7,18 @@
 findNearestMZ(data, target_mz, assay = NULL)
 }
 \arguments{
-\item{data}{A \code{SpatialExperiment} containing m/z
-values.}
+\item{data}{A SummarizedExperiment, including SingleCellExperiment or
+SpatialExperiment, with feature m/z values in \code{rowData()} or feature names.}
 
 \item{target_mz}{Numeric value defining the target m/z peak}
 
-\item{assay}{Assay or layer name. For a \code{SpatialExperiment}, \code{NULL} uses the
-first assay.}
+\item{assay}{Primary (\code{"main"} or NULL) or alternative experiment name.
+The mass lookup uses the selected experiment's \code{rowData()}, not an
+expression layer; see \link{experimentAccess}.}
 }
 \value{
-String of the closest m/z value within the given dataset
+The exact character feature identifier for the nearest measured
+m/z, not a numeric mass. Ties select the first feature in the stored order.
 }
 \description{
 Finds the nearest m/z peak to a given value in a SpaMTP Object

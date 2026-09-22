@@ -25,9 +25,11 @@ plotSinglePathway(
 
 \item{title}{Optional plot title.}
 
-\item{assay}{Primary or alternative experiment, or an assay name.}
+\item{assay}{Primary (\code{"main"}) or alternative experiment name.}
 
-\item{slot}{Assay containing expression values; defaults to logcounts.}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"logcounts"}), read with \code{SummarizedExperiment::assay()}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{reduction}{Name in reducedDimNames(object). NULL prefers UMAP, TSNE,
 then PCA, otherwise the first available reduction.}

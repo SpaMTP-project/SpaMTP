@@ -18,7 +18,8 @@ scaleSMData(
 
 \item{assay}{Primary (\code{"main"}) or alternative experiment name.}
 
-\item{slot}{Input expression assay, usually \code{"logcounts"}.}
+\item{slot}{Input expression assay, usually \code{"logcounts"}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{center, scale}{Logical values passed to base \code{scale()}.}
 

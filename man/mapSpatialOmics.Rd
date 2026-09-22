@@ -29,7 +29,9 @@ mapSpatialOmics(
 
 \item{ST.hires}{Use point-in-pixel mapping for high-resolution target cells.}
 
-\item{SM.assay, ST.assay}{Source and target experiment or assay names.}
+\item{SM.assay, ST.assay}{Primary (\code{"main"}) or alternative experiment names
+in the source and target containers; see \link{experimentAccess}. These select
+modalities, not individual expression matrices.}
 
 \item{SM.pixel.width}{Square MSI pixel width in coordinate units. NULL
 estimates the median positive nearest-neighbour distance within samples.}

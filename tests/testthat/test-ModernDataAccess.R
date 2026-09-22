@@ -52,6 +52,21 @@ test_that("package functions use accessors rather than internal or superseded AP
   expect_length(unlist(problems), 0L)
 })
 
+test_that("S4 workflow methods use public accessors", {
+  namespace <- asNamespace("SpaMTP")
+  generics <- c("asSpatialExperiment", "asCardinal", "addTranscriptome",
+    "addSpatialImage", "binSpaMTP", "normalizeSMData", "multiOmicIntegration",
+    "plotSpatialFeature")
+  for (generic in generics) {
+    methods <- methods::findMethods(generic, where = namespace)
+    expect_true(length(methods) > 0L, info = generic)
+    for (method in as.list(methods)) {
+      expect_true(length(accessorViolations(deparse(body(method)))) == 0L,
+        info = generic)
+    }
+  }
+})
+
 test_that("all shipped vignette R chunks use current data-access interfaces", {
   paths <- list.files(c(test_path("..", "..", "vignettes"),
     system.file("doc", package = "SpaMTP")), pattern = "\\.Rmd$", full.names = TRUE)

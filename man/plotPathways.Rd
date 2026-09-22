@@ -35,9 +35,11 @@ plotPathways(
 
 \item{title}{Optional plot title.}
 
-\item{assay}{Character string specifying the name of the assay to use as source data (default = "Spatial").}
+\item{assay}{Primary (\code{"main"}) or alternative experiment name.}
 
-\item{slot}{Character string specifying which slot in the assay to use as source data (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"logcounts"}), read with \code{SummarizedExperiment::assay()}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{reduction}{Name in reducedDimNames(object). NULL prefers UMAP, TSNE,
 then PCA, otherwise the first available reduction.}

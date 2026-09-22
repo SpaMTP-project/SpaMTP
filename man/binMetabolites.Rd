@@ -19,7 +19,8 @@ binMetabolites(
 
 \item{assay}{Primary or alternative experiment.}
 
-\item{slot}{Expression assay.}
+\item{slot}{Expression assay.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{bin_name}{Output colData column name. Existing columns are protected.}
 }

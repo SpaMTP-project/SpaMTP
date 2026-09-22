@@ -9,6 +9,7 @@
 #' @param data A SingleCellExperiment, including SpatialExperiment.
 #' @param assay Primary (`"main"`) or alternative experiment name.
 #' @param slot Input expression assay, usually `"logcounts"`.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param center,scale Logical values passed to base `scale()`.
 #' @param outputAssay Name of a new assay for scaled values. Must differ from
 #'   the input assay and must not already exist.

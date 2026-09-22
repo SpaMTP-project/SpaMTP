@@ -35,7 +35,8 @@ A single feature is repeated for comparison across two experiments.}
 
 \item{assays}{One or two primary/altExp names.}
 
-\item{slots}{One or two expression assay names.}
+\item{slots}{One or two expression assay names.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{between.layer.height}{Distance between layers.}
 

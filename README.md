@@ -114,7 +114,7 @@ sce <- seuratToSingleCellExperiment(seuratObject, assay = "RNA")
 | FindMultiModalNeighbors | multiOmicIntegration supplies a **different**, equal-weight PCA embedding, not WNN |
 
 Conversion preserves the requested exact layer, metadata, identities and
-paired alternative assays. It does not transfer optical rasters, graphs or
+paired alternative experiments. It does not transfer optical rasters, graphs or
 reductions. Split Seurat v5 layers must be joined beforehand or selected
 explicitly. Other assays without the same pixels are skipped with a warning.
 The original layer name is retained: a converted data layer is still called
@@ -127,6 +127,11 @@ Historical Seurat/WNN tutorials belong to the published-workflow branch.
 
 For runnable native examples, see [modern data access](vignettes/Modern_Data_Access.Rmd)
 and the [full annotation pipeline](vignettes/Metabolite_Annotation_Pipeline.Rmd).
+Function arguments distinguish the experiment (`assay = "main"` or an
+`altExp()` name) from its expression matrix (`slot = "counts"` or another
+exact character assay name). `slot` is retained for call compatibility and
+does not expose an internal S4 slot. See `?experimentAccess` for accessor
+examples and the storage convention.
 Spatial coordinates have one authoritative store: `spatialCoords()`.
 Seurat conversion reads a single image/FOV through `GetTissueCoordinates()`
 before considering historical metadata copies; multiple images require an

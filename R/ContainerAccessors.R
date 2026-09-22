@@ -15,6 +15,7 @@
 
 .experimentForAssay <- function(object, assay = NULL) {
   .requireExperiment(object)
+  if (!is.null(assay)) .validateAssayName(assay, "assay")
   alternatives <- if (inherits(object, "SingleCellExperiment")) {
     SingleCellExperiment::altExpNames(object)
   } else {
@@ -106,9 +107,10 @@
 }
 
 .assayData <- function(object, assay = NULL, layer = "counts") {
+  .validateAssayName(layer, "layer")
   experiment <- .experimentForAssay(object, assay)
   available <- SummarizedExperiment::assayNames(experiment)
-  if (length(layer) != 1L || is.na(layer) || !layer %in% available) {
+  if (!layer %in% available) {
     stop(
       "Assay `", paste(layer, collapse = ", "), "` was not found. Available assays: ",
       paste(available, collapse = ", "), ".", call. = FALSE
@@ -118,12 +120,18 @@
 }
 
 .setAssayData <- function(object, value, assay = NULL, layer = "counts") {
+  .validateAssayName(layer, "layer")
   experiment <- .experimentForAssay(object, assay)
-  if (length(layer) != 1L || is.na(layer) || !nzchar(layer)) {
-    stop("layer must be one non-empty assay name.", call. = FALSE)
-  }
   SummarizedExperiment::assay(experiment, layer) <- value
   .replaceExperiment(object, experiment, assay)
+}
+
+.validateAssayName <- function(value, argument) {
+  if (!is.character(value) || !is.null(dim(value)) || length(value) != 1L ||
+      is.na(value) || !nzchar(value)) {
+    stop(argument, " must be one non-empty character name.", call. = FALSE)
+  }
+  invisible(TRUE)
 }
 
 .assayNames <- function(object) {

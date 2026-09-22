@@ -22,7 +22,8 @@ statPlot(
 
 \item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Expression assay name within the selected experiment.}
+\item{slot}{Expression assay name within the selected experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{bottom.cutoff}{Numeric value defining the percent of data to exclude for the lower end of the distribution. A bottom.cutoff = 0.05 will remove the bottom 5\% of data point (default = NULL).}
 

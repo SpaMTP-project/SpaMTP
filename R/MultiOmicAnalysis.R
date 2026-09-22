@@ -1,17 +1,18 @@
-#' Mult-Omic data integration
+#' Integrate paired modalities using native PCA embeddings
 #'
 #' SpatialExperiment input uses paired alternative experiments and combines
 #' equal-weight PCA embeddings generated with scater. This is not Seurat WNN;
 #' the historical WNN workflow remains in the published-workflow branch.
 #'
-#' @param multiomic.data SpaMTP dataset contain Spatial Transcriptomics and Metabolomic datasets in two different assays
+#' @param multiomic.data A SpatialExperiment with a primary modality and paired
+#'   alternative experiments in `SingleCellExperiment::altExps()`.
 #' @param reduction.list Reduction names for the primary MSI and alternative
 #'   modalities (default = list("spm.pca", "spt.pca")).
 #' @param dims.list List containing the numeric range of principle component dimension to include for each modality (default = list(1:30,1:30)).
 #' @param return.intermediate Retain per-modality PCA results in reducedDims().
-#' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#' @param verbose Show progress messages (default = FALSE).
 #' @param modalities Primary experiment (`"main"`) followed by alternative
-#'   experiments to integrate. Derived pathway and merged assays are not
+#'   experiments to integrate. Derived pathway and merged experiments are not
 #'   included automatically.
 #' @param ... Additional arguments passed to scater::runPCA().
 #'
@@ -193,55 +194,61 @@ methods::setMethod(
 
 
 
-#' Create a singular multiomics assay by merging data from multiple assays.
+#' Combine paired modalities in a scaled alternative experiment
 #'
 #' Combines selected modalities as a scaled alternative experiment.
 #' Useful for integrating multiple modalities (e.g. transcriptomics, proteomics, metabolomics) that have already been scaled.
 #'
-#' @param SpaMTP A Bioconductor experiment that contains atleast two assays to be merged.
-#' @param assays.to.merge At least two distinct modality names: main and/or altExp names.
-#' @param new.assay A character string specifying the name of the new assay to be created (default = "merged").
+#' @param SpaMTP A SpatialExperiment containing at least two paired modalities.
+#' @param assays.to.merge At least two distinct modality names: `"main"` and/or
+#'   names in `SingleCellExperiment::altExpNames(SpaMTP)`. Multiple aliases for
+#'   the same primary experiment are not distinct modalities. See [experimentAccess].
+#' @param new.assay Name of the output alternative experiment, not an expression
+#'   matrix (default = `"merged"`).
 #' @param return.original TRUE adds an altExp; FALSE returns only the merged feature space.
-#' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
+#' @param verbose Reserved compatibility argument; no progress messages are emitted.
 #'
-#' @return A Bioconductor experiment containing a new assay with the merged scaled data values.
+#' @return If `return.original = TRUE`, the input SpatialExperiment with
+#'   `altExp(SpaMTP, new.assay)` containing a `scaled` assay. Otherwise a new
+#'   SpatialExperiment with merged rows, the same pixels and a `scaled` assay.
 #' @export
 #'
 #' @details
-#' Uses an existing scaled assay when available; otherwise centres and scales
-#' logcounts, normcounts or counts across pixels. Constant features become zero.
+#' Prefers the native `scaled` assay, then the legacy `scale.data` assay;
+#' otherwise centres and scales `logcounts`, `normcounts` or `counts` across
+#' pixels. Constant features become zero.
 #' The merged values are stored as scaled, never relabelled as counts.
 #'
 #' @examples
-#' utils::str(formals(createMergedModalityAssay))
-#' # merged_obj <- createMergedModalityAssay(SpaMTP = spamtp_obj, assays.to.merge = c("SPM", "SPT"),new.assay = "merged")
+#' x <- SpatialExperiment::SpatialExperiment(
+#'     assays = list(counts = rbind(a = 1:4, b = 4:1)),
+#'     spatialCoords = cbind(x = 1:4, y = 0),
+#'     colData = S4Vectors::DataFrame(row.names = paste0("p", 1:4)))
+#' rna <- matrix(c(1, 3, 2, 4), nrow = 1,
+#'     dimnames = list("gene1", colnames(x)))
+#' x <- addTranscriptome(x, rna)
+#' x <- createMergedModalityAssay(x, c("main", "transcriptome"))
+#' merged <- SingleCellExperiment::altExp(x, "merged")
+#' SummarizedExperiment::assay(merged, "scaled")
 createMergedModalityAssay <- function(SpaMTP, assays.to.merge, new.assay = "merged", return.original = TRUE, verbose = FALSE){
   .requireExperiment(SpaMTP, "SpatialExperiment")
   modalityNames <- SingleCellExperiment::altExpNames(SpaMTP)
-  primaryNames <- unique(c(
-    "main", "primary", SummarizedExperiment::assayNames(SpaMTP)
-  ))
-  getModality <- function(name) {
-    if (name %in% modalityNames) {
-      return(SingleCellExperiment::altExp(SpaMTP, name))
-    }
-    if (name %in% primaryNames) {
-      return(SpaMTP)
-    }
-    stop(
-      "Modality `", name, "` was not found. Use `main` or an altExp name.",
-      call. = FALSE
-    )
-  }
-  if (length(assays.to.merge) < 2L || anyNA(assays.to.merge) ||
+  if (!is.character(assays.to.merge) || length(assays.to.merge) < 2L ||
+      anyNA(assays.to.merge) || any(!nzchar(assays.to.merge)) ||
       anyDuplicated(assays.to.merge)) {
     stop("At least two distinct modalities must be supplied.", call. = FALSE)
   }
-  modalities <- lapply(assays.to.merge, getModality)
+  modalities <- lapply(assays.to.merge, function(name) {
+    .experimentForAssay(SpaMTP, name)
+  })
+  if (anyDuplicated(match(assays.to.merge, modalityNames, nomatch = 0L))) {
+    stop("Supply distinct modalities, not aliases of the same experiment.",
+         call. = FALSE)
+  }
   matrices <- Map(
     function(modality, name) {
       available <- SummarizedExperiment::assayNames(modality)
-      preferred <- c("scale.data", "scaled", "logcounts", "normcounts", "counts")
+      preferred <- c("scaled", "scale.data", "logcounts", "normcounts", "counts")
       selected <- intersect(preferred, available)
       if (!length(selected)) stop("No supported expression assay in modality ", name, call. = FALSE)
       selected <- selected[[1L]]

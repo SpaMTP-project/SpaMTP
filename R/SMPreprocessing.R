@@ -9,10 +9,17 @@
 #'
 #' @param data A SingleCellExperiment (including SpatialExperiment), Cardinal
 #'   MSImagingArrays/MSImagingExperiment.
-#' @param normalisation.type Character string defining the normalization method to run. Options are either c("TIC", "LogNormalize", "RC") which represent Total Ion Current (TIC) normalization, Log Normalization or counts per million (RC), respectively (default = "TIC").
-#' @param scale.factor Numeric value that sets the scale factor for pixel/spot level normalization. Following normalization the total intensity value across each pixel will equal this value. If scale.factor = NULL, TIC normalization will use a scale factor = number of m/z and Log Normalisation will use a scale factor = 10000 (default = NULL).
+#' @param normalisation.type `"TIC"` (default) or `"RC"` divides each pixel's
+#'   intensities by its total and multiplies by `scale.factor`, storing
+#'   `normcounts`. `"LogNormalize"` additionally applies natural `log1p()`
+#'   and stores `logcounts`. Cardinal input supports only `"TIC"`.
+#' @param scale.factor Positive target total before log transformation. When
+#'   NULL, native TIC uses the number of features and RC/LogNormalize use
+#'   10000. Set to 1e6 explicitly for counts/intensities per million. Zero-total
+#'   pixels remain zero. Cardinal requires NULL and uses its own TIC scaling.
 #' @param assay Primary (`main`) or alternative experiment name.
 #' @param slot Expression assay name within the selected experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
 #' @return An object of the same container family with normalized values.
@@ -167,6 +174,7 @@ methods::setMethod(
 #' @param CPM.scale.factor Numeric value that sets the scale factor for pixel/spot level normalization. Following normalization the total intensity value across each pixel will equal this value (default = 1e6).
 #' @param assay Primary (`main`) or alternative experiment name.
 #' @param slot Expression assay name within the selected experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = FALSE).
 #'
 #' @return Bioconductor experiment with count values normalised and corrected for between categories
@@ -249,6 +257,7 @@ tmmNormalize <- function(combined.obj, ident, refIdent, normalisation.type = "CP
 #' @param group.by Name of the `colData()` column to group by (default = NULL).
 #' @param assay Primary (`main`) or alternative experiment name.
 #' @param slot Expression assay name within the selected experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param bottom.cutoff Numeric value defining the percent of data to exclude for the lower end of the distribution. A bottom.cutoff = 0.05 will remove the bottom 5% of data point (default = NULL).
 #' @param top.cutoff Numeric value defining the percent of data to exclude for the upper end of the distribution. A top.cutoff = 0.05 will remove the top 5% of data point (default = NULL).
 #' @param log.data Boolean value indicating whether to log transform the y-axis values (default = FALSE).
@@ -323,6 +332,7 @@ statPlot <- function (data, group.by = NULL, assay = "main", slot = "counts", bo
 #' @param mzs Vector of characters defining which features (m/z's) to label on the plot. If `NULL` no features will be labeled (default = NULL).
 #' @param assay Primary (`main`) or alternative experiment name.
 #' @param slot Expression assay name within the selected experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param title Character string of the plot title (default = "RidgePlot").
 #' @param x.lab Character string of the x-axis label (default = "var").
 #' @param y.lab Character string of the y-axis label (default = "intensity").
@@ -382,6 +392,7 @@ mzRidgePlot <- function (data, group.by = NULL, mzs = NULL, assay = "main", slot
 #' @param mzs Vector of characters defining which features (m/z's) to label on the plot. If `NULL` no features will be labeled (default = NULL).
 #' @param assay Primary (`main`) or alternative experiment name.
 #' @param slot Expression assay name within the selected experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param title Character string of the plot title (default = "Expression").
 #' @param x.lab Character string of the x-axis label (default = "var").
 #' @param y.lab Character string of the y-axis label (default = "intensity").
@@ -479,6 +490,7 @@ mzViolinPlot <- function (data, group.by = NULL, mzs = NULL, assay = "main", slo
 #' @param mzs Vector of characters defining which features (m/z's) to label on the plot. If `NULL` no features will be labeled (default = NULL).
 #' @param assay Primary (`main`) or alternative experiment name.
 #' @param slot Expression assay name within the selected experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param title Character string of the plot title (default = "BoxPlot").
 #' @param x.lab Character string of the x-axis label (default = "var").
 #' @param y.lab Character string of the y-axis label (default = "intensity").

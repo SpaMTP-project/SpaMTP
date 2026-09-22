@@ -28,14 +28,16 @@ findCorrelatedFeatures(
 \item{ident}{A colData column defining groups. Supply exactly one of mz,
 gene and ident. Groups are compared with binary membership vectors.}
 
-\item{SM.assay}{Primary assay or modality; \code{main} selects the primary
+\item{SM.assay}{MSI experiment name; \code{main} selects the primary
 experiment. Legacy \code{SPM} and \code{Spatial} also select the primary experiment.}
 
 \item{ST.assay}{Alternative experiment name, or NULL for metabolites only.}
 
-\item{SM.slot}{Assay containing metabolite values.}
+\item{SM.slot}{Assay containing metabolite values.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
-\item{ST.slot}{Assay containing transcriptomic values.}
+\item{ST.slot}{Assay containing transcriptomic values.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{nfeatures}{Maximum results per reference; NULL returns all features.}
 

@@ -18,7 +18,10 @@ convertSeuratToCardinal(
 
 \item{assay}{Seurat assay to convert.}
 
-\item{slot}{Seurat layer to convert.}
+\item{slot}{Exact Seurat expression layer name, read with
+\code{SeuratObject::LayerData()}, not an internal S4 slot. This boundary
+converter differs from native analysis selectors; see \link{experimentAccess}
+and \code{\link[=seuratToSpatialExperiment]{seuratToSpatialExperiment()}}.}
 
 \item{run_col}{Optional cell-metadata column containing run identifiers.}
 

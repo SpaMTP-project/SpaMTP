@@ -57,13 +57,20 @@ normalizeSMData(
 \item{data}{A SingleCellExperiment (including SpatialExperiment), Cardinal
 MSImagingArrays/MSImagingExperiment.}
 
-\item{normalisation.type}{Character string defining the normalization method to run. Options are either c("TIC", "LogNormalize", "RC") which represent Total Ion Current (TIC) normalization, Log Normalization or counts per million (RC), respectively (default = "TIC").}
+\item{normalisation.type}{\code{"TIC"} (default) or \code{"RC"} divides each pixel's
+intensities by its total and multiplies by \code{scale.factor}, storing
+\code{normcounts}. \code{"LogNormalize"} additionally applies natural \code{log1p()}
+and stores \code{logcounts}. Cardinal input supports only \code{"TIC"}.}
 
-\item{scale.factor}{Numeric value that sets the scale factor for pixel/spot level normalization. Following normalization the total intensity value across each pixel will equal this value. If scale.factor = NULL, TIC normalization will use a scale factor = number of m/z and Log Normalisation will use a scale factor = 10000 (default = NULL).}
+\item{scale.factor}{Positive target total before log transformation. When
+NULL, native TIC uses the number of features and RC/LogNormalize use
+10000. Set to 1e6 explicitly for counts/intensities per million. Zero-total
+pixels remain zero. Cardinal requires NULL and uses its own TIC scaling.}
 
 \item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Expression assay name within the selected experiment.}
+\item{slot}{Expression assay name within the selected experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 }

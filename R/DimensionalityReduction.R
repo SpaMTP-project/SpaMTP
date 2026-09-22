@@ -3,16 +3,22 @@
 #' Uses scater::runPCA() and stores embeddings in reducedDim().
 #' The user can provide a bin/resolution size to increase the bin size and reduce the dimensionality/noise of the SM dataset prior to calculating PCAs.
 #'
-#' @param SpaMTP Bioconductor experiment that contains spatial metabolic information.
+#' @param SpaMTP A SingleCellExperiment, including SpatialExperiment, containing
+#'   the selected primary or alternative experiment.
 #' @param npcs Positive number of PCs, capped by matrix dimensions. NULL uses the variance threshold.
 #' @param variance_explained_threshold Cumulative variance fraction in (0, 1], used only when npcs is NULL.
 #' @param assay Primary (`main`) or alternative experiment name.
-#' @param slot Character string defining the assay slot containing the intensity values (default = "counts").
+#' @param slot Expression assay name within the selected experiment
+#'   (default = `"counts"`), read with `SummarizedExperiment::assay()`.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param show_variance_plot Boolean indicating weather to display the variance plot output by this analysis (default = FALSE).
 #' @param bin_resolution Numeric value defining the resolution to use for binning m/z peaks. If set to `NULL`, no binning will be performed (default = NULL).
 #' @param resolution_units Character string specifying the units of the `bin_resolution`. Either 'ppm' or 'mz' can be provided. `bin_resolution` must be provided for this parameter to be implemented (default = "ppm").
 #' @param bin_method Character string defining the method to use for binning respective m/z peaks that fall within a bin. Options for this parameter can be one of "sum", "mean", "max" or "min". `bin_resolution` must be provided for this parameter to be implemented (default = "sum").
-#' @param reduction.name Character string indicating the name associated with the PCA results stored in the output Bioconductor experiment (default = "pca").
+#' @param reduction.name Name in `SingleCellExperiment::reducedDimNames(SpaMTP)`
+#'   for the resulting embedding (default = `"pca"`). Even when the input
+#'   expression is in an alternative experiment, the embedding is stored in
+#'   the parent object's `reducedDim()`.
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #' @param features Optional exact feature identifiers. When supplied, all and
 #'   only these rows enter PCA; the scater top-500 default is bypassed.
@@ -123,10 +129,12 @@ runMetabolicPCA <- function(SpaMTP,
 #' Note: This method has been adapted from the GraphPCA Python package
 #' (\doi{10.1186/s13059-024-03429-x}).
 #'
-#' @param data A Bioconductor experiment containing spatial data (feature data and spatial coordinates).
+#' @param data A SpatialExperiment or aligned Cardinal MSImagingExperiment.
 #' @param n_components Integer specifying the number of principal components to compute (default = 50).
 #' @param assay Primary (`main`) or alternative experiment name.
-#' @param slot Character string defining the name of the slot to extract scaled data from (default = "scaled").
+#' @param slot Expression assay name within the selected experiment
+#'   (default = `"scaled"`), read with `SummarizedExperiment::assay()`.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param image Reserved; must be NULL. Subset pixels before running graph PCA.
 #' @param platform Character string matching either `"Visium"` or `"ST"` to determine how the k-NN graph is constructed. If "Visium" k-nns will handle the hexagon spot arrangement, including setting `n_neighbors` = 6, else "ST" assignment will set `n_neighbors` = 4 unless a value is specifically provided (default = "Visium").
 #' @param lambda Numeric value defining the regularisation parameter that controls the influence of the graph Laplacian (default = 0.5).
@@ -134,11 +142,15 @@ runMetabolicPCA <- function(SpaMTP,
 #' @param include_self Boolean logical value indicating whether to include self-connections in the graph (default = FALSE).
 #' @param alg Character string specifying the algorithm to use for nearest neighbour search (passed to `FNN::get.knn()`) (default ="kd_tree").
 #' @param fast Boolean logical value stating whether to use fast approximate eigendecomposition via `RSpectra::eigs_sym()`. For large datasets this is recommended (default =TRUE).
-#' @param graph_name Character string used to store the computed spatial graph (default ="SpatialKNN").
-#' @param reduction_name Character string used to store the dimensionality reduction (default ="SpatialPCA").
+#' @param graph_name Name for pixel edges in `SingleCellExperiment::colPair()`
+#'   and the graph matrix in `S4Vectors::metadata(data)$spatialGraphs`
+#'   (default = `"SpatialKNN"`).
+#' @param reduction_name Name for the parent object's
+#'   `SingleCellExperiment::reducedDim()` (default = `"SpatialPCA"`).
 #' @param verbose Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).
 #'
-#' @return A Bioconductor experiment with a new graph and spatially-aware PCA reduction.
+#' @return A SpatialExperiment with a new `colPair()` graph and `reducedDim()`
+#'   embedding. Expression assays are preserved.
 #' @export
 #'
 #' @rawNamespace import(Matrix, except = c(expand, head, pack, unpack))
@@ -334,11 +346,15 @@ kNeighborsGraph <- function(location, n_neighbors, platform, include_self = FALS
 
 #' Perform K-means clustering on a specified reduction
 #'
-#' This function runs K-means clustering on a specified reduction in a Bioconductor experiment and adds the cluster assignments to the object metadata.
+#' Runs K-means on an embedding read through `SingleCellExperiment::reducedDim()`
+#' and writes pixel cluster labels to `SummarizedExperiment::colData()`.
 #'
-#' @param data A Bioconductor experiment containing the results from `runSpatialGraphPCA()`.
-#' @param reduction Character string stating the name of the reduction slot to use (default = "SpatialPCA").
-#' @param cluster.name Character string of the name of the metadata column to store the cluster labels (default = "spatial_clusters").
+#' @param data A SingleCellExperiment, including SpatialExperiment, containing
+#'   an embedding such as the result of `runSpatialGraphPCA()`.
+#' @param reduction Name in `SingleCellExperiment::reducedDimNames(data)`
+#'   (default = `"SpatialPCA"`).
+#' @param cluster.name Column name in `SummarizedExperiment::colData(data)`
+#'   for cluster labels (default = `"spatial_clusters"`).
 #' @param clusters Integer defining the number of clusters to form (default = 8).
 #' @param iter.max Integer defining the maximum number of iterations allowed (default = 10).
 #' @param nstart Integer stating the number of random sets to choose (default = 1).
@@ -346,7 +362,8 @@ kNeighborsGraph <- function(location, n_neighbors, platform, include_self = FALS
 #' @param trace Logical boolean indicating whether to produce tracing information on the progress of the algorithm (default = FALSE).
 #' @param seed Integer of the random seed to use for reproducibility (default = 888).
 #'
-#' @return A Bioconductor experiment with a new metadata column containing the K-means cluster assignments.
+#' @return The input container with cluster assignments in
+#'   `SummarizedExperiment::colData(data)[[cluster.name]]`.
 #' @export
 #'
 #' @examples

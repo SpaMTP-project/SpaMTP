@@ -2,7 +2,7 @@
 % Please edit documentation in R/DifferentialMZPeaks.R
 \name{runDE}
 \alias{runDE}
-\title{Runs EdgeR analysis for pooled data}
+\title{Run limma contrasts on log-transformed technical pools}
 \usage{
 runDE(
   pooled_data,
@@ -21,21 +21,26 @@ runDE(
 \arguments{
 \item{pooled_data}{A SingleCellExperiment object which contains the pooled pseudo-replicate data.}
 
-\item{data}{A Bioconductor experiment containing the merged Xenium data being analysed (this is subset).}
+\item{data}{The original SummarizedExperiment, including SingleCellExperiment
+or SpatialExperiment, supplying pixel groups and feature annotations.}
 
-\item{ident}{A character string defining the ident column to perform differential expression analysis against.}
+\item{ident}{Column in \code{colData(data)} and \code{colData(pooled_data)} defining groups.}
 
-\item{output_dir}{A character string defining the ident column to perform differential expression analysis against.}
+\item{output_dir}{Existing directory for output CSV tables, or NULL to omit
+file output.}
 
 \item{run_name}{A character string defining the title of this DE analysis (will be used when saving DEMs to .csv file).}
 
 \item{n}{An integer that defines the number of pseudo-replicates per sample (default = 3).}
 
-\item{logFC_threshold}{A numeric value indicating the logFC threshold to use for defining significant genes (default = 1.2).}
+\item{logFC_threshold}{Fold-change threshold passed as
+\code{log2(logFC_threshold)} to \code{limma::treat()} (default = 1.2).}
 
-\item{annotation.column}{Character string defining the column where annotation information is stored in the assay metadata. This requires annotateSM() to be run where the default column to store annotations is "all_IsomerNames" (default = "None").}
+\item{annotation.column}{Column in the selected experiment's \code{rowData()}
+containing feature annotations, or NULL to omit annotations.}
 
-\item{assay}{A character string defining the assay where the mz count data and annotations are stored (default = "Spatial").}
+\item{assay}{Primary (\code{"main"}) or alternative experiment name in \code{data}.
+Pooled expression is always read from \code{counts(pooled_data)}.}
 
 \item{return.individual}{Boolean value defining whether to return a list of individual edgeR objects for each designated ident. If FALSE, one merged edgeR object will be returned (default = FALSE).}
 
@@ -46,7 +51,11 @@ A modified edgeR object which contains the relative pseudo-bulking analysis outp
 }
 \description{
 Worker function for calculating differentially abundant metabolites per pooling group.
-This function is used by by \code{findAllDEMs()}.
+Used by the compatibility \code{method = "technical"} branch of \code{\link[=findAllDEMs]{findAllDEMs()}}.
+Fits limma to \code{log2(counts(pooled_data) + 1)} and uses \code{limma::treat()};
+an edgeR DGEList stores the values and results, but no edgeR count-model
+test or voom transformation is performed. Technical pools are not independent
+biological replicates.
 }
 \examples{
 utils::str(formals(runDE))

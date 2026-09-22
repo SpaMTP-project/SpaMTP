@@ -39,9 +39,11 @@ plotSinglePathwaySpatially(
 
 \item{image.alpha}{Image opacity.}
 
-\item{assay}{Primary or alternative experiment, or an assay name.}
+\item{assay}{Primary (\code{"main"}) or alternative experiment name.}
 
-\item{slot}{Assay containing expression values; defaults to logcounts.}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"logcounts"}), read with \code{SummarizedExperiment::assay()}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{colors}{Gradient colours.}
 

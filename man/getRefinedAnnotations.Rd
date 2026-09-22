@@ -7,15 +7,17 @@
 getRefinedAnnotations(obj, assay = "main", n = 1)
 }
 \arguments{
-\item{obj}{Bioconductor experiment needing annotation refinement. The selected assay
-must contain annotations in its feature metadata.}
+\item{obj}{A SummarizedExperiment, including SingleCellExperiment or
+SpatialExperiment. The selected experiment must have annotations in \code{rowData()}.}
 
-\item{assay}{Character string defining the Bioconductor experiment assay where the annotation data is stored (default = "Spatial").}
+\item{assay}{Primary (\code{"main"}) or alternative experiment whose \code{rowData()}
+contains the annotations (default = \code{"main"}).}
 
 \item{n}{Integer defining the number of entries an annotation can have assigned. Any higher counts will be removed (default = 1).}
 }
 \value{
-Refined Bioconductor experiment that only contains annotated mz values that have n number of annotations assigned (per mz value)
+The input container with the selected experiment restricted to
+features having at most \code{n} annotations. Pixel columns are unchanged.
 }
 \description{
 Used to subset dataset to only include annotations that have n number of entries.

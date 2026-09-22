@@ -28,7 +28,8 @@ tmmNormalize(
 
 \item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Expression assay name within the selected experiment.}
+\item{slot}{Expression assay name within the selected experiment.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = FALSE).}
 }

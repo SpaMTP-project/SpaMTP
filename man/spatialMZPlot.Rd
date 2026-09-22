@@ -39,7 +39,8 @@ spatialMZPlot(
 
 \item{assay}{Primary experiment ("main") or altExp name.}
 
-\item{slot}{Expression assay name, e.g. "counts" or "logcounts".}
+\item{slot}{Expression assay name, e.g. "counts" or "logcounts".
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{keep.scale}{Colour scaling: "feature", "all" or "none"; NULL means "none".}
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/SaveSMData.R
 \name{saveSpaMTPData}
 \alias{saveSpaMTPData}
-\title{Saves SpaMTP Object}
+\title{Export an experiment's expression matrix and metadata}
 \usage{
 saveSpaMTPData(
   data,
@@ -16,13 +16,16 @@ saveSpaMTPData(
 )
 }
 \arguments{
-\item{data}{A Spatial Metabolomic Bioconductor experiment being saved.}
+\item{data}{A SummarizedExperiment, including SingleCellExperiment or
+SpatialExperiment. Image export requires SpatialExperiment.}
 
 \item{outdir}{Character string of the directory to save the mtx.mtx, barcode.tsv, features.tsv, barcode_metadata.csv and feature_metadata.csv in.}
 
 \item{assay}{Character string defining the primary or alternative experiment that contains the m/z count data (default = "Spatial").}
 
-\item{slot}{Character string defining the primary or alternative experiment slot that contains the m/z values directly (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"counts"}), read with \code{SummarizedExperiment::assay()}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{image}{Image ID identifying exactly one imgData row; NULL omits image export.}
 
@@ -44,7 +47,9 @@ The output-directory path, invisibly.
 \description{
 This function saves a Bioconductor experiment into a standard single-cell/spatial file format.
 This includes a filtered_feature_bc_matrix folder containing files storing the features, barcode/pixels and intensity matrix.
-Metadata and sapatial files (such as scale factors and hires/lowres images) are also stored.
+Pixel metadata are also stored. Feature annotations and spatial image files
+are optional exports; the export does not preserve every alternative
+experiment or analysis result. Use \code{saveRDS()} for an entire R container.
 }
 \examples{
 utils::str(formals(saveSpaMTPData))

@@ -4,8 +4,11 @@
 #'
 #' @param SpaMTP A SpatialExperiment used for fishersPathwayAnalysis.
 #' @param pathway_df Dataframe containing the pathway enrichment results (output from SpaMTP::fishersPathwayAnalysis function).
-#' @param assay Character string defining the SpaMTP assay that contains m/z values (default = "SPM").
-#' @param slot Character string defining the assay slot contain the intensity values (default = "counts").
+#' @param assay Primary (`"main"`) or alternative experiment name. The default
+#'   `"SPM"` is a compatibility alias for the primary experiment.
+#' @param slot Expression assay name within the selected experiment
+#'   (default = `"counts"`), read with `SummarizedExperiment::assay()`.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param min_n Integer value specifying the minimum number of analytes required to be present in a pathway (default = 3).
 #' @param p_val_threshold The p-val cutoff to keep the pathways generated from fisher exact test (default = "0.1").
 #' @param method Character string defining the statistical method used to calculate hclust (default = "ward.D2").
@@ -24,7 +27,6 @@
 #'
 #' @examples
 #' utils::str(formals(visualisePathways))
-#' #SpaMTP:::visualisePathways(SpaMTP =seurat,pathway_df = pathway_df,p_val_threshold = 0.1,assay = "Spatial",slot = "counts")
 visualisePathways = function(SpaMTP,
                              pathway_df,
                              assay = "SPM",

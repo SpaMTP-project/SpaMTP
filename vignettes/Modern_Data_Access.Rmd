@@ -39,6 +39,13 @@ public API. A `slot = "counts"` argument retained by some SpaMTP functions is a
 compatibility spelling for the expression assay name; it is not an instruction
 to inspect an S4 slot.
 
+The two selections are distinct: `assay = "transcriptome"` selects
+`altExp(spe, "transcriptome")`, while `slot = "logcounts"` selects the matrix
+within that experiment. Use `assay = "main"` for the primary experiment and
+exact character matrix names; numeric positions are not accepted by these
+SpaMTP selectors. See `help("experimentAccess", package = "SpaMTP")` for
+the shared convention and compatibility aliases.
+
 ```{r load-package, message=FALSE}
 library(SpaMTP)
 ```

@@ -1,5 +1,13 @@
 # SpaMTP 0.99.9
 
+* Clarified native data access across function help pages: modalities use
+  altExp(), expression matrices use assay(), and retained slot arguments
+  select matrix names rather than S4 storage slots. Corrected return types,
+  reduction locations and normalization descriptions. Added a runnable
+  experimentAccess guide. Assay selectors now require exact character names;
+  modality merging rejects duplicate primary aliases and prefers native
+  scaled values over the legacy scale.data matrix.
+
 * All vignette R chunks now execute by default, including full published
   human-brain, FMP10/Visium and DHB/Visium analyses. Resource versions are pinned;
   downloads and long builds are expected when verified caches are absent.

@@ -2,13 +2,15 @@
 
 #' Finds the nearest m/z peak to a given value in a SpaMTP Object
 #'
-#' @param data A `SpatialExperiment` containing m/z
-#'   values.
+#' @param data A SummarizedExperiment, including SingleCellExperiment or
+#'   SpatialExperiment, with feature m/z values in `rowData()` or feature names.
 #' @param target_mz Numeric value defining the target m/z peak
-#' @param assay Assay or layer name. For a `SpatialExperiment`, `NULL` uses the
-#'   first assay.
+#' @param assay Primary (`"main"` or NULL) or alternative experiment name.
+#'   The mass lookup uses the selected experiment's `rowData()`, not an
+#'   expression layer; see [experimentAccess].
 #'
-#' @returns String of the closest m/z value within the given dataset
+#' @returns The exact character feature identifier for the nearest measured
+#'   m/z, not a numeric mass. Ties select the first feature in the stored order.
 #' @export
 #'
 #' @examples
@@ -35,6 +37,7 @@ findNearestMZ <- function(data, target_mz, assay = NULL){
 #' @param mzs Character feature IDs to sum. Duplicates count once.
 #' @param assay Primary or alternative experiment.
 #' @param slot Expression assay.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param bin_name Output colData column name. Existing columns are protected.
 #' @return The updated SpatialExperiment.
 #' @export
@@ -112,6 +115,7 @@ pixelPlot <- function(plot) {
 #' @param coord.fixed Use a fixed coordinate aspect ratio.
 #' @param assay Primary experiment ("main") or altExp name.
 #' @param slot Expression assay name, e.g. "counts" or "logcounts".
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param plot.pixel Draw square rather than circular point symbols.
 #' @param verbose Retained for call compatibility.
 #' @param ... Former Seurat segmentation, molecule and blending arguments
@@ -255,6 +259,7 @@ spatialMZAnnotationPlot <- function(
 #' @param cols Optional group colours.
 #' @param assay Primary or alternative experiment.
 #' @param slot Expression assay.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param label.annotations Display annotations instead of m/z labels.
 #' @param annotation.column Annotation column in rowData.
 #' @param mz.labels Numeric m/z values to label using nearest measured peaks.
@@ -359,6 +364,7 @@ massIntensityPlot <- function(
 #'   A single feature is repeated for comparison across two experiments.
 #' @param assays One or two primary/altExp names.
 #' @param slots One or two expression assay names.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param between.layer.height Distance between layers.
 #' @param names Optional layer labels.
 #' @param size Marker size.
@@ -454,6 +460,7 @@ plot3DFeature <- function(
 #' @param object A SpatialExperiment or aligned Cardinal experiment.
 #' @param assay Primary or alternative experiment.
 #' @param slot Non-negative intensity assay.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param folder Output directory.
 #' @param sampleId Sample ID; required for multiple samples.
 #' @param ... Reserved; unused arguments cause an error.
@@ -840,6 +847,7 @@ densityMap <- function(object, assay = "main", slot = "counts",
 #' @param obj A SpatialExperiment or aligned Cardinal experiment.
 #' @param assay Primary or alternative experiment.
 #' @param slot Expression assay.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param image Optional image ID from imgData.
 #' @param sampleId Optional sample ID. NULL displays separate sample panels.
 #' @return A Shiny application object; use shiny::runApp to launch.

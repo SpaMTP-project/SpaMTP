@@ -150,7 +150,9 @@
 #' @param mz.assay Primary experiment ("main") or alternative MSI experiment.
 #' @param pathway.assay Alternative experiment containing pathway-level scores.
 #' @param mz.slot Expression assay in the MSI experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param pathway.slot Expression assay in the pathway experiment.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param corr_theshold Minimum signed pathway correlation (legacy spelling).
 #' @param corr_weight,n_weight Non-negative weights, not both zero.
 #' @param database Optional named list from loadSpaMTPDatabase.
@@ -200,6 +202,7 @@ calculateSingleAnnotationStatistics <- function(
 #' @param pathway.assay Alternative experiment of RaMP analytes, or pathway
 #'   scores when pathway.scores=TRUE.
 #' @param pathway.slot Input expression assay in pathway.assay.
+#'   See [experimentAccess] for the experiment/matrix distinction.
 #' @param return.top Return one best evaluable candidate per feature; FALSE
 #'   returns a named list of all candidate tables. Features without a score
 #'   remain as NA rows in top results and NULL entries when no table is possible.

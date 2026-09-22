@@ -428,7 +428,10 @@ binnedCardinalToSeurat <- function(
 #'
 #' @param data A Seurat object.
 #' @param assay Seurat assay to convert.
-#' @param slot Seurat layer to convert.
+#' @param slot Exact Seurat expression layer name, read with
+#'   `SeuratObject::LayerData()`, not an internal S4 slot. This boundary
+#'   converter differs from native analysis selectors; see [experimentAccess]
+#'   and [seuratToSpatialExperiment()].
 #' @param run_col Optional cell-metadata column containing run identifiers.
 #' @param feature.metadata Retained for compatibility. Feature metadata are
 #'   always preserved.

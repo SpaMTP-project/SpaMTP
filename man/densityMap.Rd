@@ -18,7 +18,8 @@ densityMap(
 
 \item{assay}{Primary or alternative experiment.}
 
-\item{slot}{Non-negative intensity assay.}
+\item{slot}{Non-negative intensity assay.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{folder}{Output directory.}
 

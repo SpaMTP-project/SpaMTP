@@ -91,7 +91,9 @@
 #'
 #' @param SM.data,ST.data SpatialExperiment objects with aligned coordinates.
 #' @param ST.hires Use point-in-pixel mapping for high-resolution target cells.
-#' @param SM.assay,ST.assay Source and target experiment or assay names.
+#' @param SM.assay,ST.assay Primary (`"main"`) or alternative experiment names
+#'   in the source and target containers; see [experimentAccess]. These select
+#'   modalities, not individual expression matrices.
 #' @param SM.pixel.width Square MSI pixel width in coordinate units. NULL
 #'   estimates the median positive nearest-neighbour distance within samples.
 #' @param overlap.threshold Minimum fraction of target area covered by a pixel.

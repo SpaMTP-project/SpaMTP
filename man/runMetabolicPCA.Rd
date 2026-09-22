@@ -21,7 +21,8 @@ runMetabolicPCA(
 )
 }
 \arguments{
-\item{SpaMTP}{Bioconductor experiment that contains spatial metabolic information.}
+\item{SpaMTP}{A SingleCellExperiment, including SpatialExperiment, containing
+the selected primary or alternative experiment.}
 
 \item{npcs}{Positive number of PCs, capped by matrix dimensions. NULL uses the variance threshold.}
 
@@ -29,7 +30,9 @@ runMetabolicPCA(
 
 \item{assay}{Primary (\code{main}) or alternative experiment name.}
 
-\item{slot}{Character string defining the assay slot containing the intensity values (default = "counts").}
+\item{slot}{Expression assay name within the selected experiment
+(default = \code{"counts"}), read with \code{SummarizedExperiment::assay()}.
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{show_variance_plot}{Boolean indicating weather to display the variance plot output by this analysis (default = FALSE).}
 
@@ -39,7 +42,10 @@ runMetabolicPCA(
 
 \item{bin_method}{Character string defining the method to use for binning respective m/z peaks that fall within a bin. Options for this parameter can be one of "sum", "mean", "max" or "min". \code{bin_resolution} must be provided for this parameter to be implemented (default = "sum").}
 
-\item{reduction.name}{Character string indicating the name associated with the PCA results stored in the output Bioconductor experiment (default = "pca").}
+\item{reduction.name}{Name in \code{SingleCellExperiment::reducedDimNames(SpaMTP)}
+for the resulting embedding (default = \code{"pca"}). Even when the input
+expression is in an alternative experiment, the embedding is stored in
+the parent object's \code{reducedDim()}.}
 
 \item{verbose}{Boolean indicating whether to show the message. If TRUE the message will be show, else the message will be suppressed (default = TRUE).}
 

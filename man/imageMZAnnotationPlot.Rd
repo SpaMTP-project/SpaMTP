@@ -72,7 +72,8 @@ queries, or "none" separately for each panel.}
 
 \item{assay}{Primary experiment ("main") or altExp name.}
 
-\item{slot}{Expression assay name, e.g. "counts" or "logcounts".}
+\item{slot}{Expression assay name, e.g. "counts" or "logcounts".
+See \link{experimentAccess} for the experiment/matrix distinction.}
 
 \item{column.name}{Annotation column in rowData.}
 
